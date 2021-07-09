@@ -1,0 +1,16 @@
+[package]
+name = "vulcast-rtc-sys"
+version = "0.1.0"
+authors = ["Gordon Guan <admin@netdex.org>"]
+edition = "2018"
+links = "vulcast-rtc"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+link-cplusplus = { version = "1.0" }
+
+[build-dependencies]
+bindgen = "0.53.1"
+cmake = "0.1"
+fs_extra = "1.2.0"

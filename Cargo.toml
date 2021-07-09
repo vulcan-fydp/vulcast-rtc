@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "vulcast-rtc",
+    "vulcast-rtc-sys",
+]
