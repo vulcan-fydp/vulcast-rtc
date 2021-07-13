@@ -9,7 +9,8 @@ fn main() {
     let current_dir = env::current_dir().unwrap();
     let prebuilt_path = current_dir
         .join("prebuilt")
-        .join(env::var("TARGET").unwrap());
+        .join(env::var("TARGET").unwrap())
+        .join(env::var("PROFILE").unwrap());
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     // create bindgen bindings
@@ -37,7 +38,6 @@ fn main() {
         let lib_path = dst.join("lib");
 
         println!("cargo:rustc-link-search=native={}", lib_path.display());
-        // println!("cargo:rustc-link-search=native={}", webrtc_binary_path);
 
         if env::var("VULCAST_RTC_UPDATE_PREBUILTS").is_ok() {
             let _ = std::fs::remove_dir_all(&prebuilt_path);
@@ -58,7 +58,7 @@ fn main() {
     }
 
     println!("cargo:rustc-link-lib=static=vulcast-rtc");
-    // println!("cargo:rustc-link-lib=static=webrtc_broadcaster");
+    println!("cargo:rustc-link-lib=static=webrtc_broadcaster");
 
     match env::var("PROFILE").unwrap().as_str() {
         "release" => println!("cargo:rustc-link-lib=static=glog"),

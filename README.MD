@@ -48,3 +48,12 @@ export LIBWEBRTC_INCLUDE_PATH=/path/to/webrtc/src
 export LIBWEBRTC_BINARY_PATH=/path/to/webrtc/src/out/m84/obj
 cargo build --target=aarch64-unknown-linux-gnu
 ```
+
+
+## Troubleshooting
+```
+# Fatal error in: ../../media/engine/adm_helpers.cc, line 39
+# last system error: 88
+# Check failed: 0 == adm->Init() (0 vs. -1)
+```
+Install an audio server like PulseAudio.

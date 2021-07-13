@@ -26,3 +26,4 @@ target_compile_definitions(webrtc_broadcaster PUBLIC
 	$<$<PLATFORM_ID:Darwin>:WEBRTC_MAC>
 )
 
+INSTALL(TARGETS webrtc_broadcaster DESTINATION lib)

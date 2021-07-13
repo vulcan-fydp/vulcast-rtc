@@ -2,17 +2,14 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
+use std::{ffi::CString, os::raw::c_char};
+
 extern crate link_cplusplus;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        unsafe {
-            super::init();
-            super::hello();
-        }
-    }
+/// Retake ownership of a string that was previously released with CString::into_raw.
+#[no_mangle]
+pub unsafe extern "C" fn retake_cstr(s: *mut c_char) {
+    drop(CString::from_raw(s));
 }
