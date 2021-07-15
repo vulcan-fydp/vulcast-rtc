@@ -31,16 +31,18 @@ impl FromStr for DataChannelState {
 }
 
 #[derive(Debug, Clone)]
-pub enum Message {
+pub(crate) enum Message {
     Data {
         data_consumer_id: DataConsumerId,
-        data: Vec<u8>,
+        data: Data,
     },
     StateChanged {
         data_consumer_id: DataConsumerId,
         state: DataChannelState,
     },
 }
+
+pub type Data = Vec<u8>;
 
 pub struct DataConsumer {
     shared: Arc<Shared>,
@@ -58,7 +60,7 @@ struct State {
 }
 
 impl DataConsumer {
-    pub fn new(
+    pub(crate) fn new(
         sys_data_consumer: *mut sys::mediasoupclient_DataConsumer,
         data_consumer_id: DataConsumerId,
         message_tx: broadcast::Sender<Message>,
@@ -72,26 +74,30 @@ impl DataConsumer {
         }
     }
 
-    pub fn stream(&self) -> impl Stream<Item = Message> {
+    pub fn id(&self) -> DataConsumerId {
+        self.shared.data_consumer_id.clone()
+    }
+
+    pub fn stream(&self) -> impl Stream<Item = Data> {
         let mut message_rx = self.shared.message_tx.subscribe();
         let data_consumer_id = self.shared.data_consumer_id.clone();
 
         let (tx, rx) = mpsc::channel(16);
         tokio::spawn(async move {
             while let Ok(message) = message_rx.recv().await {
-                match &message {
+                match message {
                     Message::Data {
                         data_consumer_id: id,
-                        ..
-                    } if id == &data_consumer_id => {
-                        if let Err(_) = tx.send(message).await {
+                        data,
+                    } if id == data_consumer_id => {
+                        if let Err(_) = tx.send(data).await {
                             return;
                         }
                     }
                     Message::StateChanged {
                         data_consumer_id: id,
                         state: DataChannelState::Closed,
-                    } if id == &data_consumer_id => {
+                    } if id == data_consumer_id => {
                         return;
                     }
                     _ => (),

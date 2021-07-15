@@ -177,20 +177,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(enclose! { (broadcaster) async move {
         while let Some(Ok(response)) = data_producer_available_stream.next().await {
             let data_producer_id = response.data.unwrap().data_producer_available;
-            println!("data producer available: {:?}", &data_producer_id);
+            println!("{:?}: data producer available", &data_producer_id);
             let data_consumer = broadcaster.consume_data(data_producer_id);
-            tokio::spawn(async move {
-                data_consumer
-                    .stream()
-                    .for_each(|msg| async move {
-                        println!("data: {:?}", msg);
-                    })
-                    .await;
+            let id = data_consumer.id();
+            tokio::spawn( async move {
+                let id = id.clone();
+                println!("{:?}: data consumer started", id);
+                let mut stream = data_consumer.stream();
+                while let Some(msg) = stream.next().await {
+                    let str = String::from_utf8_lossy(msg.as_slice());
+                    println!("{:?}: {:?} ({})", id, msg, str);
+                }
+                println!("{:?}: data consumer terminated", id);
             });
         }
     }});
 
-    // broadcaster.produce_fake_media();
+    broadcaster.produce_fake_media();
 
     println!("Press Enter to instantly die...");
     let _ = std::io::stdin().read(&mut [0u8]).unwrap();

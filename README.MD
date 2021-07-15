@@ -58,6 +58,11 @@ export BINDGEN_EXTRA_CLANG_ARGS='-I/usr/aarch64-linux-gnu/include/c++/11.1.0/aar
 cargo build --target=aarch64-unknown-linux-gnu
 ```
 
+## Sample
+The `echo` example will produce a dummy video feed and a silent audio feed, and print consumed data.
+```
+cargo run --example echo -- --signal-addr <signal-addr> --token <token>
+```
 
 ## Troubleshooting
 ### WebRTC check fail `0 == adm->Init()`
