@@ -49,6 +49,9 @@ mediasoupclient::Producer *producer_new_from_fake_audio(Broadcaster *b);
 mediasoupclient::Producer *producer_new_from_fake_video(Broadcaster *b);
 void producer_delete(mediasoupclient::Producer *producer);
 
+void debug_enumerate_capture_devices();
+
+
 enum GlogLogLevel {INFO, WARNING, ERROR, FATAL};
 enum RtcLogLevel { LS_VERBOSE, LS_INFO, LS_WARNING, LS_ERROR, LS_NONE };
 enum MediasoupLogLevel { LOG_NONE, LOG_ERROR, LOG_WARN, LOG_DEBUG, LOG_TRACE };

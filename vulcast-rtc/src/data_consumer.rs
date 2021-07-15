@@ -79,6 +79,9 @@ impl DataConsumer {
     }
 
     pub fn stream(&self) -> impl Stream<Item = Data> {
+        // TODO it's possible to call this after the consumer is closed.
+        // we don't actually have a guarantee that the datachannel is even created.
+
         let mut message_rx = self.shared.message_tx.subscribe();
         let data_consumer_id = self.shared.data_consumer_id.clone();
 

@@ -10,6 +10,8 @@ pub enum LogLevel {
     Error,
 }
 
+/// Set log levels for all native modules (vulcast-rtc, mediasoup, webrtc). Do
+/// not call before Broadcaster::new
 pub fn set_native_log_level(level: LogLevel) {
     unsafe {
         match level {
