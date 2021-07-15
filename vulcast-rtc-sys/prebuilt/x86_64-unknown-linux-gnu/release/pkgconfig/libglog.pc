@@ -1,0 +1,10 @@
+prefix=/mnt/scratch/vulcast-rtc/target/release/build/vulcast-rtc-sys-41bc6a983585d128/out
+exec_prefix=/mnt/scratch/vulcast-rtc/target/release/build/vulcast-rtc-sys-41bc6a983585d128/out/bin
+libdir=/mnt/scratch/vulcast-rtc/target/release/build/vulcast-rtc-sys-41bc6a983585d128/out/lib
+includedir=/mnt/scratch/vulcast-rtc/target/release/build/vulcast-rtc-sys-41bc6a983585d128/out/include
+
+Name: libglog
+Description: Google Log (glog) C++ logging framework
+Version: 0.5.0
+Libs: -L${libdir} -lglog
+Cflags: -I${includedir}

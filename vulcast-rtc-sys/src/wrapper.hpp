@@ -1,11 +1,12 @@
 #pragma once
 
-#include <cstdint>
+#include <cstddef>
 
 class Broadcaster;
 namespace mediasoupclient {
 class DataConsumer;
-}
+class Producer;
+} // namespace mediasoupclient
 
 struct SignalHandler {
   // Get router RTP capabilities. Returns RtpCapabilitiesFinalized.
@@ -17,31 +18,43 @@ struct SignalHandler {
   void (*on_rtp_capabilities)(const void *ctx, const char *rtp_capabilities);
   // Called when client wants to produce. Expects ProducerId.
   char *(*on_produce)(const void *ctx, const char *transport_id,
-                            const char *kind, const char *rtp_parameters);
+                      const char *kind, const char *rtp_parameters);
   // Called when client wants to connect WebRTC transport.
   void (*on_connect_webrtc_transport)(const void *ctx, const char *transport_id,
                                       const char *dtls_parameters);
   // Called when client wants to consume data.
-  void (*on_consume_data)(const void *ctx, const char *transport_id,
-                          const char *data_producer_id);
+  char *(*consume_data)(const void *ctx, const char *transport_id,
+                        const char *data_producer_id);
 
   // Called when new message is available from a DataConsumer.
-  void (*on_message)(const void *ctx, const char *data_consumer_id, const char *data,
-                     std::size_t len);
+  void (*on_data_consumer_message)(const void *ctx, const char *data_consumer_id,
+                     const char *data,size_t len);
+  // Called when a DataConsumer RTC DataState changes.
+  void (*on_data_consumer_state_changed)(const void *ctx,
+                                         const char *data_consumer_id,
+                                         const char *state);
 };
 
 void init(const char *argv0);
 
-Broadcaster *create_broadcaster(const void *ctx, SignalHandler signal_handler);
-void stop_broadcaster(Broadcaster *broadcaster);
+Broadcaster *broadcaster_new(const void *ctx, SignalHandler signal_handler);
+void broadcaster_delete(Broadcaster *broadcaster);
 
-mediasoupclient::DataConsumer *
-create_data_consumer(Broadcaster *b, const char *data_consumer_id,
-                     const char *data_producer_id);
-void stop_data_consumer(mediasoupclient::DataConsumer *consumer);
+mediasoupclient::DataConsumer *data_consumer_new(Broadcaster *b,
+                                                 const char *data_producer_id);
+void data_consumer_delete(mediasoupclient::DataConsumer *consumer);
+char *data_consumer_get_id(mediasoupclient::DataConsumer *consumer);
 
+mediasoupclient::Producer *producer_new_from_fake_audio(Broadcaster *b);
+mediasoupclient::Producer *producer_new_from_fake_video(Broadcaster *b);
+void producer_delete(mediasoupclient::Producer *producer);
+
+enum GlogLogLevel {INFO, WARNING, ERROR, FATAL};
 enum RtcLogLevel { LS_VERBOSE, LS_INFO, LS_WARNING, LS_ERROR, LS_NONE };
 enum MediasoupLogLevel { LOG_NONE, LOG_ERROR, LOG_WARN, LOG_DEBUG, LOG_TRACE };
 
+void set_glog_log_level(GlogLogLevel level);
 void set_mediasoup_log_level(MediasoupLogLevel level);
 void set_rtc_log_level(RtcLogLevel level);
+
+void delete_str(char *str);

@@ -18,8 +18,8 @@ Broadcaster::Broadcaster(Signaller signaller) : signaller_(signaller) {}
 
 Broadcaster::~Broadcaster() { this->Stop(); }
 
-void Broadcaster::OnTransportClose(mediasoupclient::Producer * /*producer*/) {
-  LOG(INFO) << "Broadcaster::OnTransportClose()";
+void Broadcaster::OnTransportClose(mediasoupclient::Producer *producer) {
+  LOG(INFO) << "Broadcaster::OnTransportClose(" << producer->GetId() << ")";
 }
 
 /* Transport::Listener::OnConnect
@@ -29,7 +29,8 @@ void Broadcaster::OnTransportClose(mediasoupclient::Producer * /*producer*/) {
  */
 std::future<void> Broadcaster::OnConnect(mediasoupclient::Transport *transport,
                                          const json &dtlsParameters) {
-  LOG(INFO) << "Broadcaster::OnConnect()";
+  LOG(INFO) << "Broadcaster::OnConnect(" << transport->GetId() << ","
+            << dtlsParameters << ")";
   std::promise<void> promise;
   signaller_.OnConnectWebrtcTransport(transport->GetId(), dtlsParameters);
   promise.set_value();
@@ -39,11 +40,10 @@ std::future<void> Broadcaster::OnConnect(mediasoupclient::Transport *transport,
 /*
  * Transport::Listener::OnConnectionStateChange.
  */
-void Broadcaster::OnConnectionStateChange(
-    mediasoupclient::Transport * /*transport*/,
-    const std::string &connectionState) {
-  LOG(INFO) << "Broadcaster::OnConnectionStateChange() [connectionState="
-            << connectionState << "]";
+void Broadcaster::OnConnectionStateChange(mediasoupclient::Transport *transport,
+                                          const std::string &connectionState) {
+  LOG(INFO) << "Broadcaster::OnConnectionStateChange(" << transport->GetId()
+            << "," << connectionState << ")";
   CHECK(connectionState != "failed");
 }
 
@@ -55,8 +55,9 @@ void Broadcaster::OnConnectionStateChange(
 std::future<std::string>
 Broadcaster::OnProduce(mediasoupclient::SendTransport *transport,
                        const std::string &kind, json rtpParameters,
-                       const json & /*appData*/) {
-  LOG(INFO) << "Broadcaster::OnProduce()";
+                       const json &appData) {
+  LOG(INFO) << "Broadcaster::OnProduce(" << transport->GetId() << "," << kind
+            << "," << rtpParameters << "," << appData << ")";
   std::promise<std::string> promise;
   promise.set_value(
       signaller_.OnProduce(transport->GetId(), kind, rtpParameters));
@@ -88,14 +89,30 @@ void Broadcaster::Start() {
   this->CreateRecvTransport();
 }
 
-mediasoupclient::DataConsumer* Broadcaster::CreateDataConsumer(const std::string &data_consumer_id,
-                                     const std::string &data_producer_id) {
-  return recv_transport_->ConsumeData(
-      this, data_consumer_id, data_producer_id, "", "", nlohmann::json());
+mediasoupclient::DataConsumer *
+Broadcaster::ConsumeData(const std::string &data_producer_id) {
+  LOG(INFO) << "Broadcaster::CreateDataConsumer(" << data_producer_id << ")";
+  auto data_consumer_options =
+      signaller_.ConsumeData(recv_transport_->GetId(), data_producer_id);
+  auto sctp_stream_parameters = data_consumer_options["sctpStreamParameters"];
+  LOG(INFO) << "sctp_stream_parameters: " << sctp_stream_parameters;
+  const auto &data_consumer_id = data_consumer_options["id"].get<std::string>();
+  return recv_transport_->ConsumeData(this, data_consumer_id, data_producer_id,
+                                      "", sctp_stream_parameters);
+}
+
+mediasoupclient::Producer *Broadcaster::Produce(
+    webrtc::MediaStreamTrackInterface *track,
+    const std::vector<webrtc::RtpEncodingParameters> *encodings,
+    const nlohmann::json &codec_options, const nlohmann::json &appdata) {
+  LOG(INFO) << "Broadcaster::Produce(" << std::hex << track << "," << std::hex
+            << encodings << "," << codec_options << "," << appdata << ")";
+  return send_transport_->Produce(this, track, encodings, &codec_options,
+                                  appdata);
 }
 
 void Broadcaster::CreateSendTransport() {
-  LOG(INFO) << "creating mediasoup send WebRtcTransport...";
+  LOG(INFO) << "Broadcaster::CreateSendTransport()";
   auto response = signaller_.CreateWebrtcTransport();
   this->send_transport_ = device_.CreateSendTransport(
       this, response["id"], response["iceParameters"],
@@ -104,7 +121,7 @@ void Broadcaster::CreateSendTransport() {
 }
 
 void Broadcaster::CreateRecvTransport() {
-  LOG(INFO) << "creating mediasoup recv WebRtcTransport...";
+  LOG(INFO) << "Broadcaster::CreateRecvTransport()";
   auto response = signaller_.CreateWebrtcTransport();
   this->recv_transport_ = device_.CreateRecvTransport(
       this, response["id"], response["iceParameters"],
@@ -114,18 +131,46 @@ void Broadcaster::CreateRecvTransport() {
 
 void Broadcaster::OnMessage(mediasoupclient::DataConsumer *data_consumer,
                             const webrtc::DataBuffer &buffer) {
-  LOG(INFO) << "Broadcaster::OnMessage() [len=" << buffer.data.size() << "]";
-  signaller_.OnMessage(data_consumer->GetId(), buffer.data.data<char>(),
-                       buffer.data.size());
+  LOG(INFO) << "Broadcaster::OnMessage(" << data_consumer->GetId()
+            << ",len=" << buffer.data.size() << ")";
+  signaller_.OnDataConsumerMessage(
+      data_consumer->GetId(), buffer.data.data<char>(), buffer.data.size());
+}
+void Broadcaster::OnConnecting(mediasoupclient::DataConsumer *data_consumer) {
+  LOG(INFO) << "Broadcaster::OnConnecting(" << data_consumer->GetId() << ")";
+  signaller_.OnDataConsumerStateChanged(
+      data_consumer->GetId(), webrtc::DataChannelInterface::DataStateString(
+                                  data_consumer->GetReadyState()));
+}
+void Broadcaster::OnClosing(mediasoupclient::DataConsumer *data_consumer) {
+  LOG(INFO) << "Broadcaster::OnClosing(" << data_consumer->GetId() << ")";
+  signaller_.OnDataConsumerStateChanged(
+      data_consumer->GetId(), webrtc::DataChannelInterface::DataStateString(
+                                  data_consumer->GetReadyState()));
+}
+void Broadcaster::OnClose(mediasoupclient::DataConsumer *data_consumer) {
+  LOG(INFO) << "Broadcaster::OnClose(" << data_consumer->GetId() << ")";
+  signaller_.OnDataConsumerStateChanged(
+      data_consumer->GetId(), webrtc::DataChannelInterface::DataStateString(
+                                  data_consumer->GetReadyState()));
+}
+void Broadcaster::OnOpen(mediasoupclient::DataConsumer *data_consumer) {
+  LOG(INFO) << "Broadcaster::OnOpen(" << data_consumer->GetId() << ")";
+  signaller_.OnDataConsumerStateChanged(
+      data_consumer->GetId(), webrtc::DataChannelInterface::DataStateString(
+                                  data_consumer->GetReadyState()));
+}
+void Broadcaster::OnTransportClose(
+    mediasoupclient::DataConsumer *data_consumer) {
+  LOG(INFO) << "Broadcaster::OnTransportClose(" << data_consumer->GetId()
+            << ")";
 }
 
 void Broadcaster::Stop() {
   LOG(INFO) << "Broadcaster::Stop()";
-
   if (this->recv_transport_) {
     recv_transport_->Close();
   }
-
   if (this->send_transport_) {
     send_transport_->Close();
   }

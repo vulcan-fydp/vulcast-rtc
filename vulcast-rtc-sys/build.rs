@@ -33,6 +33,7 @@ fn main() {
         let dst = cmake::Config::new(".")
             .define("LIBWEBRTC_INCLUDE_PATH:PATH", &webrtc_include_path)
             .define("LIBWEBRTC_BINARY_PATH:PATH", &webrtc_binary_path)
+            .define("MEDIASOUPCLIENT_LOG_DEV", "ON")
             .build();
 
         let lib_path = dst.join("lib");

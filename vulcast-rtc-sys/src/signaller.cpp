@@ -39,7 +39,7 @@ void Signaller::OnConnectWebrtcTransport(
 
 std::string Signaller::OnProduce(const std::string &transport_id,
                                  const std::string &kind,
-                                 const nlohmann::json &rtp_parameters) {
+                                 const nlohmann::json &rtp_parameters) const {
   auto rtp_parameters_str = rtp_parameters.dump();
   char *producer_id_cstr = handler_.on_produce(
       ctx_, transport_id.c_str(), kind.c_str(), rtp_parameters_str.c_str());
@@ -48,7 +48,26 @@ std::string Signaller::OnProduce(const std::string &transport_id,
   return producer_id;
 }
 
-void Signaller::OnMessage(const std::string data_consumer_id, const char *data,
-                          std::size_t len) {
-  handler_.on_message(ctx_, data_consumer_id.c_str(), data, len);
+void Signaller::OnDataConsumerMessage(const std::string &data_consumer_id,
+                                      const char *data, std::size_t len) const {
+  handler_.on_data_consumer_message(ctx_, data_consumer_id.c_str(), data, len);
+}
+
+nlohmann::json
+Signaller::ConsumeData(const std::string &transport_id,
+                       const std::string &data_producer_id) const {
+
+  char *data_consumer_options_cstr = handler_.consume_data(
+      ctx_, transport_id.c_str(), data_producer_id.c_str());
+  DCHECK(data_consumer_options_cstr != nullptr);
+  auto data_consumer_options =
+      nlohmann::json::parse(data_consumer_options_cstr);
+  retake_cstr(data_consumer_options_cstr);
+  return data_consumer_options;
+}
+
+void Signaller::OnDataConsumerStateChanged(const std::string &data_consumer_id,
+                                           const std::string &state) const {
+  handler_.on_data_consumer_state_changed(ctx_, data_consumer_id.c_str(),
+                                          state.c_str());
 }

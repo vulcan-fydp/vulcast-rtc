@@ -10,8 +10,8 @@ install(FILES ${LIBWEBRTC_STATIC} DESTINATION lib)
 # mediasoup
 FetchContent_Declare(
   mediasoupclient
-  GIT_REPOSITORY https://github.com/versatica/libmediasoupclient.git
-  GIT_TAG v3
+  GIT_REPOSITORY https://github.com/netdex/libmediasoupclient.git
+  GIT_TAG dataconsumer-stream-id-fix
 )
 FetchContent_MakeAvailable(mediasoupclient)
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${mediasoupclient_SOURCE_DIR}/include)

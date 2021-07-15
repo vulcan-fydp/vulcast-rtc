@@ -6,22 +6,21 @@ use std::str::FromStr;
 use derive_more::{From, Into};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, From, Into)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, From, Into)]
 pub struct TransportId(String);
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, From, Into)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, From, Into)]
 pub struct ProducerId(String);
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, From, Into)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, From, Into)]
 pub struct DataProducerId(String);
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, From, Into)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, From, Into)]
 pub struct DataConsumerId(String);
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum MediaKind {
-    #[serde(rename = "audio")]
     Audio,
-    #[serde(rename = "video")]
     Video,
 }
 impl FromStr for MediaKind {
@@ -35,13 +34,21 @@ impl FromStr for MediaKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, From, Into)]
-pub struct RtpParameters(String);
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, From, Into)]
-pub struct RtpCapabilities(String);
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, From, Into)]
-pub struct RtpCapabilitiesFinalized(String);
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, From, Into)]
-pub struct WebRtcTransportOptions(String);
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, From, Into)]
-pub struct DtlsParameters(String);
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, From, Into)]
+pub struct RtpParameters(serde_json::Value);
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, From, Into)]
+pub struct RtpCapabilities(serde_json::Value);
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, From, Into)]
+pub struct RtpCapabilitiesFinalized(serde_json::Value);
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, From, Into)]
+pub struct WebRtcTransportOptions(serde_json::Value);
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, From, Into)]
+pub struct DtlsParameters(serde_json::Value);
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, From, Into)]
+#[serde(rename_all = "camelCase")]
+pub struct DataConsumerOptions {
+    id: DataConsumerId,
+    data_producer_id: DataProducerId,
+    sctp_stream_parameters: serde_json::Value,
+}

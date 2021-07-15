@@ -23,7 +23,7 @@ public:
   void OnConnectionStateChange(mediasoupclient::Transport *transport,
                                const std::string &connectionState) override;
   std::future<std::string>
-  OnProduce(mediasoupclient::SendTransport * /*transport*/,
+  OnProduce(mediasoupclient::SendTransport * transport,
             const std::string &kind, nlohmann::json rtpParameters,
             const nlohmann::json &appData) override;
 
@@ -41,11 +41,11 @@ public:
 public:
   void OnMessage(mediasoupclient::DataConsumer *data_consumer,
                  const webrtc::DataBuffer &buffer) override;
-  void OnConnecting(mediasoupclient::DataConsumer *) override {}
-  void OnClosing(mediasoupclient::DataConsumer *) override {}
-  void OnClose(mediasoupclient::DataConsumer *) override {}
-  void OnOpen(mediasoupclient::DataConsumer *) override {}
-  void OnTransportClose(mediasoupclient::DataConsumer *) override {}
+  void OnConnecting(mediasoupclient::DataConsumer *) override;
+  void OnClosing(mediasoupclient::DataConsumer *) override;
+  void OnClose(mediasoupclient::DataConsumer *) override;
+  void OnOpen(mediasoupclient::DataConsumer *) override;
+  void OnTransportClose(mediasoupclient::DataConsumer *) override;
 
 public:
   void Start();
@@ -55,8 +55,16 @@ public:
   virtual ~Broadcaster();
 
   mediasoupclient::DataConsumer *
-  CreateDataConsumer(const std::string &data_consumer_id,
-                     const std::string &data_producer_id);
+  ConsumeData(const std::string &data_producer_id);
+
+  mediasoupclient::Producer *
+  Produce(webrtc::MediaStreamTrackInterface *track,
+          const std::vector<webrtc::RtpEncodingParameters> *encodings = nullptr,
+          const nlohmann::json &codec_options = nlohmann::json::object(),
+          const nlohmann::json &appdata = nlohmann::json::object());
+
+  bool CanProduceAudio() { return device_.CanProduce("audio"); }
+  bool CanProduceVideo() { return device_.CanProduce("video"); }
 
 private:
   Signaller signaller_;
