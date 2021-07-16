@@ -12,6 +12,7 @@ target_sources(webrtc_broadcaster PRIVATE
 	test/testsupport/ivf_video_frame_generator.cc
 	test/testsupport/file_utils.cc
 	test/testsupport/file_utils_override.cc
+	test/vcm_capturer.cc
 )
 
 target_include_directories(webrtc_broadcaster SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/deps/libwebrtc)

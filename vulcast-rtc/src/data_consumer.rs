@@ -1,12 +1,12 @@
 use std::{
     ffi::CString,
+    pin::Pin,
     str::FromStr,
-    sync::{Arc, Mutex},
+    task::{Context, Poll},
 };
 
 use futures::Stream;
 use tokio::sync::{broadcast, mpsc};
-use tokio_stream::wrappers::ReceiverStream;
 
 use crate::types::*;
 use vulcast_rtc_sys as sys;
@@ -45,22 +45,13 @@ pub(crate) enum Message {
 
 pub type Data = Vec<u8>;
 
-#[derive(Clone)]
 pub struct DataConsumer {
-    shared: Arc<Shared>,
-}
-struct Shared {
-    state: Mutex<State>,
-
-    data_consumer_id: DataConsumerId,
-    message_tx: broadcast::Sender<Message>,
-}
-unsafe impl Send for Shared {}
-unsafe impl Sync for Shared {}
-struct State {
     sys_data_consumer: *mut sys::mediasoupclient_DataConsumer,
-    channel_state: DataChannelState,
+    data_consumer_id: DataConsumerId,
+    data_rx: mpsc::Receiver<Data>,
 }
+unsafe impl Send for DataConsumer {}
+unsafe impl Sync for DataConsumer {}
 
 impl DataConsumer {
     pub(crate) fn new(
@@ -68,8 +59,41 @@ impl DataConsumer {
         data_consumer_options: DataConsumerOptions,
         message_tx: broadcast::Sender<Message>,
     ) -> Self {
+        let data_consumer_id = data_consumer_options.id;
+
+        let mut message_rx = message_tx.subscribe();
+        let (tx, rx) = mpsc::channel(16);
+
+        tokio::spawn({
+            let data_consumer_id = data_consumer_id.clone();
+            async move {
+                while let Ok(message) = message_rx.recv().await {
+                    match message {
+                        Message::Data {
+                            data_consumer_id: id,
+                            data,
+                        } if id == data_consumer_id => {
+                            log::debug!("{:?}: data (len={:?})", &id, data.len());
+                            if let Err(_) = tx.send(data).await {
+                                return;
+                            }
+                        }
+                        Message::StateChanged {
+                            data_consumer_id: id,
+                            state: channel_state,
+                        } if id == data_consumer_id => {
+                            log::debug!("{:?}: state_changed {:?}", &id, &channel_state);
+                            if channel_state == DataChannelState::Closed {
+                                return;
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+            }
+        });
+
         unsafe {
-            let data_consumer_id = data_consumer_options.id;
             let data_consumer_id_cstr =
                 CString::new(String::from(data_consumer_id.clone())).unwrap();
             let data_producer_id_cstr =
@@ -78,82 +102,39 @@ impl DataConsumer {
                 serde_json::to_string(&data_consumer_options.sctp_stream_parameters).unwrap(),
             )
             .unwrap();
-
-            // TODO robustness
-
             let sys_data_consumer = sys::data_consumer_new(
                 sys_broadcaster,
                 data_consumer_id_cstr.as_ptr(),
                 data_producer_id_cstr.as_ptr(),
                 sctp_stream_parameters_cstr.as_ptr(),
             );
+            log::trace!("data consumer new {:?}", &sys_data_consumer);
             Self {
-                shared: Arc::new(Shared {
-                    state: Mutex::new(State {
-                        sys_data_consumer,
-                        channel_state: DataChannelState::Connecting,
-                    }),
-                    data_consumer_id,
-                    message_tx,
-                }),
+                sys_data_consumer,
+                data_consumer_id,
+                data_rx: rx,
             }
         }
     }
 
     pub fn id(&self) -> DataConsumerId {
-        self.shared.data_consumer_id.clone()
-    }
-
-    pub fn stream(&self) -> impl Stream<Item = Data> {
-        let mut message_rx = self.shared.message_tx.subscribe();
-        let data_consumer_id = self.shared.data_consumer_id.clone();
-
-        let (tx, rx) = mpsc::channel(16);
-        let this = self.clone();
-        tokio::spawn(async move {
-            while let Ok(message) = message_rx.recv().await {
-                match message {
-                    Message::Data {
-                        data_consumer_id: id,
-                        data,
-                    } if id == data_consumer_id => {
-                        if let Err(_) = tx.send(data).await {
-                            return;
-                        }
-                    }
-                    Message::StateChanged {
-                        data_consumer_id: id,
-                        state: channel_state,
-                    } if id == data_consumer_id => {
-                        this.set_channel_state(channel_state);
-
-                        if channel_state == DataChannelState::Closed {
-                            return;
-                        }
-                    }
-                    _ => (),
-                }
-            }
-        });
-        ReceiverStream::new(rx)
-    }
-
-    fn set_channel_state(&self, channel_state: DataChannelState) {
-        let mut state = self.shared.state.lock().unwrap();
-        state.channel_state = channel_state;
-    }
-}
-impl Shared {
-    fn get_sys_data_consumer(&self) -> *mut sys::mediasoupclient_DataConsumer {
-        let state = self.state.lock().unwrap();
-        state.sys_data_consumer
+        self.data_consumer_id.clone()
     }
 }
 
-impl Drop for Shared {
+impl Drop for DataConsumer {
     fn drop(&mut self) {
+        log::trace!("data consumer delete {:?}", &self.sys_data_consumer);
         unsafe {
-            sys::data_consumer_delete(self.get_sys_data_consumer());
+            sys::data_consumer_delete(self.sys_data_consumer);
         }
+    }
+}
+
+impl Stream for DataConsumer {
+    type Item = Data;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.data_rx.poll_recv(cx)
     }
 }

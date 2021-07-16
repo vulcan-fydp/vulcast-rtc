@@ -50,6 +50,7 @@ void data_consumer_delete(mediasoupclient::DataConsumer *consumer);
 
 mediasoupclient::Producer *producer_new_from_fake_audio(Broadcaster *b);
 mediasoupclient::Producer *producer_new_from_fake_video(Broadcaster *b);
+mediasoupclient::Producer *producer_new_from_vcm_capturer(Broadcaster *b);
 void producer_delete(mediasoupclient::Producer *producer);
 
 void debug_enumerate_capture_devices();

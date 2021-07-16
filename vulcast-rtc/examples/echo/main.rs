@@ -40,6 +40,9 @@ pub struct Opts {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
+    vulcast_rtc::set_native_log_level(vulcast_rtc::LogLevel::Debug);
+
     let opts: Opts = Opts::parse();
 
     struct PromiscuousServerVerifier;
@@ -169,7 +172,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
         }}),
     });
-    vulcast_rtc::set_native_log_level(vulcast_rtc::LogLevel::Debug);
 
     let data_producer_available = client.subscribe::<signal_schema::DataProducerAvailable>(
         signal_schema::data_producer_available::Variables,
@@ -179,13 +181,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while let Some(Ok(response)) = data_producer_available_stream.next().await {
             let data_producer_id = response.data.unwrap().data_producer_available;
             println!("{:?}: data producer available", &data_producer_id);
-            let data_consumer = broadcaster.consume_data(data_producer_id).await;
+            let mut data_consumer = broadcaster.consume_data(data_producer_id).await;
             let id = data_consumer.id();
             tokio::spawn( async move {
                 let id = id.clone();
                 println!("{:?}: data consumer started", id);
-                let mut stream = data_consumer.stream();
-                while let Some(msg) = stream.next().await {
+                while let Some(msg) = data_consumer.next().await {
                     let str = String::from_utf8_lossy(msg.as_slice());
                     println!("{:?}: {:?} ({})", id, msg, str);
                 }
@@ -194,7 +195,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }});
 
-    broadcaster.produce_fake_media();
+    // broadcaster.produce_fake_media();
+    broadcaster.produce_video_from_vcm_capturer();
 
     println!("Press Enter to instantly die...");
     let _ = std::io::stdin().read(&mut [0u8]).unwrap();

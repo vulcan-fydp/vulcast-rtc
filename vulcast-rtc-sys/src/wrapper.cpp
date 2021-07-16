@@ -72,6 +72,12 @@ mediasoupclient::Producer *producer_new_from_fake_video(Broadcaster *b) {
       createSquaresVideoTrack(std::to_string(rtc::CreateRandomId()));
   return b->Produce(video_track);
 }
+mediasoupclient::Producer *producer_new_from_vcm_capturer(Broadcaster *b) {
+  LOG(INFO) << "producer_new_from_vcm_capturer(" << std::hex << b << ")";
+  auto video_track =
+      createVcmCapturerVideoTrack(std::to_string(rtc::CreateRandomId()));
+  return b->Produce(video_track);
+}
 void producer_delete(mediasoupclient::Producer *producer) {
   LOG(INFO) << "producer_delete(" << std::hex << producer << ")";
   producer->Close();
@@ -88,8 +94,8 @@ void debug_enumerate_capture_devices() {
     char unique_name[256];
     CHECK(info->GetDeviceName(i, device_name, sizeof(device_name), unique_name,
                               sizeof(unique_name)) == 0);
-    LOG(INFO) << "device_name: " << device_name
-              << " unique_name: " << unique_name;
+    LOG(INFO) << i << ": device_name=" << device_name
+              << " unique_name=" << unique_name;
     webrtc::VideoCaptureCapability video_caps;
     const int cap_count = info->NumberOfCapabilities(unique_name);
     for (int j = 0; j < cap_count; ++j) {

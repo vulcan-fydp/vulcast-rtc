@@ -1,7 +1,6 @@
 use futures::future::BoxFuture;
 use std::ptr;
 use std::str::FromStr;
-use std::sync::Once;
 use std::sync::{Arc, Mutex};
 use std::{
     ffi::{c_void, CStr, CString},
@@ -16,7 +15,6 @@ use crate::data_consumer::{self, DataConsumer};
 use crate::types::*;
 use vulcast_rtc_sys as sys;
 
-static NATIVE_INIT: Once = Once::new();
 lazy_static! {
     static ref NATIVE_RUNTIME: Runtime = runtime::Builder::new_multi_thread().build().unwrap();
 }
@@ -63,14 +61,7 @@ pub struct Handlers {
 
 impl Broadcaster {
     pub fn new(handlers: Handlers) -> Self {
-        NATIVE_INIT.call_once(|| {
-            let argv0 = std::env::args().next().unwrap();
-            unsafe {
-                let c_str = CString::new(argv0).unwrap();
-                sys::init(c_str.as_ptr());
-            }
-        });
-
+        super::native_init();
         let shared = Arc::new(Shared {
             state: Mutex::new(State {
                 sys_broadcaster: ptr::null_mut(),
@@ -92,7 +83,9 @@ impl Broadcaster {
                     on_data_consumer_state_changed: Some(on_data_consumer_state_changed),
                 },
             );
-            shared.set_sys_broadcaster(sys_broadcaster);
+            log::trace!("broadcaster new {:?}", sys_broadcaster);
+            let mut state = shared.state.lock().unwrap();
+            state.sys_broadcaster = sys_broadcaster;
         }
         Self { shared }
     }
@@ -100,7 +93,7 @@ impl Broadcaster {
     fn get_recv_transport_id(&self) -> TransportId {
         unsafe {
             let recv_transport_id_ptr =
-                sys::broadcaster_get_recv_transport_id(self.shared.get_sys_broadcaster());
+                sys::broadcaster_get_recv_transport_id(self.get_sys_broadcaster());
             let recv_transport_id = TransportId::from(
                 CStr::from_ptr(recv_transport_id_ptr)
                     .to_str()
@@ -121,7 +114,7 @@ impl Broadcaster {
                     .await;
 
             let data_consumer = DataConsumer::new(
-                self.shared.get_sys_broadcaster(),
+                self.get_sys_broadcaster(),
                 data_consumer_options,
                 self.shared.data_consumer_tx.clone(),
             );
@@ -131,29 +124,32 @@ impl Broadcaster {
 
     pub fn produce_fake_media(&self) {
         unsafe {
-            sys::producer_new_from_fake_audio(self.shared.get_sys_broadcaster());
-            sys::producer_new_from_fake_video(self.shared.get_sys_broadcaster());
+            sys::producer_new_from_fake_audio(self.get_sys_broadcaster());
+            sys::producer_new_from_fake_video(self.get_sys_broadcaster());
         }
     }
-}
 
-impl Drop for Shared {
-    fn drop(&mut self) {
-        unsafe { sys::broadcaster_delete(self.get_sys_broadcaster()) }
+    pub fn produce_video_from_vcm_capturer(&self) {
+        unsafe {
+            sys::producer_new_from_vcm_capturer(self.get_sys_broadcaster());
+        }
     }
-}
-impl Shared {
-    fn set_sys_broadcaster(&self, sys_broadcaster: *mut sys::Broadcaster) {
-        let mut state = self.state.lock().unwrap();
-        state.sys_broadcaster = sys_broadcaster;
-    }
+
     fn get_sys_broadcaster(&self) -> *mut sys::Broadcaster {
-        let state = self.state.lock().unwrap();
+        let state = self.shared.state.lock().unwrap();
         state.sys_broadcaster
     }
 }
 
+impl Drop for State {
+    fn drop(&mut self) {
+        log::trace!("broadcaster delete {:?}", self.sys_broadcaster);
+        unsafe { sys::broadcaster_delete(self.sys_broadcaster) }
+    }
+}
+
 extern "C" fn server_rtp_capabilities(ctx: *const c_void) -> *mut i8 {
+    log::trace!("server_rtp_capabilities({:?})", ctx);
     unsafe {
         let shared = &*(ctx as *const Shared);
 
@@ -170,6 +166,7 @@ extern "C" fn server_rtp_capabilities(ctx: *const c_void) -> *mut i8 {
     }
 }
 extern "C" fn create_webrtc_transport(ctx: *const c_void) -> *mut i8 {
+    log::trace!("create_webrtc_transport({:?})", ctx);
     unsafe {
         let shared = &*(ctx as *const Shared);
 
@@ -186,6 +183,7 @@ extern "C" fn create_webrtc_transport(ctx: *const c_void) -> *mut i8 {
     }
 }
 extern "C" fn on_rtp_capabilities(ctx: *const c_void, rtp_caps: *const c_char) {
+    log::trace!("on_rtp_capabilities({:?})", ctx);
     unsafe {
         let shared = &*(ctx as *const Shared);
         let rtp_caps = CStr::from_ptr(rtp_caps).to_str().unwrap();
@@ -206,6 +204,7 @@ extern "C" fn on_produce(
     kind: *const i8,
     rtp_parameters: *const i8,
 ) -> *mut i8 {
+    log::trace!("on_produce({:?})", ctx);
     unsafe {
         let shared = &*(ctx as *const Shared);
         let transport_id_cstr = CStr::from_ptr(transport_id);
@@ -231,6 +230,7 @@ extern "C" fn on_connect_webrtc_transport(
     transport_id: *const i8,
     dtls_parameters: *const i8,
 ) {
+    log::trace!("on_connect_webrtc_transport({:?})", ctx);
     unsafe {
         let shared = &*(ctx as *const Shared);
         let transport_id_cstr = CStr::from_ptr(transport_id);
@@ -255,6 +255,7 @@ extern "C" fn consume_data(
     transport_id: *const i8,
     data_producer_id: *const i8,
 ) -> *mut i8 {
+    log::trace!("consume_data({:?})", ctx);
     unsafe {
         let shared = &*(ctx as *const Shared);
         let transport_id_cstr = CStr::from_ptr(transport_id);
@@ -281,6 +282,7 @@ extern "C" fn on_data_consumer_message(
     data: *const i8,
     len: u64,
 ) {
+    log::trace!("on_data_consumer_message({:?}, len={})", ctx, len);
     unsafe {
         let shared = &*(ctx as *const Shared);
         let data_consumer_id_cstr = CStr::from_ptr(data_consumer_id);
@@ -296,6 +298,7 @@ extern "C" fn on_data_consumer_state_changed(
     data_consumer_id: *const i8,
     state: *const i8,
 ) {
+    log::trace!("on_data_consumer_state_changed({:?})", ctx);
     unsafe {
         let shared = &*(ctx as *const Shared);
         let data_consumer_id_cstr = CStr::from_ptr(data_consumer_id);
