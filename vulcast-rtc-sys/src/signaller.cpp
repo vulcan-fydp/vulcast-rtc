@@ -53,19 +53,6 @@ void Signaller::OnDataConsumerMessage(const std::string &data_consumer_id,
   handler_.on_data_consumer_message(ctx_, data_consumer_id.c_str(), data, len);
 }
 
-nlohmann::json
-Signaller::ConsumeData(const std::string &transport_id,
-                       const std::string &data_producer_id) const {
-
-  char *data_consumer_options_cstr = handler_.consume_data(
-      ctx_, transport_id.c_str(), data_producer_id.c_str());
-  DCHECK(data_consumer_options_cstr != nullptr);
-  auto data_consumer_options =
-      nlohmann::json::parse(data_consumer_options_cstr);
-  retake_cstr(data_consumer_options_cstr);
-  return data_consumer_options;
-}
-
 void Signaller::OnDataConsumerStateChanged(const std::string &data_consumer_id,
                                            const std::string &state) const {
   handler_.on_data_consumer_state_changed(ctx_, data_consumer_id.c_str(),

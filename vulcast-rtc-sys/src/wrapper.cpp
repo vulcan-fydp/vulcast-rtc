@@ -12,6 +12,14 @@
 #include "broadcaster.hpp"
 #include "media_stream_track_factory.hpp"
 
+namespace {
+[[nodiscard]] char *copy_cstr(const std::string &str) {
+  char *buf = new char[str.length() + 1];
+  std::strcpy(buf, str.c_str());
+  return buf;
+}
+} // namespace
+
 void init(const char *argv0) {
   google::InitGoogleLogging(argv0);
   google::InstallFailureSignalHandler();
@@ -27,27 +35,27 @@ Broadcaster *broadcaster_new(const void *ctx, SignalHandler signal_handler) {
   broadcaster->Start();
   return broadcaster;
 }
-
 void broadcaster_delete(Broadcaster *broadcaster) {
   LOG(INFO) << "broadcaster_delete(" << std::hex << broadcaster << ")";
   delete broadcaster;
 }
+char *broadcaster_get_recv_transport_id(Broadcaster *b) {
+  std::string recv_transport_id = b->GetRecvTransportId();
+  return copy_cstr(recv_transport_id);
+}
 
-mediasoupclient::DataConsumer *data_consumer_new(Broadcaster *b,
-                                                 const char *data_producer_id) {
-  LOG(INFO) << "data_consumer_new(" << std::hex << b << "," << data_producer_id
-            << ")";
-  return b->ConsumeData(data_producer_id);
+mediasoupclient::DataConsumer *
+data_consumer_new(Broadcaster *b, const char *data_consumer_id,
+                  const char *data_producer_id,
+                  const char *sctp_stream_parameters) {
+  LOG(INFO) << "data_consumer_new(" << std::hex << b << "," << data_consumer_id
+            << "," << data_producer_id << "," << sctp_stream_parameters << ")";
+  return b->ConsumeData(data_consumer_id, data_producer_id,
+                        nlohmann::json::parse(sctp_stream_parameters));
 }
 void data_consumer_delete(mediasoupclient::DataConsumer *consumer) {
   LOG(INFO) << "data_consumer_delete(" << consumer->GetId() << ")";
   consumer->Close();
-}
-char *data_consumer_get_id(mediasoupclient::DataConsumer *consumer) {
-  std::string id = consumer->GetId();
-  char *buf = new char[id.length()];
-  std::memcpy(buf, id.c_str(), id.length());
-  return buf;
 }
 
 mediasoupclient::Producer *producer_new_from_fake_audio(Broadcaster *b) {

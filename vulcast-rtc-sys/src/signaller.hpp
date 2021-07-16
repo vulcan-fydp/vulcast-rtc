@@ -24,10 +24,6 @@ struct Signaller {
 
   void OnDataConsumerStateChanged(const std::string &data_consumer_id,
                                   const std::string &state) const;
-
-  nlohmann::json ConsumeData(const std::string &transport_id,
-                             const std::string &data_producer_id) const;
-
 private:
   const void *ctx_;
   SignalHandler handler_;

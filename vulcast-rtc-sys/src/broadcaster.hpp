@@ -22,10 +22,10 @@ public:
                               const nlohmann::json &dtlsParameters) override;
   void OnConnectionStateChange(mediasoupclient::Transport *transport,
                                const std::string &connectionState) override;
-  std::future<std::string>
-  OnProduce(mediasoupclient::SendTransport * transport,
-            const std::string &kind, nlohmann::json rtpParameters,
-            const nlohmann::json &appData) override;
+  std::future<std::string> OnProduce(mediasoupclient::SendTransport *transport,
+                                     const std::string &kind,
+                                     nlohmann::json rtpParameters,
+                                     const nlohmann::json &appData) override;
 
   std::future<std::string>
   OnProduceData(mediasoupclient::SendTransport *transport,
@@ -55,7 +55,9 @@ public:
   virtual ~Broadcaster();
 
   mediasoupclient::DataConsumer *
-  ConsumeData(const std::string &data_producer_id);
+  ConsumeData(const std::string &data_consumer_id,
+              const std::string &data_producer_id,
+              const nlohmann::json &sctp_stream_parameters);
 
   mediasoupclient::Producer *
   Produce(webrtc::MediaStreamTrackInterface *track,
@@ -66,6 +68,9 @@ public:
   bool CanProduceAudio() { return device_.CanProduce("audio"); }
   bool CanProduceVideo() { return device_.CanProduce("video"); }
 
+  std::string GetSendTransportId() const { return send_transport_->GetId(); }
+  std::string GetRecvTransportId() const { return recv_transport_->GetId(); }
+
 private:
   Signaller signaller_;
 
@@ -74,7 +79,6 @@ private:
   mediasoupclient::RecvTransport *recv_transport_{nullptr};
 
   std::string id = std::to_string(rtc::CreateRandomId());
-  std::thread sendDataThread;
 
   void CreateSendTransport();
   void CreateRecvTransport();

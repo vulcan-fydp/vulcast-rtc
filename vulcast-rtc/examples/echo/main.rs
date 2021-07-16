@@ -169,6 +169,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
         }}),
     });
+    vulcast_rtc::set_native_log_level(vulcast_rtc::LogLevel::Debug);
 
     let data_producer_available = client.subscribe::<signal_schema::DataProducerAvailable>(
         signal_schema::data_producer_available::Variables,
@@ -178,7 +179,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while let Some(Ok(response)) = data_producer_available_stream.next().await {
             let data_producer_id = response.data.unwrap().data_producer_available;
             println!("{:?}: data producer available", &data_producer_id);
-            let data_consumer = broadcaster.consume_data(data_producer_id);
+            let data_consumer = broadcaster.consume_data(data_producer_id).await;
             let id = data_consumer.id();
             tokio::spawn( async move {
                 let id = id.clone();

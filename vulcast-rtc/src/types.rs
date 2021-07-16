@@ -48,7 +48,7 @@ pub struct DtlsParameters(serde_json::Value);
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, From, Into)]
 #[serde(rename_all = "camelCase")]
 pub struct DataConsumerOptions {
-    id: DataConsumerId,
-    data_producer_id: DataProducerId,
-    sctp_stream_parameters: serde_json::Value,
+    pub id: DataConsumerId,
+    pub data_producer_id: DataProducerId,
+    pub sctp_stream_parameters: serde_json::Value,
 }

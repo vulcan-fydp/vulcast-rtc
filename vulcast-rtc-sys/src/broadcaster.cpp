@@ -90,13 +90,10 @@ void Broadcaster::Start() {
 }
 
 mediasoupclient::DataConsumer *
-Broadcaster::ConsumeData(const std::string &data_producer_id) {
+Broadcaster::ConsumeData(const std::string &data_consumer_id,
+                         const std::string &data_producer_id,
+                         const nlohmann::json &sctp_stream_parameters) {
   LOG(INFO) << "Broadcaster::CreateDataConsumer(" << data_producer_id << ")";
-  auto data_consumer_options =
-      signaller_.ConsumeData(recv_transport_->GetId(), data_producer_id);
-  auto sctp_stream_parameters = data_consumer_options["sctpStreamParameters"];
-  LOG(INFO) << "sctp_stream_parameters: " << sctp_stream_parameters;
-  const auto &data_consumer_id = data_consumer_options["id"].get<std::string>();
   return recv_transport_->ConsumeData(this, data_consumer_id, data_producer_id,
                                       "", sctp_stream_parameters);
 }

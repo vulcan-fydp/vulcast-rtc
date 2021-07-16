@@ -39,15 +39,26 @@ struct State {
 }
 
 pub struct Handlers {
-    pub server_rtp_capabilities: Box<dyn Fn() -> BoxFuture<'static, RtpCapabilitiesFinalized>>,
-    pub create_webrtc_transport: Box<dyn Fn() -> BoxFuture<'static, WebRtcTransportOptions>>,
-    pub on_rtp_capabilities: Box<dyn Fn(RtpCapabilities) -> BoxFuture<'static, ()>>,
-    pub on_produce:
-        Box<dyn Fn(TransportId, MediaKind, RtpParameters) -> BoxFuture<'static, ProducerId>>,
+    pub server_rtp_capabilities:
+        Box<dyn Fn() -> BoxFuture<'static, RtpCapabilitiesFinalized> + Send + Sync + 'static>,
+    pub create_webrtc_transport:
+        Box<dyn Fn() -> BoxFuture<'static, WebRtcTransportOptions> + Send + Sync + 'static>,
+    pub on_rtp_capabilities:
+        Box<dyn Fn(RtpCapabilities) -> BoxFuture<'static, ()> + Send + Sync + 'static>,
+    pub on_produce: Box<
+        dyn Fn(TransportId, MediaKind, RtpParameters) -> BoxFuture<'static, ProducerId>
+            + Send
+            + Sync
+            + 'static,
+    >,
     pub on_connect_webrtc_transport:
-        Box<dyn Fn(TransportId, DtlsParameters) -> BoxFuture<'static, ()>>,
-    pub consume_data:
-        Box<dyn Fn(TransportId, DataProducerId) -> BoxFuture<'static, DataConsumerOptions>>,
+        Box<dyn Fn(TransportId, DtlsParameters) -> BoxFuture<'static, ()> + Send + Sync + 'static>,
+    pub consume_data: Box<
+        dyn Fn(TransportId, DataProducerId) -> BoxFuture<'static, DataConsumerOptions>
+            + Send
+            + Sync
+            + 'static,
+    >,
 }
 
 impl Broadcaster {
@@ -86,24 +97,35 @@ impl Broadcaster {
         Self { shared }
     }
 
-    pub fn consume_data(&self, data_producer_id: DataProducerId) -> DataConsumer {
+    fn get_recv_transport_id(&self) -> TransportId {
         unsafe {
-            let data_producer_id_cstr =
-                CString::new(String::from(data_producer_id.clone())).unwrap();
-            let sys_data_consumer = sys::data_consumer_new(
-                self.shared.get_sys_broadcaster(),
-                data_producer_id_cstr.as_ptr(),
+            let recv_transport_id_ptr =
+                sys::broadcaster_get_recv_transport_id(self.shared.get_sys_broadcaster());
+            let recv_transport_id = TransportId::from(
+                CStr::from_ptr(recv_transport_id_ptr)
+                    .to_str()
+                    .unwrap()
+                    .to_owned(),
             );
-            let data_consumer_id_ptr = sys::data_consumer_get_id(sys_data_consumer);
-            let data_consumer_id_cstr = CStr::from_ptr(data_consumer_id_ptr);
-            let data_consumer_id =
-                DataConsumerId::from(data_consumer_id_cstr.to_string_lossy().into_owned());
-            sys::delete_str(data_consumer_id_ptr);
-            DataConsumer::new(
-                sys_data_consumer,
-                data_consumer_id,
+            sys::delete_str(recv_transport_id_ptr);
+            recv_transport_id
+        }
+    }
+
+    pub async fn consume_data(&self, data_producer_id: DataProducerId) -> DataConsumer {
+        unsafe {
+            let recv_transport_id = self.get_recv_transport_id();
+
+            let data_consumer_options =
+                (self.shared.handlers.consume_data)(recv_transport_id, data_producer_id.clone())
+                    .await;
+
+            let data_consumer = DataConsumer::new(
+                self.shared.get_sys_broadcaster(),
+                data_consumer_options,
                 self.shared.data_consumer_tx.clone(),
-            )
+            );
+            data_consumer
         }
     }
 
