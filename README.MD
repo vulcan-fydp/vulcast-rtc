@@ -14,22 +14,24 @@ cargo build
 ```
 
 ## Build (Cross-compiling)
-### From prebuilt
-Two host triples are prebuilt in debug mode, `aarch64-unknown-linux-gnu` and `x86_64-unknown-linux-gnu`.
-
-1. Install cross-compiler toolchain for ARM64
+1. Install cross-compiler toolchain for arm-linux-gnueabihf
 ```bash
 # install rust cross toolchain
-rustup target add aarch64-unknown-linux-gnu
-# install system cross linker (e.g. for archlinux)
-sudo pacman -S aarch64-linux-gnu-gcc
+rustup target add armv7-unknown-linux-gnueabihf
+
+# install system cross linker (e.g. arm-linux-gnueabihf-gcc for Arch Linux)
 ```
-2. Build `vulcast-rtc`
+
+### From prebuilt
+Two host triples are prebuilt, `armv7-unknown-linux-gnueabihf` and `x86_64-unknown-linux-gnu`.
+
+1. Build `vulcast-rtc`
 ```bash
-# bindgen uses clang, so if your cross-compiler is gnu you need to add some include dirs
-export BINDGEN_EXTRA_CLANG_ARGS='-I/usr/aarch64-linux-gnu/include/c++/11.1.0/aarch64-linux-gnu'
-cargo build --target=aarch64-unknown-linux-gnu
+export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=/usr/bin/arm-linux-gnueabihf-gcc
+export BINDGEN_EXTRA_CLANG_ARGS='-I/usr/arm-linux-gnueabihf/include/c++/11.1.0/arm-linux-gnueabihf'
+cargo build --target=armv7-unknown-linux-gnueabihf
 ```
+
 ### From source
 You will need:
 - A 64-bit linux system with kernel >4.2
@@ -41,21 +43,15 @@ You will need:
 - You MUST use clang (i.e. `is_clang=true` for GN config)
 - You MUST compile to a static library (no component builds)
 - You will need to add a Debian sysroot for ARM64
-2. Install cross-compiler toolchain for ARM64
-```bash
-# install rust cross toolchain
-rustup target add aarch64-unknown-linux-gnu
-# install system cross compiler (e.g. for Arch Linux)
-sudo pacman -S aarch64-linux-gnu-gcc lib32-glibc
-```
-3. Build `vulcast-rtc`
+
+2. Build `vulcast-rtc`
 ```bash
 export VULCAST_RTC_FROM_SOURCE=1
 export LIBWEBRTC_INCLUDE_PATH=/path/to/webrtc/src
-export LIBWEBRTC_BINARY_PATH=/path/to/webrtc/src/out/m84/obj
-# bindgen uses clang, so if your cross-compiler is gnu you need to add some include dirs
-export BINDGEN_EXTRA_CLANG_ARGS='-I/usr/aarch64-linux-gnu/include/c++/11.1.0/aarch64-linux-gnu'
-cargo build --target=aarch64-unknown-linux-gnu
+export LIBWEBRTC_BINARY_PATH=/path/to/webrtc/src/out/m84-arm/obj
+export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=/usr/bin/arm-linux-gnueabihf-gcc
+export BINDGEN_EXTRA_CLANG_ARGS='-I/usr/arm-linux-gnueabihf/include/c++/11.1.0/arm-linux-gnueabihf'
+cargo build --target=armv7-unknown-linux-gnu-gcc
 ```
 
 ## Sample
