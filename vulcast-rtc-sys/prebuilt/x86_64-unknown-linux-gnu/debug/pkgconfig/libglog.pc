@@ -1,7 +1,7 @@
-prefix=/mnt/scratch/vulcast-rtc/target/debug/build/vulcast-rtc-sys-9c0502a2d284af3c/out
-exec_prefix=/mnt/scratch/vulcast-rtc/target/debug/build/vulcast-rtc-sys-9c0502a2d284af3c/out/bin
-libdir=/mnt/scratch/vulcast-rtc/target/debug/build/vulcast-rtc-sys-9c0502a2d284af3c/out/lib
-includedir=/mnt/scratch/vulcast-rtc/target/debug/build/vulcast-rtc-sys-9c0502a2d284af3c/out/include
+prefix=/mnt/scratch/vulcast-rtc/target/debug/build/vulcast-rtc-sys-eb92f0f5be548468/out
+exec_prefix=/mnt/scratch/vulcast-rtc/target/debug/build/vulcast-rtc-sys-eb92f0f5be548468/out/bin
+libdir=/mnt/scratch/vulcast-rtc/target/debug/build/vulcast-rtc-sys-eb92f0f5be548468/out/lib
+includedir=/mnt/scratch/vulcast-rtc/target/debug/build/vulcast-rtc-sys-eb92f0f5be548468/out/include
 
 Name: libglog
 Description: Google Log (glog) C++ logging framework

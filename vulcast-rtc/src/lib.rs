@@ -1,6 +1,8 @@
 pub mod broadcaster;
 pub mod data_consumer;
 pub mod types;
+pub mod foreign_producer;
+pub mod frame_source;
 
 use std::{ffi::CString, sync::Once};
 

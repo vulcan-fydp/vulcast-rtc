@@ -1,12 +1,17 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 class Broadcaster;
 namespace mediasoupclient {
 class DataConsumer;
 class Producer;
 } // namespace mediasoupclient
+
+// foreign callback requesting frame in RGB (little-endian) format
+typedef void (*frame_callback_t)(const void *ctx, size_t width, size_t height,
+                                 int64_t timestamp, uint8_t *);
 
 struct SignalHandler {
   // Get router RTP capabilities. Returns RtpCapabilitiesFinalized.
@@ -51,6 +56,9 @@ void data_consumer_delete(mediasoupclient::DataConsumer *consumer);
 mediasoupclient::Producer *producer_new_from_fake_audio(Broadcaster *b);
 mediasoupclient::Producer *producer_new_from_fake_video(Broadcaster *b);
 mediasoupclient::Producer *producer_new_from_vcm_capturer(Broadcaster *b);
+mediasoupclient::Producer *
+producer_new_from_foreign(Broadcaster *b, size_t width, size_t height,
+                          size_t fps, void *ctx, frame_callback_t callback);
 void producer_delete(mediasoupclient::Producer *producer);
 
 void debug_enumerate_capture_devices();

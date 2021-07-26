@@ -4,6 +4,7 @@ include(FetchContent)
 add_subdirectory(libwebrtc)
 set(LIBWEBRTC_STATIC ${LIBWEBRTC_BINARY_PATH}/libwebrtc${CMAKE_STATIC_LIBRARY_SUFFIX})
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${LIBWEBRTC_INCLUDE_PATH})
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${LIBWEBRTC_INCLUDE_PATH}/third_party/libyuv/include)
 target_link_libraries(${PROJECT_NAME} PUBLIC ${LIBWEBRTC_STATIC} pthread dl webrtc_broadcaster)
 install(FILES ${LIBWEBRTC_STATIC} DESTINATION lib)
 

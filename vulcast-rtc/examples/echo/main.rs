@@ -2,16 +2,14 @@ use serde::Serialize;
 use std::{io::Read, sync::Arc};
 
 use clap::{AppSettings, Clap};
-use futures::StreamExt;
 use graphql_ws::GraphQLWebSocket;
 use http::Uri;
 use tokio::net::TcpStream;
 use tokio_tungstenite::Connector;
 
+use crate::echo_frame_source::EchoFrameSource;
 use signal_schema as schema;
 use vulcast_rtc::broadcaster::{Broadcaster, Handlers};
-
-mod signal_schema;
 
 macro_rules! enclose {
     ( ($( $x:ident ),*) $y:expr ) => {
@@ -21,6 +19,10 @@ macro_rules! enclose {
         }
     };
 }
+
+mod controller_message;
+mod echo_frame_source;
+mod signal_schema;
 
 #[derive(Serialize)]
 struct SessionToken {
@@ -36,6 +38,9 @@ pub struct Opts {
     /// Pre-authorized access token.
     #[clap(short, long)]
     pub token: String,
+    // Disable TLS.
+    #[clap(long)]
+    pub no_tls: bool,
 }
 
 #[tokio::main]
@@ -78,7 +83,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         req,
         stream,
         None,
-        Some(Connector::Rustls(Arc::new(client_config))),
+        Some(if opts.no_tls {
+            Connector::Plain
+        } else {
+            Connector::Rustls(Arc::new(client_config))
+        }),
     )
     .await?;
 
@@ -176,27 +185,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let data_producer_available = client.subscribe::<signal_schema::DataProducerAvailable>(
         signal_schema::data_producer_available::Variables,
     );
-    let mut data_producer_available_stream = data_producer_available.execute();
-    tokio::spawn(enclose! { (broadcaster) async move {
-        while let Some(Ok(response)) = data_producer_available_stream.next().await {
-            let data_producer_id = response.data.unwrap().data_producer_available;
-            println!("{:?}: data producer available", &data_producer_id);
-            let mut data_consumer = broadcaster.consume_data(data_producer_id).await;
-            let id = data_consumer.id();
-            tokio::spawn( async move {
-                let id = id.clone();
-                println!("{:?}: data consumer started", id);
-                while let Some(msg) = data_consumer.next().await {
-                    let str = String::from_utf8_lossy(msg.as_slice());
-                    println!("{:?}: {:?} ({})", id, msg, str);
-                }
-                println!("{:?}: data consumer terminated", id);
-            });
-        }
-    }});
-
-    // broadcaster.produce_fake_media();
-    broadcaster.produce_video_from_vcm_capturer();
+    let _producer = broadcaster.produce_video_from_frame_source(
+        Arc::new(EchoFrameSource::new(
+            broadcaster.clone(),
+            data_producer_available,
+        )),
+        640,
+        480,
+        24,
+    );
 
     println!("Press Enter to instantly die...");
     let _ = std::io::stdin().read(&mut [0u8]).unwrap();

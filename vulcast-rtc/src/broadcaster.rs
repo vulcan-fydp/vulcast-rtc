@@ -1,4 +1,5 @@
 use futures::future::BoxFuture;
+use std::pin::Pin;
 use std::ptr;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -12,6 +13,8 @@ use tokio::runtime::{self, Runtime};
 use tokio::sync::broadcast;
 
 use crate::data_consumer::{self, DataConsumer};
+use crate::foreign_producer::ForeignProducer;
+use crate::frame_source::FrameSource;
 use crate::types::*;
 use vulcast_rtc_sys as sys;
 
@@ -21,7 +24,7 @@ lazy_static! {
 
 #[derive(Clone)]
 pub struct Broadcaster {
-    shared: Arc<Shared>,
+    shared: Pin<Arc<Shared>>,
 }
 struct Shared {
     state: Mutex<State>,
@@ -29,7 +32,6 @@ struct Shared {
 
     data_consumer_tx: broadcast::Sender<data_consumer::Message>,
 }
-// uses of sys_broadcaster are guarded by mutex, so this is safe
 unsafe impl Send for Shared {}
 unsafe impl Sync for Shared {}
 struct State {
@@ -60,9 +62,10 @@ pub struct Handlers {
 }
 
 impl Broadcaster {
+    /// Create a new broadcaster with the given signalling handlers.
     pub fn new(handlers: Handlers) -> Self {
         super::native_init();
-        let shared = Arc::new(Shared {
+        let shared = Arc::pin(Shared {
             state: Mutex::new(State {
                 sys_broadcaster: ptr::null_mut(),
             }),
@@ -92,8 +95,7 @@ impl Broadcaster {
 
     fn get_recv_transport_id(&self) -> TransportId {
         unsafe {
-            let recv_transport_id_ptr =
-                sys::broadcaster_get_recv_transport_id(self.get_sys_broadcaster());
+            let recv_transport_id_ptr = sys::broadcaster_get_recv_transport_id(self.sys());
             let recv_transport_id = TransportId::from(
                 CStr::from_ptr(recv_transport_id_ptr)
                     .to_str()
@@ -105,6 +107,7 @@ impl Broadcaster {
         }
     }
 
+    /// Consume data from the given data producer.
     pub async fn consume_data(&self, data_producer_id: DataProducerId) -> DataConsumer {
         unsafe {
             let recv_transport_id = self.get_recv_transport_id();
@@ -114,7 +117,7 @@ impl Broadcaster {
                     .await;
 
             let data_consumer = DataConsumer::new(
-                self.get_sys_broadcaster(),
+                self.sys(),
                 data_consumer_options,
                 self.shared.data_consumer_tx.clone(),
             );
@@ -122,20 +125,36 @@ impl Broadcaster {
         }
     }
 
-    pub fn produce_fake_media(&self) {
+    /// Produce a fake media stream for debugging purposes (leaks memory).
+    pub fn debug_produce_fake_media(&self) {
         unsafe {
-            sys::producer_new_from_fake_audio(self.get_sys_broadcaster());
-            sys::producer_new_from_fake_video(self.get_sys_broadcaster());
+            sys::producer_new_from_fake_audio(self.sys());
+            sys::producer_new_from_fake_video(self.sys());
         }
     }
 
-    pub fn produce_video_from_vcm_capturer(&self) {
+    /// Produce a fake media stream from the first available video device for
+    /// debugging purposes (leaks memory).
+    pub fn debug_produce_video_from_vcm_capturer(&self) {
         unsafe {
-            sys::producer_new_from_vcm_capturer(self.get_sys_broadcaster());
+            sys::producer_new_from_vcm_capturer(self.sys());
         }
     }
 
-    fn get_sys_broadcaster(&self) -> *mut sys::Broadcaster {
+    /// Produce a video stream from a programatically generated source.
+    /// The provided frame source is initialized with the provided dimensions,
+    /// and will be polled from a RTC thread at the given frame rate.
+    pub fn produce_video_from_frame_source(
+        &self,
+        frame_source: Arc<dyn FrameSource>,
+        width: u64,
+        height: u64,
+        fps: u64,
+    ) -> ForeignProducer {
+        ForeignProducer::new(self.sys(), frame_source, width, height, fps)
+    }
+
+    fn sys(&self) -> *mut sys::Broadcaster {
         let state = self.shared.state.lock().unwrap();
         state.sys_broadcaster
     }
@@ -150,53 +169,46 @@ impl Drop for State {
 
 extern "C" fn server_rtp_capabilities(ctx: *const c_void) -> *mut i8 {
     log::trace!("server_rtp_capabilities({:?})", ctx);
-    unsafe {
-        let shared = &*(ctx as *const Shared);
+    let shared = unsafe { &*(ctx as *const Shared) };
 
-        let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        let fut = (shared.handlers.server_rtp_capabilities)();
-        NATIVE_RUNTIME.spawn(async move {
-            let _ = tx.send(fut.await);
-        });
+    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    let fut = (shared.handlers.server_rtp_capabilities)();
+    NATIVE_RUNTIME.spawn(async move {
+        let _ = tx.send(fut.await);
+    });
 
-        let server_rtp_capabilities = rx.recv().unwrap();
-        CString::new(serde_json::to_string(&server_rtp_capabilities).unwrap())
-            .unwrap()
-            .into_raw()
-    }
+    let server_rtp_capabilities = rx.recv().unwrap();
+    CString::new(serde_json::to_string(&server_rtp_capabilities).unwrap())
+        .unwrap()
+        .into_raw()
 }
 extern "C" fn create_webrtc_transport(ctx: *const c_void) -> *mut i8 {
     log::trace!("create_webrtc_transport({:?})", ctx);
-    unsafe {
-        let shared = &*(ctx as *const Shared);
+    let shared = unsafe { &*(ctx as *const Shared) };
+    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    let fut = (shared.handlers.create_webrtc_transport)();
+    NATIVE_RUNTIME.spawn(async move {
+        let _ = tx.send(fut.await);
+    });
 
-        let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        let fut = (shared.handlers.create_webrtc_transport)();
-        NATIVE_RUNTIME.spawn(async move {
-            let _ = tx.send(fut.await);
-        });
-
-        let webrtc_transport_options = rx.recv().unwrap();
-        CString::new(serde_json::to_string(&webrtc_transport_options).unwrap())
-            .unwrap()
-            .into_raw()
-    }
+    let webrtc_transport_options = rx.recv().unwrap();
+    CString::new(serde_json::to_string(&webrtc_transport_options).unwrap())
+        .unwrap()
+        .into_raw()
 }
 extern "C" fn on_rtp_capabilities(ctx: *const c_void, rtp_caps: *const c_char) {
     log::trace!("on_rtp_capabilities({:?})", ctx);
-    unsafe {
-        let shared = &*(ctx as *const Shared);
-        let rtp_caps = CStr::from_ptr(rtp_caps).to_str().unwrap();
+    let shared = unsafe { &*(ctx as *const Shared) };
+    let rtp_caps = unsafe { CStr::from_ptr(rtp_caps).to_str().unwrap() };
 
-        let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        let fut = (shared.handlers.on_rtp_capabilities)(RtpCapabilities::from(
-            serde_json::from_str::<serde_json::Value>(rtp_caps).unwrap(),
-        ));
-        NATIVE_RUNTIME.spawn(async move {
-            let _ = tx.send(fut.await);
-        });
-        let _ = rx.recv().unwrap();
-    }
+    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    let fut = (shared.handlers.on_rtp_capabilities)(RtpCapabilities::from(
+        serde_json::from_str::<serde_json::Value>(rtp_caps).unwrap(),
+    ));
+    NATIVE_RUNTIME.spawn(async move {
+        let _ = tx.send(fut.await);
+    });
+    let _ = rx.recv().unwrap();
 }
 extern "C" fn on_produce(
     ctx: *const c_void,

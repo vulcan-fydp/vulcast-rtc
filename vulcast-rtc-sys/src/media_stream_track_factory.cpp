@@ -1,3 +1,4 @@
+#include <api/task_queue/default_task_queue_factory.h>
 #include <iostream>
 
 #include "api/audio_codecs/builtin_audio_decoder_factory.h"
@@ -60,8 +61,7 @@ static void createFactory() {
 }
 
 // Audio track creation.
-rtc::scoped_refptr<webrtc::AudioTrackInterface>
-createAudioTrack(const std::string &label) {
+rtc::scoped_refptr<webrtc::AudioTrackInterface> createAudioTrack() {
   if (!factory)
     createFactory();
 
@@ -71,12 +71,11 @@ createAudioTrack(const std::string &label) {
   rtc::scoped_refptr<webrtc::AudioSourceInterface> source =
       factory->CreateAudioSource(options);
 
-  return factory->CreateAudioTrack(label, source);
+  return factory->CreateAudioTrack(rtc::CreateRandomUuid(), source);
 }
 
 // Video track creation.
-rtc::scoped_refptr<webrtc::VideoTrackInterface>
-createVideoTrack(const std::string & /*label*/) {
+rtc::scoped_refptr<webrtc::VideoTrackInterface> createVideoTrack() {
   if (!factory)
     createFactory();
 
@@ -87,8 +86,7 @@ createVideoTrack(const std::string & /*label*/) {
   return factory->CreateVideoTrack(rtc::CreateRandomUuid(), videoTrackSource);
 }
 
-rtc::scoped_refptr<webrtc::VideoTrackInterface>
-createSquaresVideoTrack(const std::string & /*label*/) {
+rtc::scoped_refptr<webrtc::VideoTrackInterface> createSquaresVideoTrack() {
   if (!factory)
     createFactory();
 
@@ -140,8 +138,7 @@ private:
   std::unique_ptr<webrtc::test::VcmCapturer> capturer_;
 };
 
-rtc::scoped_refptr<webrtc::VideoTrackInterface>
-createVcmCapturerVideoTrack(const std::string & /*label*/) {
+rtc::scoped_refptr<webrtc::VideoTrackInterface> createVcmCapturerVideoTrack() {
   if (!factory)
     createFactory();
 
@@ -149,4 +146,25 @@ createVcmCapturerVideoTrack(const std::string & /*label*/) {
       CapturerTrackSource::Create();
   CHECK(video_device);
   return factory->CreateVideoTrack(rtc::CreateRandomUuid(), video_device);
+}
+
+rtc::scoped_refptr<webrtc::VideoTrackInterface>
+createForeignVideoTrack(size_t width, size_t height, size_t fps, void *ctx,
+                        frame_callback_t callback) {
+  if (!factory)
+    createFactory();
+
+  auto task_queue_factory = webrtc::CreateDefaultTaskQueueFactory();
+  auto video_capturer = std::make_unique<webrtc::test::FrameGeneratorCapturer>(
+      webrtc::Clock::GetRealTimeClock(),
+      std::make_unique<ForeignFrameGenerator>(width, height, webrtc::Clock::GetRealTimeClock(), ctx, callback),
+      fps, *task_queue_factory);
+  video_capturer->Init();
+
+  auto *videoTrackSource =
+      new rtc::RefCountedObject<webrtc::FrameGeneratorCapturerVideoTrackSource>(
+          std::move(video_capturer), true);
+  videoTrackSource->Start();
+
+  return factory->CreateVideoTrack(rtc::CreateRandomUuid(), videoTrackSource);
 }
