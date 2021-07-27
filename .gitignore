@@ -3,7 +3,7 @@
 # clangd cache
 .cache/
 # cmake build
-build/
+out/
 
 # will have compiled files and executables
 target/

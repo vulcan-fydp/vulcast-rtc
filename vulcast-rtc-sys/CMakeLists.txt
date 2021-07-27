@@ -15,3 +15,5 @@ add_subdirectory(src)
 add_subdirectory(deps)
 
 install(TARGETS vulcast-rtc DESTINATION lib)
+
+message(STATUS ${CMAKE_SYSTEM_PROCESSOR})

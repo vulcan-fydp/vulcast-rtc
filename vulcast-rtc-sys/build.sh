@@ -1,13 +1,11 @@
 #!/bin/bash
-# build cmake portion only
+# build a compile db for clangd
 
 set -euo pipefail
 
-source env.sh
-
-cmake . -Bbuild \
+cmake . -Bout \
 	-DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
-	-DLIBWEBRTC_INCLUDE_PATH:PATH="$LIBWEBRTC_INCLUDE_PATH" \
-	-DLIBWEBRTC_BINARY_PATH:PATH="$LIBWEBRTC_BINARY_PATH" 
+	-DLIBWEBRTC_INCLUDE_PATH:PATH="/mnt/scratch/vulcast-rtc/vulcast-rtc-sys/deps/libwebrtc/include" \
+	-DLIBWEBRTC_BINARY_PATH:PATH="/mnt/scratch/vulcast-rtc/vulcast-rtc-sys/deps/libwebrtc/lib/x86_64-unknown-linux-gnu" 
 
-cmake --build build 
+cmake --build out

@@ -63,28 +63,37 @@ mediasoupclient::Producer *producer_new_from_fake_audio(Broadcaster *b) {
   CHECK(b->CanProduceAudio());
   auto audio_track = createAudioTrack();
   nlohmann::json codec_options = {{"opusStereo", true}, {"opusDtx", true}};
-  return b->Produce(audio_track, nullptr, codec_options);
+  auto producer = b->Produce(audio_track, nullptr, codec_options);
+  CHECK(producer != nullptr);
+  return producer;
 }
 mediasoupclient::Producer *producer_new_from_fake_video(Broadcaster *b) {
   LOG(INFO) << "producer_new_from_fake_video(" << std::hex << b << ")";
   CHECK(b->CanProduceVideo());
   auto video_track = createSquaresVideoTrack();
-  return b->Produce(video_track);
+  auto producer = b->Produce(video_track);
+  CHECK(producer != nullptr);
+  return producer;
 }
 mediasoupclient::Producer *producer_new_from_vcm_capturer(Broadcaster *b) {
   LOG(INFO) << "producer_new_from_vcm_capturer(" << std::hex << b << ")";
   auto video_track = createVcmCapturerVideoTrack();
-  return b->Produce(video_track);
+  auto producer = b->Produce(video_track);
+  CHECK(producer != nullptr);
+  return producer;
 }
 mediasoupclient::Producer *
 producer_new_from_foreign(Broadcaster *b, size_t width, size_t height,
                           size_t fps, void *ctx, frame_callback_t callback) {
   LOG(INFO) << "producer_new_from_foreign(" << std::hex << b << ")";
   auto video_track = createForeignVideoTrack(width, height, fps, ctx, callback);
-  return b->Produce(video_track);
+  auto producer = b->Produce(video_track);
+  CHECK(producer != nullptr);
+  return producer;
 }
 void producer_delete(mediasoupclient::Producer *producer) {
   LOG(INFO) << "producer_delete(" << std::hex << producer << ")";
+  CHECK(producer != nullptr);
   producer->Close();
 }
 
