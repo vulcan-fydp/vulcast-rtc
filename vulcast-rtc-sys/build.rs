@@ -43,6 +43,7 @@ fn main() {
     let lib_path = dst.join("lib");
 
     println!("cargo:rustc-link-search=native={}", lib_path.display());
+    println!("cargo:rustc-link-search=native={}", webrtc_binary_path);
 
     println!("cargo:rustc-link-lib=static=vulcast-rtc");
     println!("cargo:rustc-link-lib=static=webrtcextra");

@@ -1,0 +1,4 @@
+# clangd cache
+.cache/
+# cmake build
+/build

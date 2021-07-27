@@ -1,4 +1,5 @@
 use futures::future::BoxFuture;
+use std::os::raw::c_ulong;
 use std::pin::Pin;
 use std::ptr;
 use std::str::FromStr;
@@ -147,9 +148,9 @@ impl Broadcaster {
     pub fn produce_video_from_frame_source(
         &self,
         frame_source: Arc<dyn FrameSource>,
-        width: u64,
-        height: u64,
-        fps: u64,
+        width: u32,
+        height: u32,
+        fps: u32,
     ) -> ForeignProducer {
         ForeignProducer::new(self.sys(), frame_source, width, height, fps)
     }
@@ -167,7 +168,7 @@ impl Drop for State {
     }
 }
 
-extern "C" fn server_rtp_capabilities(ctx: *const c_void) -> *mut i8 {
+extern "C" fn server_rtp_capabilities(ctx: *const c_void) -> *mut c_char {
     log::trace!("server_rtp_capabilities({:?})", ctx);
     let shared = unsafe { &*(ctx as *const Shared) };
 
@@ -182,7 +183,7 @@ extern "C" fn server_rtp_capabilities(ctx: *const c_void) -> *mut i8 {
         .unwrap()
         .into_raw()
 }
-extern "C" fn create_webrtc_transport(ctx: *const c_void) -> *mut i8 {
+extern "C" fn create_webrtc_transport(ctx: *const c_void) -> *mut c_char {
     log::trace!("create_webrtc_transport({:?})", ctx);
     let shared = unsafe { &*(ctx as *const Shared) };
     let (tx, rx) = std::sync::mpsc::sync_channel(1);
@@ -212,10 +213,10 @@ extern "C" fn on_rtp_capabilities(ctx: *const c_void, rtp_caps: *const c_char) {
 }
 extern "C" fn on_produce(
     ctx: *const c_void,
-    transport_id: *const i8,
-    kind: *const i8,
-    rtp_parameters: *const i8,
-) -> *mut i8 {
+    transport_id: *const c_char,
+    kind: *const c_char,
+    rtp_parameters: *const c_char,
+) -> *mut c_char {
     log::trace!("on_produce({:?})", ctx);
     unsafe {
         let shared = &*(ctx as *const Shared);
@@ -239,8 +240,8 @@ extern "C" fn on_produce(
 }
 extern "C" fn on_connect_webrtc_transport(
     ctx: *const c_void,
-    transport_id: *const i8,
-    dtls_parameters: *const i8,
+    transport_id: *const c_char,
+    dtls_parameters: *const c_char,
 ) {
     log::trace!("on_connect_webrtc_transport({:?})", ctx);
     unsafe {
@@ -264,9 +265,9 @@ extern "C" fn on_connect_webrtc_transport(
 }
 extern "C" fn consume_data(
     ctx: *const c_void,
-    transport_id: *const i8,
-    data_producer_id: *const i8,
-) -> *mut i8 {
+    transport_id: *const c_char,
+    data_producer_id: *const c_char,
+) -> *mut c_char {
     log::trace!("consume_data({:?})", ctx);
     unsafe {
         let shared = &*(ctx as *const Shared);
@@ -290,9 +291,9 @@ extern "C" fn consume_data(
 }
 extern "C" fn on_data_consumer_message(
     ctx: *const c_void,
-    data_consumer_id: *const i8,
-    data: *const i8,
-    len: u64,
+    data_consumer_id: *const c_char,
+    data: *const c_char,
+    len: c_ulong,
 ) {
     log::trace!("on_data_consumer_message({:?}, len={})", ctx, len);
     unsafe {
@@ -307,8 +308,8 @@ extern "C" fn on_data_consumer_message(
 }
 extern "C" fn on_data_consumer_state_changed(
     ctx: *const c_void,
-    data_consumer_id: *const i8,
-    state: *const i8,
+    data_consumer_id: *const c_char,
+    state: *const c_char,
 ) {
     log::trace!("on_data_consumer_state_changed({:?})", ctx);
     unsafe {

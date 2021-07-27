@@ -27,9 +27,9 @@ impl ForeignProducer {
     pub fn new(
         sys_broadcaster: *mut sys::Broadcaster,
         frame_source: Arc<dyn FrameSource>,
-        width: u64,
-        height: u64,
-        fps: u64,
+        width: u32,
+        height: u32,
+        fps: u32,
     ) -> Self {
         let shared = Arc::pin(Shared {
             state: Mutex::new(State {
@@ -65,8 +65,8 @@ impl Drop for State {
 
 extern "C" fn frame_source_next_frame(
     ctx: *const c_void,
-    width: u64,
-    height: u64,
+    width: u32,
+    height: u32,
     timestamp: i64,
     data: *mut u8,
 ) {
