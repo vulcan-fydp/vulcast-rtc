@@ -83,8 +83,8 @@ mediasoupclient::Producer *producer_new_from_vcm_capturer(Broadcaster *b) {
   return producer;
 }
 mediasoupclient::Producer *
-producer_new_from_foreign(Broadcaster *b, size_t width, size_t height,
-                          size_t fps, void *ctx, frame_callback_t callback) {
+producer_new_from_foreign(Broadcaster *b, uint32_t width, uint32_t height,
+                          uint32_t fps, void *ctx, frame_callback_t callback) {
   LOG(INFO) << "producer_new_from_foreign(" << std::hex << b << ")";
   auto video_track = createForeignVideoTrack(width, height, fps, ctx, callback);
   auto producer = b->Produce(video_track);

@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         sys::set_mediasoup_log_level(sys::MediasoupLogLevel_LOG_DEBUG);
         sys::set_rtc_log_level(sys::RtcLogLevel_LS_WARNING);
 
-		sys::debug_enumerate_capture_devices();
+        sys::debug_enumerate_capture_devices();
         Ok(())
     }
 }
