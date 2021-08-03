@@ -45,6 +45,7 @@ impl EchoFrameSource {
         }});
         this
     }
+
     pub async fn handle_controller(&self, mut data_consumer: DataConsumer) {
         let id = data_consumer.id();
         println!("{:?}: data consumer started", id);

@@ -1,4 +1,3 @@
-use futures::future::BoxFuture;
 use std::os::raw::c_ulong;
 use std::pin::Pin;
 use std::ptr;
@@ -9,8 +8,7 @@ use std::{
     os::raw::c_char,
 };
 
-use lazy_static::lazy_static;
-use tokio::runtime::{self, Runtime};
+use async_trait::async_trait;
 use tokio::sync::broadcast;
 
 use crate::data_consumer::{self, DataConsumer};
@@ -19,17 +17,13 @@ use crate::frame_source::FrameSource;
 use crate::types::*;
 use vulcast_rtc_sys as sys;
 
-lazy_static! {
-    static ref NATIVE_RUNTIME: Runtime = runtime::Builder::new_multi_thread().build().unwrap();
-}
-
 #[derive(Clone)]
 pub struct Broadcaster {
     shared: Pin<Arc<Shared>>,
 }
 struct Shared {
     state: Mutex<State>,
-    handlers: Handlers,
+    signaller: Arc<dyn Signaller>,
 
     data_consumer_tx: broadcast::Sender<data_consumer::Message>,
 }
@@ -39,38 +33,38 @@ struct State {
     sys_broadcaster: *mut sys::Broadcaster,
 }
 
-pub struct Handlers {
-    pub server_rtp_capabilities:
-        Box<dyn Fn() -> BoxFuture<'static, RtpCapabilitiesFinalized> + Send + Sync + 'static>,
-    pub create_webrtc_transport:
-        Box<dyn Fn() -> BoxFuture<'static, WebRtcTransportOptions> + Send + Sync + 'static>,
-    pub on_rtp_capabilities:
-        Box<dyn Fn(RtpCapabilities) -> BoxFuture<'static, ()> + Send + Sync + 'static>,
-    pub on_produce: Box<
-        dyn Fn(TransportId, MediaKind, RtpParameters) -> BoxFuture<'static, ProducerId>
-            + Send
-            + Sync
-            + 'static,
-    >,
-    pub on_connect_webrtc_transport:
-        Box<dyn Fn(TransportId, DtlsParameters) -> BoxFuture<'static, ()> + Send + Sync + 'static>,
-    pub consume_data: Box<
-        dyn Fn(TransportId, DataProducerId) -> BoxFuture<'static, DataConsumerOptions>
-            + Send
-            + Sync
-            + 'static,
-    >,
+#[async_trait]
+pub trait Signaller: Send + Sync {
+    async fn server_rtp_capabilities(&self) -> RtpCapabilitiesFinalized;
+    async fn create_webrtc_transport(&self) -> WebRtcTransportOptions;
+    async fn on_rtp_capabilities(&self, rtp_caps: RtpCapabilities);
+    async fn on_produce(
+        &self,
+        transport_id: TransportId,
+        kind: MediaKind,
+        rtp_parameters: RtpParameters,
+    ) -> ProducerId;
+    async fn on_connect_webrtc_transport(
+        &self,
+        transport_id: TransportId,
+        dtls_parameters: DtlsParameters,
+    );
+    async fn consume_data(
+        &self,
+        transport_id: TransportId,
+        data_producer_id: DataProducerId,
+    ) -> DataConsumerOptions;
 }
 
 impl Broadcaster {
     /// Create a new broadcaster with the given signalling handlers.
-    pub fn new(handlers: Handlers) -> Self {
+    pub fn new(signaller: Arc<dyn Signaller>) -> Self {
         super::native_init();
         let shared = Arc::pin(Shared {
             state: Mutex::new(State {
                 sys_broadcaster: ptr::null_mut(),
             }),
-            handlers,
+            signaller,
             data_consumer_tx: broadcast::channel(16).0,
         });
         unsafe {
@@ -85,6 +79,7 @@ impl Broadcaster {
                     create_webrtc_transport: Some(create_webrtc_transport),
                     on_data_consumer_message: Some(on_data_consumer_message),
                     on_data_consumer_state_changed: Some(on_data_consumer_state_changed),
+                    on_connection_state_changed: Some(on_connection_state_changed),
                 },
             );
             log::trace!("broadcaster new {:?}", sys_broadcaster);
@@ -113,9 +108,11 @@ impl Broadcaster {
         unsafe {
             let recv_transport_id = self.get_recv_transport_id();
 
-            let data_consumer_options =
-                (self.shared.handlers.consume_data)(recv_transport_id, data_producer_id.clone())
-                    .await;
+            let data_consumer_options = self
+                .shared
+                .signaller
+                .consume_data(recv_transport_id, data_producer_id.clone())
+                .await;
 
             let data_consumer = DataConsumer::new(
                 self.sys(),
@@ -173,8 +170,8 @@ extern "C" fn server_rtp_capabilities(ctx: *const c_void) -> *mut c_char {
     let shared = unsafe { &*(ctx as *const Shared) };
 
     let (tx, rx) = std::sync::mpsc::sync_channel(1);
-    let fut = (shared.handlers.server_rtp_capabilities)();
-    NATIVE_RUNTIME.spawn(async move {
+    let fut = shared.signaller.server_rtp_capabilities();
+    tokio::spawn(async move {
         let _ = tx.send(fut.await);
     });
 
@@ -187,8 +184,8 @@ extern "C" fn create_webrtc_transport(ctx: *const c_void) -> *mut c_char {
     log::trace!("create_webrtc_transport({:?})", ctx);
     let shared = unsafe { &*(ctx as *const Shared) };
     let (tx, rx) = std::sync::mpsc::sync_channel(1);
-    let fut = (shared.handlers.create_webrtc_transport)();
-    NATIVE_RUNTIME.spawn(async move {
+    let fut = shared.signaller.create_webrtc_transport();
+    tokio::spawn(async move {
         let _ = tx.send(fut.await);
     });
 
@@ -203,10 +200,10 @@ extern "C" fn on_rtp_capabilities(ctx: *const c_void, rtp_caps: *const c_char) {
     let rtp_caps = unsafe { CStr::from_ptr(rtp_caps).to_str().unwrap() };
 
     let (tx, rx) = std::sync::mpsc::sync_channel(1);
-    let fut = (shared.handlers.on_rtp_capabilities)(RtpCapabilities::from(
+    let fut = shared.signaller.on_rtp_capabilities(RtpCapabilities::from(
         serde_json::from_str::<serde_json::Value>(rtp_caps).unwrap(),
     ));
-    NATIVE_RUNTIME.spawn(async move {
+    tokio::spawn(async move {
         let _ = tx.send(fut.await);
     });
     let _ = rx.recv().unwrap();
@@ -225,12 +222,12 @@ extern "C" fn on_produce(
         let rtp_parameters = CStr::from_ptr(rtp_parameters).to_str().unwrap();
 
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        let fut = (shared.handlers.on_produce)(
+        let fut = shared.signaller.on_produce(
             transport_id_cstr.to_string_lossy().into_owned().into(),
             MediaKind::from_str(kind_cstr.to_string_lossy().as_ref()).unwrap(),
             RtpParameters::from(serde_json::from_str::<serde_json::Value>(rtp_parameters).unwrap()),
         );
-        NATIVE_RUNTIME.spawn(async move {
+        tokio::spawn(async move {
             let _ = tx.send(fut.await);
         });
 
@@ -250,13 +247,13 @@ extern "C" fn on_connect_webrtc_transport(
         let dtls_parameters = CStr::from_ptr(dtls_parameters).to_str().unwrap();
 
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        let fut = (shared.handlers.on_connect_webrtc_transport)(
+        let fut = shared.signaller.on_connect_webrtc_transport(
             transport_id_cstr.to_string_lossy().into_owned().into(),
             DtlsParameters::from(
                 serde_json::from_str::<serde_json::Value>(dtls_parameters).unwrap(),
             ),
         );
-        NATIVE_RUNTIME.spawn(async move {
+        tokio::spawn(async move {
             let _ = tx.send(fut.await);
         });
 
@@ -275,11 +272,11 @@ extern "C" fn consume_data(
         let data_producer_id_cstr = CStr::from_ptr(data_producer_id);
 
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        let fut = (shared.handlers.consume_data)(
+        let fut = shared.signaller.consume_data(
             transport_id_cstr.to_string_lossy().into_owned().into(),
             data_producer_id_cstr.to_string_lossy().into_owned().into(),
         );
-        NATIVE_RUNTIME.spawn(async move {
+        tokio::spawn(async move {
             let _ = tx.send(fut.await);
         });
 
@@ -326,4 +323,25 @@ extern "C" fn on_data_consumer_state_changed(
                 .unwrap(),
             });
     }
+}
+extern "C" fn on_connection_state_changed(
+    ctx: *const c_void,
+    transport_id: *const c_char,
+    state: *const c_char,
+) {
+    log::trace!("on_connection_state_changed({:?})", ctx);
+    // unsafe {
+    //     let shared = &*(ctx as *const Shared);
+    //     let transport_id_cstr = CStr::from_ptr(transport_id);
+    //     let state_cstr = CStr::from_ptr(state);
+    //     let _ = shared
+    //         .data_consumer_tx
+    //         .send(data_consumer::Message::StateChanged {
+    //             data_consumer_id: data_consumer_id_cstr.to_string_lossy().into_owned().into(),
+    //             state: data_consumer::DataChannelState::from_str(
+    //                 state_cstr.to_string_lossy().as_ref(),
+    //             )
+    //             .unwrap(),
+    //         });
+    // }
 }

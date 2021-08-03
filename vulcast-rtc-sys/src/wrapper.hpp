@@ -10,8 +10,8 @@ class Producer;
 } // namespace mediasoupclient
 
 // foreign callback requesting frame in RGB (little-endian) format
-typedef void (*frame_callback_t)(const void *ctx, uint32_t width, uint32_t height,
-                                 int64_t timestamp, uint8_t *);
+typedef void (*frame_callback_t)(const void *ctx, uint32_t width,
+                                 uint32_t height, int64_t timestamp, uint8_t *);
 
 struct SignalHandler {
   // Get router RTP capabilities. Returns RtpCapabilitiesFinalized.
@@ -39,6 +39,9 @@ struct SignalHandler {
   void (*on_data_consumer_state_changed)(const void *ctx,
                                          const char *data_consumer_id,
                                          const char *state);
+  // Called when a transport connection state changes.
+  void (*on_connection_state_changed)(const void *ctx, const char *transport_id,
+                                      const char *state);
 };
 
 void init(const char *argv0);

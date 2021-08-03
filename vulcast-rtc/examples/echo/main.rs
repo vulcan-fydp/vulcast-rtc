@@ -8,8 +8,8 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::Connector;
 
 use crate::echo_frame_source::EchoFrameSource;
-use signal_schema as schema;
-use vulcast_rtc::broadcaster::{Broadcaster, Handlers};
+use crate::graphql_signaller::GraphQLSignaller;
+use vulcast_rtc::broadcaster::Broadcaster;
 
 macro_rules! enclose {
     ( ($( $x:ident ),*) $y:expr ) => {
@@ -22,6 +22,7 @@ macro_rules! enclose {
 
 mod controller_message;
 mod echo_frame_source;
+mod graphql_signaller;
 mod signal_schema;
 
 #[derive(Serialize)]
@@ -102,101 +103,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(serde_json::to_value(SessionToken { token: opts.token })?),
     );
 
-    let broadcaster = Broadcaster::new(Handlers {
-        server_rtp_capabilities: Box::new(enclose! { (client) move || {
-            let client = client.clone();
-            Box::pin(async move {
-                    client
-                        .query_unchecked::<schema::ServerRtpCapabilities>(
-                            schema::server_rtp_capabilities::Variables,
-                        )
-                        .await
-                        .server_rtp_capabilities
-            })
-        }}),
-        create_webrtc_transport: Box::new(enclose! { (client) move || {
-            let client = client.clone();
-            Box::pin(async move {
-                client.query_unchecked::<schema::CreateWebrtcTransport>(
-                    schema::create_webrtc_transport::Variables
-                )
-                .await
-                .create_webrtc_transport
-            })
-        }}),
-        on_rtp_capabilities: Box::new(enclose! { (client) move |rtp_capabilities| {
-            let client = client.clone();
-            Box::pin(async move {
-                client.query_unchecked::<schema::ClientRtpCapabilities>(
-                    schema::client_rtp_capabilities::Variables{
-                        rtp_capabilities
-                    }
-                )
-                .await
-                .rtp_capabilities;
-            })
-        }}),
-        on_produce: Box::new(
-            enclose! { (client) move |transport_id, kind, rtp_parameters| {
-                let client = client.clone();
-                Box::pin(async move {
-                    client.query_unchecked::<schema::Produce>(
-                        schema::produce::Variables{
-                            transport_id,
-                            kind,
-                            rtp_parameters
-                        }
-                    )
-                    .await
-                    .produce
-                })
-            }},
-        ),
-        on_connect_webrtc_transport: Box::new(
-            enclose! { (client) move |transport_id, dtls_parameters| {
-                let client = client.clone();
-                Box::pin(async move {
-                    client.query_unchecked::<schema::ConnectWebrtcTransport>(
-                        schema::connect_webrtc_transport::Variables{
-                            transport_id,
-                            dtls_parameters
-                        }
-                    )
-                    .await
-                    .connect_webrtc_transport;
-                })
-            }},
-        ),
-        consume_data: Box::new(enclose! { (client) move |transport_id, data_producer_id| {
-            let client = client.clone();
-            Box::pin(async move {
-                client.query_unchecked::<schema::ConsumeData>(
-                    schema::consume_data::Variables{
-                        transport_id,
-                        data_producer_id
-                    }
-                )
-                .await
-                .consume_data
-            })
-        }}),
-    });
+    let broadcaster = Broadcaster::new(Arc::new(GraphQLSignaller::new(client.clone())));
 
     let data_producer_available = client.subscribe::<signal_schema::DataProducerAvailable>(
         signal_schema::data_producer_available::Variables,
     );
-    let _producer = broadcaster.produce_video_from_frame_source(
-        Arc::new(EchoFrameSource::new(
-            broadcaster.clone(),
-            data_producer_available,
-        )),
-        640,
-        480,
-        24,
-    );
-
-    println!("Press Enter to instantly die...");
-    let _ = std::io::stdin().read(&mut [0u8]).unwrap();
+    let echo_frame_source = EchoFrameSource::new(broadcaster.clone(), data_producer_available);
+    let _producer =
+        broadcaster.produce_video_from_frame_source(Arc::new(echo_frame_source), 640, 480, 24);
 
     Ok(())
 }
