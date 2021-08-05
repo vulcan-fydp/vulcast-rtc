@@ -2,7 +2,7 @@ use font8x8::UnicodeFonts;
 use futures::StreamExt;
 use std::sync::{Arc, Mutex};
 use tiny_skia::{Color, Paint, PixmapMut, Rect, Transform};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 
 use graphql_ws::GraphQLOperation;
 use vulcast_rtc::{broadcaster::WeakBroadcaster, frame_source::FrameSource};
@@ -18,6 +18,9 @@ struct Shared {
 }
 struct State {
     last_message: ControllerMessage,
+    p: [f32; 2],
+    v: [f32; 2],
+    s: [f32; 2],
 }
 impl EchoFrameSource {
     pub fn new(
@@ -27,6 +30,9 @@ impl EchoFrameSource {
         let shared = Arc::new(Shared {
             state: Mutex::new(State {
                 last_message: ControllerMessage::default(),
+                p: [10.0, 10.0],
+                v: [5.0, 3.0],
+                s: [100.0, 100.0],
             }),
         });
         let mut data_producer_available_stream = data_producer_available.execute();
@@ -70,30 +76,35 @@ impl FrameSource for EchoFrameSource {
         let mut paint = Paint::default();
         paint.set_color_rgba8(255, 255, 255, 255);
         pixmap.fill(Color::BLACK);
-        let x = ((timestamp / 10000) as u32 % width) as f32;
-        let y = ((timestamp / 10000) as u32 % height) as f32;
-        pixmap.fill_rect(
-            Rect::from_xywh(x, y, 10.0, 10.0).unwrap(),
-            &paint,
-            Transform::identity(),
-            None,
-        );
 
-        let state = self.shared.state.lock().unwrap();
-        let msg_dump = format!("{:#?}", &state.last_message);
+        let mut state = self.shared.state.lock().unwrap();
+        let rect = Rect::from_xywh(state.p[0], state.p[1], state.s[0], state.s[1]).unwrap();
+        pixmap.fill_rect(rect, &paint, Transform::identity(), None);
+
+        // shitty physics
+        let dim = [width, height];
+        for i in 0..=1 {
+            state.p[i] += state.v[i];
+            if state.p[i] + state.s[i] > dim[i] as f32 || state.p[i] < 0.0 {
+                state.v[i] *= -1.0;
+            }
+        }
 
         blit_text(
-            format!("Last Message Received:\n\n{}", &msg_dump).as_str(),
+            format!(
+                "vulcast-rtc now={}\n\nLast Message Received:\n\n{:#?}",
+                timestamp, &state.last_message
+            )
+            .as_str(),
             10,
             10,
             data,
             width,
-            [255, 255, 255, 255],
         );
     }
 }
 
-fn blit_text(text: &str, x: u32, y: u32, data: &mut [u8], width: u32, color: [u8; 4]) {
+fn blit_text(text: &str, x: u32, y: u32, data: &mut [u8], width: u32) {
     const BPP: usize = 4;
     let stride = width as usize * BPP;
     let mut ax = x as usize;
@@ -112,10 +123,10 @@ fn blit_text(text: &str, x: u32, y: u32, data: &mut [u8], width: u32, color: [u8
                     if cursor + 4 >= data.len() {
                         return;
                     }
-                    data[cursor] = color[0];
-                    data[cursor + 1] = color[1];
-                    data[cursor + 2] = color[2];
-                    data[cursor + 3] = color[3];
+                    data[cursor] = 255 - data[cursor];
+                    data[cursor + 1] = 255 - data[cursor + 1];
+                    data[cursor + 2] = 255 - data[cursor + 2];
+                    // data[cursor + 3] = color[3];
                 }
             }
         }

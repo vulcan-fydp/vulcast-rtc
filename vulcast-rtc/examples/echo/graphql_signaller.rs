@@ -98,7 +98,7 @@ impl Signaller for GraphQLSignaller {
 
     async fn on_connection_state_changed(
         &self,
-        transport_id: vulcast_rtc::types::TransportId,
+        _transport_id: vulcast_rtc::types::TransportId,
         state: vulcast_rtc::broadcaster::TransportConnectionState,
     ) {
         match state {
