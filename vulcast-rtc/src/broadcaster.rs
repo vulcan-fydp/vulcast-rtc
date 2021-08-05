@@ -8,8 +8,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use lazy_static::lazy_static;
-use tokio::runtime::{self, Runtime};
 use tokio::sync::{broadcast, mpsc};
 
 use crate::data_consumer::{self, DataConsumer};
@@ -17,10 +15,6 @@ use crate::foreign_producer::ForeignProducer;
 use crate::frame_source::FrameSource;
 use crate::types::*;
 use vulcast_rtc_sys as sys;
-
-lazy_static! {
-    static ref NATIVE_RUNTIME: Runtime = runtime::Builder::new_multi_thread().build().unwrap();
-}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TransportConnectionState {
@@ -124,6 +118,7 @@ impl Broadcaster {
             channel_tx,
         });
         unsafe {
+            // this could actually deadlock the executor... but let's pretend it doesn't
             let sys_broadcaster = sys::broadcaster_new(
                 &*shared as *const _ as *const c_void,
                 sys::SignalHandler {
@@ -175,26 +170,30 @@ impl Broadcaster {
 
     /// Consume data from the given data producer.
     pub async fn consume_data(&self, data_producer_id: DataProducerId) -> DataConsumer {
-        unsafe {
-            let recv_transport_id = self.get_recv_transport_id();
+        let recv_transport_id = self.get_recv_transport_id();
 
-            let data_consumer_options = self
-                .shared
-                .signaller
-                .consume_data(recv_transport_id, data_producer_id.clone())
-                .await;
+        let data_consumer_options = self
+            .shared
+            .signaller
+            .consume_data(recv_transport_id, data_producer_id.clone())
+            .await;
 
-            let data_consumer = DataConsumer::new(
-                self.sys(),
-                data_consumer_options,
-                self.shared.data_consumer_tx.subscribe(),
-            );
-            data_consumer
-        }
+        // spawn on blocking thread
+        let weak_broadcaster = self.downgrade();
+        let data_consumer = tokio::task::spawn_blocking(move || {
+            let broadcaster = weak_broadcaster.upgrade().unwrap();
+            let sys = broadcaster.sys();
+            let data_consumer_rx = broadcaster.shared.data_consumer_tx.subscribe();
+            DataConsumer::new(sys, data_consumer_options, data_consumer_rx)
+        })
+        .await
+        .unwrap();
+        data_consumer
     }
 
     /// Produce a fake media stream for debugging purposes (leaks memory).
     pub fn debug_produce_fake_media(&self) {
+        // deadlock risk
         unsafe {
             sys::producer_new_from_fake_audio(self.sys());
             sys::producer_new_from_fake_video(self.sys());
@@ -204,6 +203,7 @@ impl Broadcaster {
     /// Produce a fake media stream from the first available video device for
     /// debugging purposes (leaks memory).
     pub fn debug_produce_video_from_vcm_capturer(&self) {
+        // deadlock risk
         unsafe {
             sys::producer_new_from_vcm_capturer(self.sys());
         }
@@ -212,14 +212,22 @@ impl Broadcaster {
     /// Produce a video stream from a programatically generated source.
     /// The provided frame source is initialized with the provided dimensions,
     /// and will be polled from a RTC thread at the given frame rate.
-    pub fn produce_video_from_frame_source(
+    pub async fn produce_video_from_frame_source(
         &self,
         frame_source: Arc<dyn FrameSource>,
         width: u32,
         height: u32,
         fps: u32,
     ) -> ForeignProducer {
-        ForeignProducer::new(self.sys(), frame_source, width, height, fps)
+        // spawn on blocking thread
+        let weak_broadcaster = self.downgrade();
+        tokio::task::spawn_blocking(move || {
+            let broadcaster = weak_broadcaster.upgrade().unwrap();
+            let sys = broadcaster.sys();
+            ForeignProducer::new(sys, frame_source, width, height, fps)
+        })
+        .await
+        .unwrap()
     }
 
     fn sys(&self) -> *mut sys::Broadcaster {
@@ -253,7 +261,7 @@ extern "C" fn server_rtp_capabilities(ctx: *const c_void) -> *mut c_char {
 
     let (tx, rx) = std::sync::mpsc::sync_channel(1);
     let fut = shared.signaller.server_rtp_capabilities();
-    NATIVE_RUNTIME.spawn(async move {
+    tokio::spawn(async move {
         let _ = tx.send(fut.await);
     });
 
@@ -267,7 +275,7 @@ extern "C" fn create_webrtc_transport(ctx: *const c_void) -> *mut c_char {
     let shared = unsafe { &*(ctx as *const Shared) };
     let (tx, rx) = std::sync::mpsc::sync_channel(1);
     let fut = shared.signaller.create_webrtc_transport();
-    NATIVE_RUNTIME.spawn(async move {
+    tokio::spawn(async move {
         let _ = tx.send(fut.await);
     });
 
@@ -285,7 +293,7 @@ extern "C" fn on_rtp_capabilities(ctx: *const c_void, rtp_caps: *const c_char) {
     let fut = shared.signaller.on_rtp_capabilities(RtpCapabilities::from(
         serde_json::from_str::<serde_json::Value>(rtp_caps).unwrap(),
     ));
-    NATIVE_RUNTIME.spawn(async move {
+    tokio::spawn(async move {
         let _ = tx.send(fut.await);
     });
     let _ = rx.recv().unwrap();
@@ -309,7 +317,7 @@ extern "C" fn on_produce(
             MediaKind::from_str(kind_cstr.to_string_lossy().as_ref()).unwrap(),
             RtpParameters::from(serde_json::from_str::<serde_json::Value>(rtp_parameters).unwrap()),
         );
-        NATIVE_RUNTIME.spawn(async move {
+        tokio::spawn(async move {
             let _ = tx.send(fut.await);
         });
 
@@ -335,7 +343,7 @@ extern "C" fn on_connect_webrtc_transport(
                 serde_json::from_str::<serde_json::Value>(dtls_parameters).unwrap(),
             ),
         );
-        NATIVE_RUNTIME.spawn(async move {
+        tokio::spawn(async move {
             let _ = tx.send(fut.await);
         });
 
@@ -358,7 +366,7 @@ extern "C" fn consume_data(
             TransportId::from(transport_id_cstr.to_str().unwrap().to_owned()),
             DataProducerId::from(data_producer_id_cstr.to_str().unwrap().to_owned()),
         );
-        NATIVE_RUNTIME.spawn(async move {
+        tokio::spawn(async move {
             let _ = tx.send(fut.await);
         });
 

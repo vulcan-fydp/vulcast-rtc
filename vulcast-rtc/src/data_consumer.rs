@@ -98,27 +98,26 @@ impl DataConsumer {
             }
         });
 
-        unsafe {
-            let data_consumer_id_cstr =
-                CString::new(String::from(data_consumer_id.clone())).unwrap();
-            let data_producer_id_cstr =
-                CString::new(String::from(data_consumer_options.data_producer_id)).unwrap();
-            let sctp_stream_parameters_cstr = CString::new(
-                serde_json::to_string(&data_consumer_options.sctp_stream_parameters).unwrap(),
-            )
-            .unwrap();
-            let sys_data_consumer = sys::data_consumer_new(
+        let data_consumer_id_cstr = CString::new(String::from(data_consumer_id.clone())).unwrap();
+        let data_producer_id_cstr =
+            CString::new(String::from(data_consumer_options.data_producer_id)).unwrap();
+        let sctp_stream_parameters_cstr = CString::new(
+            serde_json::to_string(&data_consumer_options.sctp_stream_parameters).unwrap(),
+        )
+        .unwrap();
+        let sys_data_consumer = unsafe {
+            sys::data_consumer_new(
                 sys_broadcaster,
                 data_consumer_id_cstr.as_ptr(),
                 data_producer_id_cstr.as_ptr(),
                 sctp_stream_parameters_cstr.as_ptr(),
-            );
-            log::trace!("data consumer new {:?}", &sys_data_consumer);
-            Self {
-                sys_data_consumer,
-                data_consumer_id,
-                data_rx: rx,
-            }
+            )
+        };
+        log::trace!("data consumer new {:?}", &sys_data_consumer);
+        Self {
+            sys_data_consumer,
+            data_consumer_id,
+            data_rx: rx,
         }
     }
 

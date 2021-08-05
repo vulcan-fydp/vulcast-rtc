@@ -109,10 +109,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let data_producer_available = client.subscribe::<signal_schema::DataProducerAvailable>(
         signal_schema::data_producer_available::Variables,
     );
-    let echo_frame_source =
-        EchoFrameSource::new(broadcaster.downgrade(), data_producer_available);
-    let _producer =
-        broadcaster.produce_video_from_frame_source(Arc::new(echo_frame_source), 640, 480, 24);
+    let echo_frame_source = EchoFrameSource::new(broadcaster.downgrade(), data_producer_available);
+    let _producer = broadcaster
+        .produce_video_from_frame_source(Arc::new(echo_frame_source), 640, 480, 24)
+        .await;
 
     let _ = graphql_signaller.shutdown().recv().await;
 
