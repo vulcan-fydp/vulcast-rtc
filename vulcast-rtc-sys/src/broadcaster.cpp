@@ -44,7 +44,7 @@ void Broadcaster::OnConnectionStateChange(mediasoupclient::Transport *transport,
                                           const std::string &connectionState) {
   LOG(INFO) << "Broadcaster::OnConnectionStateChange(" << transport->GetId()
             << "," << connectionState << ")";
-  CHECK(connectionState != "failed");
+  signaller_.OnConnectionStateChanged(transport->GetId(), connectionState);
 }
 
 /* Producer::Listener::OnProduce

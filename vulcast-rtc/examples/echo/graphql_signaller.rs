@@ -1,15 +1,24 @@
 use async_trait::async_trait;
 use graphql_ws::GraphQLWebSocket;
-use vulcast_rtc::broadcaster::Signaller;
+use tokio::sync::broadcast;
+use vulcast_rtc::broadcaster::{Signaller, TransportConnectionState};
 
 use crate::signal_schema as schema;
 
 pub struct GraphQLSignaller {
     client: GraphQLWebSocket,
+    shutdown_tx: broadcast::Sender<()>,
 }
 impl GraphQLSignaller {
     pub fn new(client: GraphQLWebSocket) -> Self {
-        Self { client }
+        let (shutdown_tx, _) = broadcast::channel(16);
+        Self {
+            client,
+            shutdown_tx,
+        }
+    }
+    pub fn shutdown(&self) -> broadcast::Receiver<()> {
+        self.shutdown_tx.subscribe()
     }
 }
 #[async_trait]
@@ -85,5 +94,18 @@ impl Signaller for GraphQLSignaller {
             })
             .await
             .consume_data
+    }
+
+    async fn on_connection_state_changed(
+        &self,
+        transport_id: vulcast_rtc::types::TransportId,
+        state: vulcast_rtc::broadcaster::TransportConnectionState,
+    ) {
+        match state {
+            TransportConnectionState::Disconnected | TransportConnectionState::Failed => {
+                let _ = self.shutdown_tx.send(());
+            }
+            _ => (),
+        }
     }
 }

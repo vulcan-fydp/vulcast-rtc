@@ -2,11 +2,10 @@ use font8x8::UnicodeFonts;
 use futures::StreamExt;
 use std::sync::{Arc, Mutex};
 use tiny_skia::{Color, Paint, PixmapMut, Rect, Transform};
+use tokio::sync::{mpsc, oneshot};
 
 use graphql_ws::GraphQLOperation;
-use vulcast_rtc::{
-    broadcaster::Broadcaster, data_consumer::DataConsumer, frame_source::FrameSource,
-};
+use vulcast_rtc::{broadcaster::WeakBroadcaster, frame_source::FrameSource};
 
 use crate::{controller_message::*, signal_schema::DataProducerAvailable};
 
@@ -22,47 +21,47 @@ struct State {
 }
 impl EchoFrameSource {
     pub fn new(
-        broadcaster: Broadcaster,
+        weak_broadcaster: WeakBroadcaster,
         data_producer_available: GraphQLOperation<DataProducerAvailable>,
     ) -> Self {
-        let this = EchoFrameSource {
-            shared: Arc::new(Shared {
-                state: Mutex::new(State {
-                    last_message: ControllerMessage::default(),
-                }),
+        let shared = Arc::new(Shared {
+            state: Mutex::new(State {
+                last_message: ControllerMessage::default(),
             }),
-        };
+        });
         let mut data_producer_available_stream = data_producer_available.execute();
-        tokio::spawn(enclose! { (broadcaster, this) async move {
-            while let Some(Ok(response)) = data_producer_available_stream.next().await {
-                let data_producer_id = response.data.unwrap().data_producer_available;
-                println!("{:?}: data producer available", &data_producer_id);
-                let data_consumer = broadcaster.consume_data(data_producer_id).await;
-                tokio::spawn(enclose!{ (this) async move {
-                    this.handle_controller(data_consumer).await;
-                }});
+        let weak_shared = Arc::downgrade(&shared);
+        tokio::spawn(async move {
+            let (message_tx, mut message_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+            loop {
+                tokio::select! {
+                    Some(msg) = message_rx.recv() => {
+                        let msg = ControllerMessage::from_slice_u8(&msg);
+                        if let Ok(msg) = msg {
+                            let shared = weak_shared.upgrade()?;
+                            let mut state = shared.state.lock().unwrap();
+                            state.last_message = msg;
+                        } else {
+                            println!("rejected malformed message");
+                        }
+                    },
+                    Some(Ok(response)) = data_producer_available_stream.next() => {
+                        let broadcaster = weak_broadcaster.upgrade()?;
+                        let data_producer_id = response.data.unwrap().data_producer_available;
+                        println!("{:?}: data producer available", &data_producer_id);
+                        let mut data_consumer = broadcaster.consume_data(data_producer_id).await;
+                        tokio::spawn(enclose! { (message_tx) async move {
+                            while let Some(msg) = data_consumer.next().await {
+                                let _ = message_tx.send(msg);
+                            }
+                        }});
+                    },
+                    else => {break}
+                };
             }
-        }});
-        this
-    }
-
-    pub async fn handle_controller(&self, mut data_consumer: DataConsumer) {
-        let id = data_consumer.id();
-        println!("{:?}: data consumer started", id);
-        while let Some(msg) = data_consumer.next().await {
-            let msg = ControllerMessage::from_slice_u8(&msg);
-            if let Ok(msg) = msg {
-                println!("{:?}: todo", id);
-                self.set_last_message(msg);
-            } else {
-                println!("{:?}: rejected malformed message", id);
-            }
-        }
-        println!("{:?}: data consumer terminated", id);
-    }
-    pub fn set_last_message(&self, message: ControllerMessage) {
-        let mut state = self.shared.state.lock().unwrap();
-        state.last_message = message;
+            Some::<()>(())
+        });
+        EchoFrameSource { shared }
     }
 }
 impl FrameSource for EchoFrameSource {

@@ -19,11 +19,15 @@ struct Signaller {
                         const std::string &kind,
                         const nlohmann::json &rtp_parameters) const;
 
-  void OnDataConsumerMessage(const std::string &data_consumer_id, const char *data,
-                 std::size_t len) const;
+  void OnDataConsumerMessage(const std::string &data_consumer_id,
+                             const char *data, std::size_t len) const;
 
   void OnDataConsumerStateChanged(const std::string &data_consumer_id,
                                   const std::string &state) const;
+
+  void OnConnectionStateChanged(const std::string &transport_id,
+                                const std::string &state) const;
+
 private:
   const void *ctx_;
   SignalHandler handler_;

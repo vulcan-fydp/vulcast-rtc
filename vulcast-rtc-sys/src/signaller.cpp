@@ -58,3 +58,9 @@ void Signaller::OnDataConsumerStateChanged(const std::string &data_consumer_id,
   handler_.on_data_consumer_state_changed(ctx_, data_consumer_id.c_str(),
                                           state.c_str());
 }
+
+void Signaller::OnConnectionStateChanged(const std::string &transport_id,
+                                         const std::string &state) const {
+  handler_.on_connection_state_changed(ctx_, transport_id.c_str(),
+                                       state.c_str());
+}

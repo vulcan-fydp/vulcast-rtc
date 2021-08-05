@@ -1,15 +1,16 @@
 use std::os::raw::c_ulong;
-use std::pin::Pin;
 use std::ptr;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::{
     ffi::{c_void, CStr, CString},
     os::raw::c_char,
 };
 
 use async_trait::async_trait;
-use tokio::sync::broadcast;
+use lazy_static::lazy_static;
+use tokio::runtime::{self, Runtime};
+use tokio::sync::{broadcast, mpsc};
 
 use crate::data_consumer::{self, DataConsumer};
 use crate::foreign_producer::ForeignProducer;
@@ -17,20 +18,67 @@ use crate::frame_source::FrameSource;
 use crate::types::*;
 use vulcast_rtc_sys as sys;
 
+lazy_static! {
+    static ref NATIVE_RUNTIME: Runtime = runtime::Builder::new_multi_thread().build().unwrap();
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum TransportConnectionState {
+    Closed,
+    Failed,
+    Disconnected,
+    New,
+    Connecting,
+    Connected,
+    // not actually part of RTCPeerConnectionState
+    Checking,
+    Completed,
+}
+impl FromStr for TransportConnectionState {
+    type Err = ();
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match input {
+            "closed" => Ok(TransportConnectionState::Closed),
+            "failed" => Ok(TransportConnectionState::Failed),
+            "disconnected" => Ok(TransportConnectionState::Disconnected),
+            "new" => Ok(TransportConnectionState::New),
+            "connecting" => Ok(TransportConnectionState::Connecting),
+            "connected" => Ok(TransportConnectionState::Connected),
+            "checking" => Ok(TransportConnectionState::Checking),
+            "completed" => Ok(TransportConnectionState::Completed),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum InternalMessage {
+    TransportConnectionStateChanged {
+        transport_id: TransportId,
+        state: TransportConnectionState,
+    },
+}
+
 #[derive(Clone)]
 pub struct Broadcaster {
-    shared: Pin<Arc<Shared>>,
+    shared: Arc<Shared>,
 }
 struct Shared {
     state: Mutex<State>,
     signaller: Arc<dyn Signaller>,
 
     data_consumer_tx: broadcast::Sender<data_consumer::Message>,
+    channel_tx: mpsc::UnboundedSender<InternalMessage>,
 }
 unsafe impl Send for Shared {}
 unsafe impl Sync for Shared {}
 struct State {
     sys_broadcaster: *mut sys::Broadcaster,
+}
+
+#[derive(Clone)]
+pub struct WeakBroadcaster {
+    shared: Weak<Shared>,
 }
 
 #[async_trait]
@@ -54,18 +102,26 @@ pub trait Signaller: Send + Sync {
         transport_id: TransportId,
         data_producer_id: DataProducerId,
     ) -> DataConsumerOptions;
+    async fn on_connection_state_changed(
+        &self,
+        transport_id: TransportId,
+        state: TransportConnectionState,
+    );
 }
 
 impl Broadcaster {
     /// Create a new broadcaster with the given signalling handlers.
     pub fn new(signaller: Arc<dyn Signaller>) -> Self {
         super::native_init();
-        let shared = Arc::pin(Shared {
+
+        let (channel_tx, mut channel_rx) = mpsc::unbounded_channel();
+        let shared = Arc::new(Shared {
             state: Mutex::new(State {
                 sys_broadcaster: ptr::null_mut(),
             }),
-            signaller,
+            signaller: signaller.clone(),
             data_consumer_tx: broadcast::channel(16).0,
+            channel_tx,
         });
         unsafe {
             let sys_broadcaster = sys::broadcaster_new(
@@ -86,6 +142,20 @@ impl Broadcaster {
             let mut state = shared.state.lock().unwrap();
             state.sys_broadcaster = sys_broadcaster;
         }
+        tokio::spawn(async move {
+            while let Some(message) = channel_rx.recv().await {
+                match message {
+                    InternalMessage::TransportConnectionStateChanged {
+                        transport_id,
+                        state,
+                    } => {
+                        signaller
+                            .on_connection_state_changed(transport_id, state)
+                            .await;
+                    }
+                }
+            }
+        });
         Self { shared }
     }
 
@@ -117,7 +187,7 @@ impl Broadcaster {
             let data_consumer = DataConsumer::new(
                 self.sys(),
                 data_consumer_options,
-                self.shared.data_consumer_tx.clone(),
+                self.shared.data_consumer_tx.subscribe(),
             );
             data_consumer
         }
@@ -156,6 +226,18 @@ impl Broadcaster {
         let state = self.shared.state.lock().unwrap();
         state.sys_broadcaster
     }
+
+    pub fn downgrade(&self) -> WeakBroadcaster {
+        WeakBroadcaster {
+            shared: Arc::downgrade(&self.shared),
+        }
+    }
+}
+impl WeakBroadcaster {
+    pub fn upgrade(&self) -> Option<Broadcaster> {
+        let shared = self.shared.upgrade()?;
+        Some(Broadcaster { shared })
+    }
 }
 
 impl Drop for State {
@@ -171,7 +253,7 @@ extern "C" fn server_rtp_capabilities(ctx: *const c_void) -> *mut c_char {
 
     let (tx, rx) = std::sync::mpsc::sync_channel(1);
     let fut = shared.signaller.server_rtp_capabilities();
-    tokio::spawn(async move {
+    NATIVE_RUNTIME.spawn(async move {
         let _ = tx.send(fut.await);
     });
 
@@ -185,7 +267,7 @@ extern "C" fn create_webrtc_transport(ctx: *const c_void) -> *mut c_char {
     let shared = unsafe { &*(ctx as *const Shared) };
     let (tx, rx) = std::sync::mpsc::sync_channel(1);
     let fut = shared.signaller.create_webrtc_transport();
-    tokio::spawn(async move {
+    NATIVE_RUNTIME.spawn(async move {
         let _ = tx.send(fut.await);
     });
 
@@ -203,7 +285,7 @@ extern "C" fn on_rtp_capabilities(ctx: *const c_void, rtp_caps: *const c_char) {
     let fut = shared.signaller.on_rtp_capabilities(RtpCapabilities::from(
         serde_json::from_str::<serde_json::Value>(rtp_caps).unwrap(),
     ));
-    tokio::spawn(async move {
+    NATIVE_RUNTIME.spawn(async move {
         let _ = tx.send(fut.await);
     });
     let _ = rx.recv().unwrap();
@@ -223,11 +305,11 @@ extern "C" fn on_produce(
 
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
         let fut = shared.signaller.on_produce(
-            transport_id_cstr.to_string_lossy().into_owned().into(),
+            TransportId::from(transport_id_cstr.to_str().unwrap().to_owned()),
             MediaKind::from_str(kind_cstr.to_string_lossy().as_ref()).unwrap(),
             RtpParameters::from(serde_json::from_str::<serde_json::Value>(rtp_parameters).unwrap()),
         );
-        tokio::spawn(async move {
+        NATIVE_RUNTIME.spawn(async move {
             let _ = tx.send(fut.await);
         });
 
@@ -248,12 +330,12 @@ extern "C" fn on_connect_webrtc_transport(
 
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
         let fut = shared.signaller.on_connect_webrtc_transport(
-            transport_id_cstr.to_string_lossy().into_owned().into(),
+            TransportId::from(transport_id_cstr.to_str().unwrap().to_owned()),
             DtlsParameters::from(
                 serde_json::from_str::<serde_json::Value>(dtls_parameters).unwrap(),
             ),
         );
-        tokio::spawn(async move {
+        NATIVE_RUNTIME.spawn(async move {
             let _ = tx.send(fut.await);
         });
 
@@ -273,10 +355,10 @@ extern "C" fn consume_data(
 
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
         let fut = shared.signaller.consume_data(
-            transport_id_cstr.to_string_lossy().into_owned().into(),
-            data_producer_id_cstr.to_string_lossy().into_owned().into(),
+            TransportId::from(transport_id_cstr.to_str().unwrap().to_owned()),
+            DataProducerId::from(data_producer_id_cstr.to_str().unwrap().to_owned()),
         );
-        tokio::spawn(async move {
+        NATIVE_RUNTIME.spawn(async move {
             let _ = tx.send(fut.await);
         });
 
@@ -298,7 +380,9 @@ extern "C" fn on_data_consumer_message(
         let data_consumer_id_cstr = CStr::from_ptr(data_consumer_id);
         let message_data = std::slice::from_raw_parts(data as *const u8, len as usize).to_vec();
         let _ = shared.data_consumer_tx.send(data_consumer::Message::Data {
-            data_consumer_id: data_consumer_id_cstr.to_string_lossy().into_owned().into(),
+            data_consumer_id: DataConsumerId::from(
+                data_consumer_id_cstr.to_str().unwrap().to_owned(),
+            ),
             data: message_data,
         });
     }
@@ -316,11 +400,11 @@ extern "C" fn on_data_consumer_state_changed(
         let _ = shared
             .data_consumer_tx
             .send(data_consumer::Message::StateChanged {
-                data_consumer_id: data_consumer_id_cstr.to_string_lossy().into_owned().into(),
-                state: data_consumer::DataChannelState::from_str(
-                    state_cstr.to_string_lossy().as_ref(),
-                )
-                .unwrap(),
+                data_consumer_id: DataConsumerId::from(
+                    data_consumer_id_cstr.to_str().unwrap().to_owned(),
+                ),
+                state: data_consumer::DataChannelState::from_str(state_cstr.to_str().unwrap())
+                    .unwrap(),
             });
     }
 }
@@ -330,18 +414,17 @@ extern "C" fn on_connection_state_changed(
     state: *const c_char,
 ) {
     log::trace!("on_connection_state_changed({:?})", ctx);
-    // unsafe {
-    //     let shared = &*(ctx as *const Shared);
-    //     let transport_id_cstr = CStr::from_ptr(transport_id);
-    //     let state_cstr = CStr::from_ptr(state);
-    //     let _ = shared
-    //         .data_consumer_tx
-    //         .send(data_consumer::Message::StateChanged {
-    //             data_consumer_id: data_consumer_id_cstr.to_string_lossy().into_owned().into(),
-    //             state: data_consumer::DataChannelState::from_str(
-    //                 state_cstr.to_string_lossy().as_ref(),
-    //             )
-    //             .unwrap(),
-    //         });
-    // }
+    unsafe {
+        let shared = &*(ctx as *const Shared);
+        let transport_id_cstr = CStr::from_ptr(transport_id);
+        let state_cstr = CStr::from_ptr(state);
+
+        let _ = shared
+            .channel_tx
+            .send(InternalMessage::TransportConnectionStateChanged {
+                transport_id: TransportId::from(transport_id_cstr.to_str().unwrap().to_owned()),
+                state: TransportConnectionState::from_str(state_cstr.to_str().unwrap()).unwrap(),
+            })
+            .unwrap();
+    }
 }

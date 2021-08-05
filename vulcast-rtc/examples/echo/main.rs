@@ -103,14 +103,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(serde_json::to_value(SessionToken { token: opts.token })?),
     );
 
-    let broadcaster = Broadcaster::new(Arc::new(GraphQLSignaller::new(client.clone())));
+    let graphql_signaller = Arc::new(GraphQLSignaller::new(client.clone()));
+    let broadcaster = Broadcaster::new(graphql_signaller.clone());
 
     let data_producer_available = client.subscribe::<signal_schema::DataProducerAvailable>(
         signal_schema::data_producer_available::Variables,
     );
-    let echo_frame_source = EchoFrameSource::new(broadcaster.clone(), data_producer_available);
+    let echo_frame_source =
+        EchoFrameSource::new(broadcaster.downgrade(), data_producer_available);
     let _producer =
         broadcaster.produce_video_from_frame_source(Arc::new(echo_frame_source), 640, 480, 24);
+
+    let _ = graphql_signaller.shutdown().recv().await;
 
     Ok(())
 }

@@ -48,7 +48,7 @@ pub type Data = Vec<u8>;
 pub struct DataConsumer {
     sys_data_consumer: *mut sys::mediasoupclient_DataConsumer,
     data_consumer_id: DataConsumerId,
-    data_rx: mpsc::Receiver<Data>,
+    data_rx: mpsc::UnboundedReceiver<Data>,
 }
 unsafe impl Send for DataConsumer {}
 unsafe impl Sync for DataConsumer {}
@@ -57,37 +57,42 @@ impl DataConsumer {
     pub(crate) fn new(
         sys_broadcaster: *mut sys::Broadcaster,
         data_consumer_options: DataConsumerOptions,
-        message_tx: broadcast::Sender<Message>,
+        mut message_rx: broadcast::Receiver<Message>,
     ) -> Self {
         let data_consumer_id = data_consumer_options.id;
 
-        let mut message_rx = message_tx.subscribe();
-        let (tx, rx) = mpsc::channel(16);
+        let (tx, rx) = mpsc::unbounded_channel();
 
         tokio::spawn({
             let data_consumer_id = data_consumer_id.clone();
             async move {
-                while let Ok(message) = message_rx.recv().await {
-                    match message {
-                        Message::Data {
-                            data_consumer_id: id,
-                            data,
-                        } if id == data_consumer_id => {
-                            log::debug!("{:?}: data (len={:?})", &id, data.len());
-                            if let Err(_) = tx.send(data).await {
-                                return;
+                loop {
+                    tokio::select! {
+                        Ok(message) = message_rx.recv() => {
+                            match message {
+                                Message::Data {
+                                    data_consumer_id: id,
+                                    data,
+                                } if id == data_consumer_id => {
+                                    log::debug!("{:?}: data (len={:?})", &id, data.len());
+                                    if let Err(_) = tx.send(data) {
+                                        return;
+                                    }
+                                }
+                                Message::StateChanged {
+                                    data_consumer_id: id,
+                                    state: channel_state,
+                                } if id == data_consumer_id => {
+                                    log::debug!("{:?}: state_changed {:?}", &id, &channel_state);
+                                    if channel_state == DataChannelState::Closed {
+                                        return;
+                                    }
+                                }
+                                _ => (),
                             }
-                        }
-                        Message::StateChanged {
-                            data_consumer_id: id,
-                            state: channel_state,
-                        } if id == data_consumer_id => {
-                            log::debug!("{:?}: state_changed {:?}", &id, &channel_state);
-                            if channel_state == DataChannelState::Closed {
-                                return;
-                            }
-                        }
-                        _ => (),
+                        },
+                        _ = tx.closed() => {break},
+                        else => {break}
                     }
                 }
             }
