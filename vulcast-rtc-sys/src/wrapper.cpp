@@ -22,7 +22,6 @@ namespace {
 
 void init(const char *argv0) {
   google::InitGoogleLogging(argv0);
-  google::InstallFailureSignalHandler();
   FLAGS_logtostderr = true;
   FLAGS_minloglevel = 3;
   mediasoupclient::Initialize();

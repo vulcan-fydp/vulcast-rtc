@@ -248,10 +248,11 @@ impl WeakBroadcaster {
     }
 }
 
-impl Drop for State {
+impl Drop for Shared {
     fn drop(&mut self) {
-        log::trace!("broadcaster delete {:?}", self.sys_broadcaster);
-        unsafe { sys::broadcaster_delete(self.sys_broadcaster) }
+        let state = self.state.lock().unwrap();
+        log::trace!("broadcaster delete {:?}", state.sys_broadcaster);
+        unsafe { sys::broadcaster_delete(state.sys_broadcaster) }
     }
 }
 
@@ -432,7 +433,6 @@ extern "C" fn on_connection_state_changed(
             .send(InternalMessage::TransportConnectionStateChanged {
                 transport_id: TransportId::from(transport_id_cstr.to_str().unwrap().to_owned()),
                 state: TransportConnectionState::from_str(state_cstr.to_str().unwrap()).unwrap(),
-            })
-            .unwrap();
+            });
     }
 }

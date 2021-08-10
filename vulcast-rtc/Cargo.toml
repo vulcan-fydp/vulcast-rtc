@@ -19,7 +19,7 @@ log = "0.4"
 async-trait = "0.1.50"
 
 [dev-dependencies]
-graphql_client = "0.9"
+graphql_client = "0.10"
 graphql-ws = { version = "0.3", git = "https://github.com/Netdex/graphql-ws" }
 tokio-tungstenite = { version = "0.15", features = ["rustls-tls"] }
 rustls = { version = "0.19", features = ["dangerous_configuration"] }
