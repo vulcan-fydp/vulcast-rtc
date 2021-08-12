@@ -32,7 +32,7 @@ impl EchoFrameSource {
                 last_message: ControllerMessage::default(),
                 p: [10.0, 10.0],
                 v: [5.0, 3.0],
-                s: [100.0, 100.0],
+                s: [50.0, 50.0],
             }),
         });
         let mut data_producer_available_stream = data_producer_available.execute();
@@ -42,6 +42,7 @@ impl EchoFrameSource {
             loop {
                 tokio::select! {
                     Some(msg) = message_rx.recv() => {
+                        println!("{:?}", msg);
                         let msg = ControllerMessage::from_slice_u8(&msg);
                         if let Ok(msg) = msg {
                             let shared = weak_shared.upgrade()?;
