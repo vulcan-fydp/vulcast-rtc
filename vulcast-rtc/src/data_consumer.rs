@@ -74,7 +74,7 @@ impl DataConsumer {
                                     data_consumer_id: id,
                                     data,
                                 } if id == data_consumer_id => {
-                                    log::debug!("{:?}: data (len={:?})", &id, data.len());
+                                    log::trace!("{:?}: data (len={:?})", &id, data.len());
                                     if let Err(_) = tx.send(data) {
                                         return;
                                     }
