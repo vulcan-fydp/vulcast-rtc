@@ -75,6 +75,9 @@ pub struct WeakBroadcaster {
     shared: Weak<Shared>,
 }
 
+#[derive(Debug)]
+pub struct Error;
+
 #[async_trait]
 pub trait Signaller: Send + Sync {
     async fn server_rtp_capabilities(&self) -> RtpCapabilitiesFinalized;
@@ -95,7 +98,7 @@ pub trait Signaller: Send + Sync {
         &self,
         transport_id: TransportId,
         data_producer_id: DataProducerId,
-    ) -> DataConsumerOptions;
+    ) -> Result<DataConsumerOptions, Error>;
     async fn on_connection_state_changed(
         &self,
         transport_id: TransportId,
@@ -126,7 +129,6 @@ impl Broadcaster {
                     on_rtp_capabilities: Some(on_rtp_capabilities),
                     on_produce: Some(on_produce),
                     on_connect_webrtc_transport: Some(on_connect_webrtc_transport),
-                    consume_data: Some(consume_data),
                     create_webrtc_transport: Some(create_webrtc_transport),
                     on_data_consumer_message: Some(on_data_consumer_message),
                     on_data_consumer_state_changed: Some(on_data_consumer_state_changed),
@@ -169,14 +171,17 @@ impl Broadcaster {
     }
 
     /// Consume data from the given data producer.
-    pub async fn consume_data(&self, data_producer_id: DataProducerId) -> DataConsumer {
+    pub async fn consume_data(
+        &self,
+        data_producer_id: DataProducerId,
+    ) -> Result<DataConsumer, Error> {
         let recv_transport_id = self.get_recv_transport_id();
 
         let data_consumer_options = self
             .shared
             .signaller
             .consume_data(recv_transport_id, data_producer_id.clone())
-            .await;
+            .await?;
 
         // spawn on blocking thread
         let weak_broadcaster = self.downgrade();
@@ -188,7 +193,7 @@ impl Broadcaster {
         })
         .await
         .unwrap();
-        data_consumer
+        Ok(data_consumer)
     }
 
     /// Produce a fake media stream for debugging purposes (leaks memory).
@@ -349,32 +354,6 @@ extern "C" fn on_connect_webrtc_transport(
         });
 
         let _ = rx.recv().unwrap();
-    }
-}
-extern "C" fn consume_data(
-    ctx: *const c_void,
-    transport_id: *const c_char,
-    data_producer_id: *const c_char,
-) -> *mut c_char {
-    log::trace!("consume_data({:?})", ctx);
-    unsafe {
-        let shared = &*(ctx as *const Shared);
-        let transport_id_cstr = CStr::from_ptr(transport_id);
-        let data_producer_id_cstr = CStr::from_ptr(data_producer_id);
-
-        let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        let fut = shared.signaller.consume_data(
-            TransportId::from(transport_id_cstr.to_str().unwrap().to_owned()),
-            DataProducerId::from(data_producer_id_cstr.to_str().unwrap().to_owned()),
-        );
-        tokio::spawn(async move {
-            let _ = tx.send(fut.await);
-        });
-
-        let data_consumer_options = rx.recv().unwrap();
-        CString::new(serde_json::to_string(&data_consumer_options).unwrap())
-            .unwrap()
-            .into_raw()
     }
 }
 extern "C" fn on_data_consumer_message(

@@ -27,9 +27,6 @@ struct SignalHandler {
   // Called when client wants to connect WebRTC transport.
   void (*on_connect_webrtc_transport)(const void *ctx, const char *transport_id,
                                       const char *dtls_parameters);
-  // Called when client wants to consume data.
-  char *(*consume_data)(const void *ctx, const char *transport_id,
-                        const char *data_producer_id);
 
   // Called when new message is available from a DataConsumer.
   void (*on_data_consumer_message)(const void *ctx,

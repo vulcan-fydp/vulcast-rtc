@@ -10,6 +10,24 @@ target_sources(${PROJECT_NAME} PRIVATE
 	signaller.cpp
 	foreign_frame_generator.hpp
 	foreign_frame_generator.cpp
+	rpi/raspi_encoder.h
+	rpi/raspi_encoder.cc
+	rpi/raspi_encoder_impl.h
+	rpi/raspi_encoder_impl.cc
+	rpi/mmal_wrapper.h
+	rpi/mmal_wrapper.cc
+	rpi/config_media.h
+	rpi/config_media.cc
+	rpi/compat/optionsfile.h
+	rpi/compat/optionsfile.cc
+	rpi/wstreamer_types.h
+	rpi/wstreamer_types.cc
+	rpi/def/config_media.def
+	rpi/frame_queue.h
+	rpi/frame_queue.cc
+	rpi/mmal_video.h
+	rpi/mmal_video.c
+	rpi/mmal_common.h
 )
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_options(${PROJECT_NAME} PRIVATE "-Wall" "-Wextra")
