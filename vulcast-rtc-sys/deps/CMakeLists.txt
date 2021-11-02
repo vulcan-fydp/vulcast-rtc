@@ -28,8 +28,5 @@ target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${glog_SOURCE_DIR}/src)
 target_link_libraries(${PROJECT_NAME} PUBLIC glog::glog)
 
 # rpi firmware
-FetchContent_Declare(
-  rpi-firmware
-  GIT_REPOSITORY https://github.com/raspberrypi/firmware.git
-)
-FetchContent_MakeAvailable(rpi-firmware)
+add_subdirectory(rpi-firmware)
+target_link_libraries(${PROJECT_NAME} PUBLIC rpi-firmware)

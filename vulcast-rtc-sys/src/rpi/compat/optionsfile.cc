@@ -19,7 +19,7 @@
 #include "rtc_base/string_utils.h"
 
 // clang format off
-#include "optionsfile.h"
+#include "compat/optionsfile.h"
 // clang format on
 
 const static size_t kConfigLineMinLength = 4;

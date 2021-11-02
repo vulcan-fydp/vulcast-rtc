@@ -36,7 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "compat/optionsfile.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/constructor_magic.h"
-// #include "rtc_base/synchronization/mutex.h"
+#include "rtc_base/synchronization/mutex.h"
 #include "wstreamer_types.h"
 
 #ifdef __cplusplus

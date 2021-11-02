@@ -28,6 +28,12 @@ target_sources(${PROJECT_NAME} PRIVATE
 	rpi/mmal_video.h
 	rpi/mmal_video.c
 	rpi/mmal_common.h
+	rpi/raspicamcontrol.h
+	rpi/raspicamcontrol.c
+	rpi/raspicli.h
+	rpi/raspicli.c
+	rpi/raspipreview.h
+	rpi/raspipreview.c
 )
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_options(${PROJECT_NAME} PRIVATE "-Wall" "-Wextra")
