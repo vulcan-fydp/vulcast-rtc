@@ -35,5 +35,8 @@ target_sources(${PROJECT_NAME} PRIVATE
 	rpi/raspipreview.h
 	rpi/raspipreview.c
 )
-target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(${PROJECT_NAME} PUBLIC 
+	${CMAKE_CURRENT_SOURCE_DIR}
+	${CMAKE_CURRENT_SOURCE_DIR}/rpi
+)
 target_compile_options(${PROJECT_NAME} PRIVATE "-Wall" "-Wextra")
