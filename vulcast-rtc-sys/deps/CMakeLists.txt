@@ -29,4 +29,6 @@ target_link_libraries(${PROJECT_NAME} PUBLIC glog::glog)
 
 # rpi firmware
 add_subdirectory(rpi-firmware)
-target_link_libraries(${PROJECT_NAME} PUBLIC rpi-firmware)
+
+add_subdirectory(rpi-webrtc-streamer)
+target_link_libraries(${PROJECT_NAME} PUBLIC rpi-webrtc-streamer)
