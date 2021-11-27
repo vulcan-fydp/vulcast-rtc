@@ -39,7 +39,7 @@ class CORE_EXPORT ScriptCustomElementDefinition final
                                 CustomElementDefinition::Id);
   ~ScriptCustomElementDefinition() override = default;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
   v8::Local<v8::Object> Constructor() const;
 
@@ -68,7 +68,7 @@ class CORE_EXPORT ScriptCustomElementDefinition final
   void RunFormResetCallback(Element& element) override;
   void RunFormDisabledCallback(Element& element, bool is_disabled) override;
   void RunFormStateRestoreCallback(Element& element,
-                                   const FileOrUSVStringOrFormData& value,
+                                   const V8ControlValue* value,
                                    const String& mode) override;
 
  private:

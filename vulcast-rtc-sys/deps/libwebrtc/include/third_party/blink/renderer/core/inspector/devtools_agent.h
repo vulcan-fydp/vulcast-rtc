@@ -9,13 +9,14 @@
 
 #include "base/single_thread_task_runner.h"
 #include "base/unguessable_token.h"
-#include "mojo/public/cpp/bindings/associated_receiver.h"
-#include "mojo/public/cpp/bindings/associated_remote.h"
-#include "mojo/public/cpp/bindings/receiver.h"
-#include "mojo/public/cpp/bindings/remote.h"
+#include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/mojom/devtools/devtools_agent.mojom-blink.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_associated_receiver.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_associated_remote.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/ref_counted.h"
 
@@ -29,12 +30,17 @@ class InspectorTaskRunner;
 class WorkerThread;
 struct WorkerDevToolsParams;
 
+// All public methods of this class are expected to be called on the same thread
+// that created the instance. That might be the main thread or a worker thread.
+// If used on a worker via BindReceiverForWorker() this class will delegate
+// internally to the IO thread to avoid blocking the worker thread. See
+// DevToolsAgent::IOAgent for more details.
 class CORE_EXPORT DevToolsAgent : public GarbageCollected<DevToolsAgent>,
                                   public mojom::blink::DevToolsAgent {
  public:
   class Client {
    public:
-    virtual ~Client() {}
+    virtual ~Client() = default;
     virtual void AttachSession(DevToolsSession*, bool restore) = 0;
     virtual void DetachSession(DevToolsSession*) = 0;
     virtual void InspectElement(const gfx::Point&) = 0;
@@ -46,7 +52,8 @@ class CORE_EXPORT DevToolsAgent : public GarbageCollected<DevToolsAgent>,
       ExecutionContext* parent_context,
       WorkerThread*,
       const KURL&,
-      const String& global_scope_name);
+      const String& global_scope_name,
+      const absl::optional<const DedicatedWorkerToken>& token);
   static void WorkerThreadTerminated(ExecutionContext* parent_context,
                                      WorkerThread*);
 
@@ -73,7 +80,7 @@ class CORE_EXPORT DevToolsAgent : public GarbageCollected<DevToolsAgent>,
       mojo::PendingAssociatedRemote<mojom::blink::DevToolsAgentHost>,
       mojo::PendingAssociatedReceiver<mojom::blink::DevToolsAgent>,
       scoped_refptr<base::SingleThreadTaskRunner>);
-  virtual void Trace(Visitor*);
+  virtual void Trace(Visitor*) const;
 
  private:
   friend class DevToolsSession;
@@ -123,11 +130,14 @@ class CORE_EXPORT DevToolsAgent : public GarbageCollected<DevToolsAgent>,
                               base::OnceClosure callback);
 
   Client* client_;
-  mojo::AssociatedReceiver<mojom::blink::DevToolsAgent> associated_receiver_{
-      this};
-  mojo::Remote<mojom::blink::DevToolsAgentHost> host_remote_;
-  mojo::AssociatedRemote<mojom::blink::DevToolsAgentHost>
-      associated_host_remote_;
+  // DevToolsAgent is not tied to ExecutionContext
+  HeapMojoAssociatedReceiver<mojom::blink::DevToolsAgent, DevToolsAgent>
+      associated_receiver_{this, nullptr};
+  // DevToolsAgent is not tied to ExecutionContext
+  HeapMojoRemote<mojom::blink::DevToolsAgentHost> host_remote_{nullptr};
+  // DevToolsAgent is not tied to ExecutionContext
+  HeapMojoAssociatedRemote<mojom::blink::DevToolsAgentHost>
+      associated_host_remote_{nullptr};
   Member<InspectedFrames> inspected_frames_;
   Member<CoreProbeSink> probe_sink_;
   HeapHashSet<Member<DevToolsSession>> sessions_;

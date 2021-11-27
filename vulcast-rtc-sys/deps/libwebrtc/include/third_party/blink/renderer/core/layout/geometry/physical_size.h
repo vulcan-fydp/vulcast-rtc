@@ -13,6 +13,8 @@
 
 namespace blink {
 
+enum AspectRatioFit { kAspectRatioFitShrink, kAspectRatioFitGrow };
+
 class LayoutSize;
 struct LogicalSize;
 
@@ -25,7 +27,7 @@ struct CORE_EXPORT PhysicalSize {
   constexpr PhysicalSize(LayoutUnit width, LayoutUnit height)
       : width(width), height(height) {}
 
-  // For testing only. It's defined in core/testing/core_unit_test_helpers.h.
+  // For testing only. It's defined in core/testing/core_unit_test_helper.h.
   inline PhysicalSize(int width, int height);
 
   LayoutUnit width;
@@ -98,6 +100,10 @@ struct CORE_EXPORT PhysicalSize {
   static PhysicalSize FromFloatSizeRound(const FloatSize& size) {
     return {LayoutUnit::FromFloatRound(size.Width()),
             LayoutUnit::FromFloatRound(size.Height())};
+  }
+  static PhysicalSize FromFloatSizeFloor(const FloatSize& size) {
+    return {LayoutUnit::FromFloatFloor(size.Width()),
+            LayoutUnit::FromFloatFloor(size.Height())};
   }
   constexpr explicit operator FloatSize() const { return {width, height}; }
 

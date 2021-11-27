@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_PAINT_RASTER_INVALIDATOR_H_
 
 #include "base/callback.h"
+#include "base/dcheck_is_on.h"
 #include "third_party/blink/renderer/platform/graphics/compositing/chunk_to_layer_mapper.h"
 #include "third_party/blink/renderer/platform/graphics/paint/float_clip_rect.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_chunk.h"
@@ -36,26 +37,23 @@ class PLATFORM_EXPORT RasterInvalidator {
 
   RasterInvalidationTracking& EnsureTracking();
 
-  // Generate raster invalidations for all of the changed paint chunks and
-  // display items in the paint artifact.
-  void Generate(RasterInvalidationFunction,
-                scoped_refptr<const PaintArtifact>,
-                const gfx::Rect& layer_bounds,
-                const PropertyTreeState& layer_state,
-                const FloatSize& visual_rect_subpixel_offset = FloatSize(),
-                const DisplayItemClient* layer_client = nullptr);
-
   // Generate raster invalidations for a subset of the paint chunks in the
   // paint artifact.
   void Generate(RasterInvalidationFunction,
-                scoped_refptr<const PaintArtifact>,
                 const PaintChunkSubset&,
-                const gfx::Rect& layer_bounds,
+                const FloatPoint& layer_offset,
+                const IntSize& layer_bounds,
                 const PropertyTreeState& layer_state,
-                const FloatSize& visual_rect_subpixel_offset = FloatSize(),
                 const DisplayItemClient* layer_client = nullptr);
 
-  const gfx::Rect& LayerBounds() const { return layer_bounds_; }
+  // Called when we repainted PaintArtifact but a ContentLayerClientImpl doesn't
+  // have anything changed. We just need to let |old_paint_artifact_| point to
+  // the real old one. TODO(wangxianzhu): When we remove pre-CAP code, we can
+  // avoid this function by storing the old paint artifact in
+  // PaintArtifactCompositor and pass it in Generate().
+  void SetOldPaintArtifact(scoped_refptr<const PaintArtifact>);
+
+  const IntSize& LayerBounds() const { return layer_bounds_; }
 
   size_t ApproximateUnsharedMemoryUsage() const;
 
@@ -65,13 +63,13 @@ class PLATFORM_EXPORT RasterInvalidator {
   friend class DisplayItemRasterInvalidator;
   friend class RasterInvalidatorTest;
 
-  void UpdateClientDebugNames(const PaintArtifact&, const PaintChunkSubset&);
+  void UpdateClientDebugNames();
 
   struct PaintChunkInfo {
     PaintChunkInfo(const RasterInvalidator& invalidator,
                    const ChunkToLayerMapper& mapper,
-                   PaintChunkSubset::Iterator chunk_it)
-        : index_in_paint_artifact(chunk_it.OriginalIndex()),
+                   const PaintChunkIterator& chunk_it)
+        : index_in_paint_artifact(chunk_it.IndexInPaintArtifact()),
 #if DCHECK_IS_ON()
           id(chunk_it->id),
 #endif
@@ -79,6 +77,20 @@ class PLATFORM_EXPORT RasterInvalidator {
               mapper.MapVisualRect(chunk_it->drawable_bounds))),
           chunk_to_layer_clip(mapper.ClipRect()),
           chunk_to_layer_transform(mapper.Transform()) {
+    }
+
+    PaintChunkInfo(const PaintChunkInfo& old_chunk_info,
+                   const PaintChunkIterator& chunk_it)
+        : index_in_paint_artifact(chunk_it.IndexInPaintArtifact()),
+#if DCHECK_IS_ON()
+          id(chunk_it->id),
+#endif
+          bounds_in_layer(old_chunk_info.bounds_in_layer),
+          chunk_to_layer_clip(old_chunk_info.chunk_to_layer_clip),
+          chunk_to_layer_transform(old_chunk_info.chunk_to_layer_transform) {
+#if DCHECK_IS_ON()
+      DCHECK_EQ(id, old_chunk_info.id);
+#endif
     }
 
     // The index of the chunk in the PaintArtifact. It may be different from
@@ -96,10 +108,9 @@ class PLATFORM_EXPORT RasterInvalidator {
   };
 
   void GenerateRasterInvalidations(RasterInvalidationFunction,
-                                   const PaintArtifact&,
                                    const PaintChunkSubset&,
                                    const PropertyTreeState& layer_state,
-                                   const FloatSize& visual_rect_subpixel_offset,
+                                   bool layer_offset_changed,
                                    Vector<PaintChunkInfo>& new_chunks_info);
 
   ALWAYS_INLINE const PaintChunk& GetOldChunk(wtf_size_t index) const;
@@ -133,8 +144,8 @@ class PLATFORM_EXPORT RasterInvalidator {
                                ClientIsOldOrNew);
 
   ALWAYS_INLINE PaintInvalidationReason
-  ChunkPropertiesChanged(const RefCountedPropertyTreeState& new_chunk_state,
-                         const RefCountedPropertyTreeState& old_chunk_state,
+  ChunkPropertiesChanged(const PaintChunk& new_chunk,
+                         const PaintChunk& old_chunk,
                          const PaintChunkInfo& new_chunk_info,
                          const PaintChunkInfo& old_chunk_info,
                          const PropertyTreeState& layer_state) const;
@@ -143,12 +154,11 @@ class PLATFORM_EXPORT RasterInvalidator {
   template <typename Rect>
   Rect ClipByLayerBounds(const Rect& r) const {
     return Intersection(
-        r, Rect(0, 0, layer_bounds_.width(), layer_bounds_.height()));
+        r, Rect(0, 0, layer_bounds_.Width(), layer_bounds_.Height()));
   }
 
-  void TrackImplicitFullLayerInvalidation(const DisplayItemClient&);
-
-  gfx::Rect layer_bounds_;
+  FloatPoint layer_offset_;
+  IntSize layer_bounds_;
   Vector<PaintChunkInfo> old_paint_chunks_info_;
   scoped_refptr<const PaintArtifact> old_paint_artifact_;
 

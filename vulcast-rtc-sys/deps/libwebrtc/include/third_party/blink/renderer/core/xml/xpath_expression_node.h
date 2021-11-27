@@ -27,7 +27,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_XML_XPATH_EXPRESSION_NODE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_XML_XPATH_EXPRESSION_NODE_H_
 
-#include "base/macros.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/node.h"
 #include "third_party/blink/renderer/core/xml/xpath_value.h"
@@ -58,14 +57,16 @@ struct CORE_EXPORT EvaluationContext {
 class CORE_EXPORT ParseNode : public GarbageCollected<ParseNode> {
  public:
   virtual ~ParseNode() = default;
-  virtual void Trace(Visitor* visitor) {}
+  virtual void Trace(Visitor* visitor) const {}
 };
 
 class CORE_EXPORT Expression : public ParseNode {
  public:
   Expression();
+  Expression(const Expression&) = delete;
+  Expression& operator=(const Expression&) = delete;
   ~Expression() override;
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
   virtual Value Evaluate(EvaluationContext&) const = 0;
 
@@ -107,7 +108,6 @@ class CORE_EXPORT Expression : public ParseNode {
   bool is_context_node_sensitive_;
   bool is_context_position_sensitive_;
   bool is_context_size_sensitive_;
-  DISALLOW_COPY_AND_ASSIGN(Expression);
 };
 
 }  // namespace xpath

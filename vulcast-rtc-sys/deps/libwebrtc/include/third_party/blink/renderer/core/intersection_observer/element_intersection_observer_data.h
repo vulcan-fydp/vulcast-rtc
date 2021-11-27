@@ -21,6 +21,7 @@ class CORE_EXPORT ElementIntersectionObserverData final
       public NameClient {
  public:
   ElementIntersectionObserverData();
+  ~ElementIntersectionObserverData() final = default;
 
   // If the argument observer is observing this Element, this method will return
   // the observation.
@@ -46,7 +47,7 @@ class CORE_EXPORT ElementIntersectionObserverData final
   // algorithm is invalid and must be recomputed.
   void InvalidateCachedRects();
 
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
   const char* NameInHeapSnapshot() const override {
     return "ElementIntersectionObserverData";
   }

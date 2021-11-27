@@ -1,23 +1,25 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * Copyright © 2013 Red Hat, Inc.
  *
- * Permission to use, copy, modify, distribute, and sell this software and its
- * documentation for any purpose is hereby granted without fee, provided that
- * the above copyright notice appear in all copies and that both that copyright
- * notice and this permission notice appear in supporting documentation, and
- * that the name of the copyright holders not be used in advertising or
- * publicity pertaining to distribution of the software without specific,
- * written prior permission.  The copyright holders make no representations
- * about the suitability of this software for any purpose.  It is provided "as
- * is" without express or implied warranty.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to
+ * deal in the Software without restriction, including without limitation the
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * THE COPYRIGHT HOLDERS DISCLAIM ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
- * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO
- * EVENT SHALL THE COPYRIGHT HOLDERS BE LIABLE FOR ANY SPECIAL, INDIRECT OR
- * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
- * DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
- * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
- * OF THIS SOFTWARE.
+ * The above copyright notice and this permission notice (including the next
+ * paragraph) shall be included in all copies or substantial portions of the
+ * Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
  */
 
 #ifndef LIBEVDEV_UINPUT_H
@@ -138,6 +140,9 @@ enum libevdev_uinput_open_mode {
  * REP_PERIOD will default to the kernel defaults, not to the ones set in the
  * source device.
  *
+ * @note On FreeBSD, if the UI_GET_SYSNAME ioctl() fails, there is no other way
+ * to get a device, and the function call will fail.
+ *
  * @param dev The device to duplicate
  * @param uinput_fd @ref LIBEVDEV_UINPUT_OPEN_MANAGED or a file descriptor to @c /dev/uinput,
  * @param[out] uinput_dev The newly created libevdev device.
@@ -195,6 +200,9 @@ int libevdev_uinput_get_fd(const struct libevdev_uinput *uinput_dev);
  * To avoid false positives, wait at least wait at least 1.5s between
  * creating devices that have the same name.
  *
+ * @note FreeBSD does not have sysfs, on FreeBSD this function always returns
+ * NULL.
+ *
  * @param uinput_dev A previously created uinput device.
  * @return The syspath for this device, including the preceding /sys
  *
@@ -212,6 +220,11 @@ const char* libevdev_uinput_get_syspath(struct libevdev_uinput *uinput_dev);
  *
  * @note This function may return NULL. libevdev may have to guess the
  * syspath and the device node. See libevdev_uinput_get_syspath() for details.
+ *
+ * @note On FreeBSD, this function can not return NULL.  libudev uses the
+ * UI_GET_SYSNAME ioctl to get the device node on this platform and if that
+ * fails, the call to libevdev_uinput_create_from_device() fails.
+ *
  * @param uinput_dev A previously created uinput device.
  * @return The device node for this device, in the form of /dev/input/eventN
  *

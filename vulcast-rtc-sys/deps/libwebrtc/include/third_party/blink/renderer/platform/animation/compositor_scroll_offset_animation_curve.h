@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "cc/animation/scroll_offset_animation_curve_factory.h"
 #include "third_party/blink/renderer/platform/animation/compositor_animation_curve.h"
@@ -28,6 +27,10 @@ class PLATFORM_EXPORT CompositorScrollOffsetAnimationCurve
   CompositorScrollOffsetAnimationCurve(FloatPoint, ScrollType);
   explicit CompositorScrollOffsetAnimationCurve(
       cc::ScrollOffsetAnimationCurve*);
+  CompositorScrollOffsetAnimationCurve(
+      const CompositorScrollOffsetAnimationCurve&) = delete;
+  CompositorScrollOffsetAnimationCurve& operator=(
+      const CompositorScrollOffsetAnimationCurve&) = delete;
 
   ~CompositorScrollOffsetAnimationCurve() override;
 
@@ -39,12 +42,10 @@ class PLATFORM_EXPORT CompositorScrollOffsetAnimationCurve
   void UpdateTarget(base::TimeDelta time, FloatPoint new_target);
 
   // CompositorAnimationCurve implementation.
-  std::unique_ptr<cc::AnimationCurve> CloneToAnimationCurve() const override;
+  std::unique_ptr<gfx::AnimationCurve> CloneToAnimationCurve() const override;
 
  private:
   std::unique_ptr<cc::ScrollOffsetAnimationCurve> curve_;
-
-  DISALLOW_COPY_AND_ASSIGN(CompositorScrollOffsetAnimationCurve);
 };
 
 }  // namespace blink

@@ -7,10 +7,15 @@
 
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/layout_block_flow.h"
+#include "third_party/blink/renderer/core/layout/list_marker.h"
 #include "third_party/blink/renderer/core/layout/ng/layout_ng_block_flow_mixin.h"
-#include "third_party/blink/renderer/core/layout/ng/list/list_marker.h"
 
 namespace blink {
+
+extern template class CORE_EXTERN_TEMPLATE_EXPORT
+    LayoutNGBlockFlowMixin<LayoutBlockFlow>;
+extern template class CORE_EXTERN_TEMPLATE_EXPORT
+    LayoutNGMixin<LayoutBlockFlow>;
 
 // A LayoutObject subclass for outside-positioned list markers in LayoutNG.
 class CORE_EXPORT LayoutNGOutsideListMarker final
@@ -27,6 +32,9 @@ class CORE_EXPORT LayoutNGOutsideListMarker final
   const ListMarker& Marker() const { return list_marker_; }
   ListMarker& Marker() { return list_marker_; }
 
+  PaginationBreakability GetPaginationBreakability(
+      FragmentationEngine engine) const final;
+
  private:
   bool IsOfType(LayoutObjectType) const override;
   PositionWithAffinity PositionForPoint(const PhysicalOffset&) const override;
@@ -34,8 +42,12 @@ class CORE_EXPORT LayoutNGOutsideListMarker final
   ListMarker list_marker_;
 };
 
-DEFINE_LAYOUT_OBJECT_TYPE_CASTS(LayoutNGOutsideListMarker,
-                                IsLayoutNGOutsideListMarker());
+template <>
+struct DowncastTraits<LayoutNGOutsideListMarker> {
+  static bool AllowFrom(const LayoutObject& object) {
+    return object.IsLayoutNGOutsideListMarker();
+  }
+};
 
 }  // namespace blink
 

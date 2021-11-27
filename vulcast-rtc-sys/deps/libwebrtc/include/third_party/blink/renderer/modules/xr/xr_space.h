@@ -7,10 +7,10 @@
 
 #include <memory>
 
-#include "base/optional.h"
+#include "device/vr/public/mojom/vr_service.mojom-blink.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
-#include "third_party/blink/renderer/modules/xr/xr_native_origin_information.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
@@ -37,12 +37,12 @@ class XRSpace : public EventTargetWithInlineData {
   // Unless noted otherwise, all data returned over vr_service.mojom interfaces
   // is expressed in mojo space coordinates.
   // Returns nullopt if computing a transform is not possible.
-  virtual base::Optional<TransformationMatrix> MojoFromNative() = 0;
+  virtual absl::optional<TransformationMatrix> MojoFromNative() = 0;
 
   // Convenience method to try to get the inverse of the above. This will return
   // the pose of the mojo origin in this space's native origin.
   // Returns nullopt if computing a transform is not possible.
-  virtual base::Optional<TransformationMatrix> NativeFromMojo() = 0;
+  absl::optional<TransformationMatrix> NativeFromMojo();
 
   // Gets the viewer pose in the native coordinates of this space, corresponding
   // to a transform from viewer coordinates to this space's native coordinates.
@@ -52,14 +52,14 @@ class XRSpace : public EventTargetWithInlineData {
   // on the calling side, as this allows the viewer space to return identity
   // instead of something near to, but not quite, identity.
   // Returns nullopt if computing a transform is not possible.
-  virtual base::Optional<TransformationMatrix> NativeFromViewer(
-      const base::Optional<TransformationMatrix>& mojo_from_viewer);
+  virtual absl::optional<TransformationMatrix> NativeFromViewer(
+      const absl::optional<TransformationMatrix>& mojo_from_viewer);
 
   // Convenience method for calling NativeFromViewer with the current
   // MojoFromViewer of the session associated with this space. This also handles
   // the multiplication of OffsetFromNative onto the result of NativeFromViewer.
   // Returns nullopt if computing a transform is not possible.
-  base::Optional<TransformationMatrix> OffsetFromViewer();
+  absl::optional<TransformationMatrix> OffsetFromViewer();
 
   // Return origin offset matrix, aka native_origin_from_offset_space.
   virtual TransformationMatrix NativeFromOffsetMatrix();
@@ -68,7 +68,7 @@ class XRSpace : public EventTargetWithInlineData {
   // Returns transformation from offset space to mojo space. Convenience method,
   // returns MojoFromNative() * NativeFromOffsetMatrix() or nullopt if computing
   // a transform is not possible.
-  base::Optional<TransformationMatrix> MojoFromOffsetMatrix();
+  absl::optional<TransformationMatrix> MojoFromOffsetMatrix();
 
   // Returns true when invoked on a space that is deemed stationary, false
   // otherwise (this means that the space is considered dynamic). Stationary
@@ -90,17 +90,17 @@ class XRSpace : public EventTargetWithInlineData {
 
   XRSession* session() const { return session_; }
 
+  // ToString() helper, used for debugging.
+  virtual std::string ToString() const = 0;
+
   // EventTarget overrides.
   ExecutionContext* GetExecutionContext() const override;
   const AtomicString& InterfaceName() const override;
 
-  virtual base::Optional<XRNativeOriginInformation> NativeOrigin() const = 0;
+  virtual device::mojom::blink::XRNativeOriginInformationPtr NativeOrigin()
+      const = 0;
 
-  void Trace(Visitor* visitor) override;
-
- protected:
-  static base::Optional<TransformationMatrix> TryInvert(
-      const base::Optional<TransformationMatrix>& matrix);
+  void Trace(Visitor* visitor) const override;
 
  private:
   const Member<XRSession> session_;

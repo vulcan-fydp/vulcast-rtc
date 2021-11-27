@@ -17,17 +17,13 @@
 namespace blink {
 
 class LocalDOMWindow;
-class NDEFScanOptions;
 class NDEFReader;
-class NDEFWriter;
 
-// This is a proxy class used by NDEFWriter(s) and NDEFReader(s) to connect
+// This is a proxy class used by NDEFReader(s) to connect
 // to implementation of device::mojom::blink::NFC interface.
 class MODULES_EXPORT NFCProxy final : public GarbageCollected<NFCProxy>,
                                       public Supplement<LocalDOMWindow>,
                                       public device::mojom::blink::NFCClient {
-  USING_GARBAGE_COLLECTED_MIXIN(NFCProxy);
-
  public:
   static const char kSupplementName[];
   static NFCProxy* From(LocalDOMWindow&);
@@ -35,22 +31,21 @@ class MODULES_EXPORT NFCProxy final : public GarbageCollected<NFCProxy>,
   explicit NFCProxy(LocalDOMWindow&);
   ~NFCProxy() override;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
   // There is no matching RemoveWriter() method because writers are
   // automatically removed from the weak hash set when they are garbage
   // collected.
-  void AddWriter(NDEFWriter*);
+  void AddWriter(NDEFReader*);
 
   void StartReading(NDEFReader*,
-                    const NDEFScanOptions*,
                     device::mojom::blink::NFC::WatchCallback);
   void StopReading(NDEFReader*);
   bool IsReading(const NDEFReader*);
   void Push(device::mojom::blink::NDEFMessagePtr,
             device::mojom::blink::NDEFWriteOptionsPtr,
             device::mojom::blink::NFC::PushCallback);
-  void CancelPush(device::mojom::blink::NFC::CancelPushCallback);
+  void CancelPush();
 
  private:
   // Implementation of device::mojom::blink::NFCClient.
@@ -78,14 +73,11 @@ class MODULES_EXPORT NFCProxy final : public GarbageCollected<NFCProxy>,
   using ReaderMap = HeapHashMap<WeakMember<NDEFReader>, uint32_t>;
   ReaderMap readers_;
 
-  using WriterSet = HeapHashSet<WeakMember<NDEFWriter>>;
+  using WriterSet = HeapHashSet<WeakMember<NDEFReader>>;
   WriterSet writers_;
 
   mojo::Remote<device::mojom::blink::NFC> nfc_remote_;
-  HeapMojoReceiver<device::mojom::blink::NFCClient,
-                   NFCProxy,
-                   HeapMojoWrapperMode::kWithoutContextObserver>
-      client_receiver_;
+  HeapMojoReceiver<device::mojom::blink::NFCClient, NFCProxy> client_receiver_;
 };
 
 }  // namespace blink

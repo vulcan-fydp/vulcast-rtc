@@ -17,26 +17,27 @@ namespace blink {
 class ExecutionContext;
 
 // Class that allows the registration and unregistration of generic
-// VideoFrameCallbacks. Used to store to pending video.requestAnimationFrame
+// VideoFrameCallbacks. Used to store to pending video.requestVideoFrameCallback
 // requests, and to propagate the results of the request once it completes.
 class MODULES_EXPORT VideoFrameRequestCallbackCollection final
     : public GarbageCollected<VideoFrameRequestCallbackCollection>,
       public NameClient {
  public:
   explicit VideoFrameRequestCallbackCollection(ExecutionContext*);
+  ~VideoFrameRequestCallbackCollection() final = default;
 
   using CallbackId = int;
 
-  // Abstract class that generalizes a video.rAF callback.
+  // Abstract class that generalizes a video.rVFC callback.
   class MODULES_EXPORT VideoFrameCallback
       : public GarbageCollected<VideoFrameCallback>,
         public NameClient {
    public:
-    virtual void Trace(Visitor*) {}
+    virtual void Trace(Visitor*) const {}
     const char* NameInHeapSnapshot() const override {
       return "VideoFrameCallback";
     }
-    virtual ~VideoFrameCallback() = default;
+    ~VideoFrameCallback() override = default;
 
     virtual void Invoke(double, const VideoFrameMetadata*) = 0;
 
@@ -57,7 +58,7 @@ class MODULES_EXPORT VideoFrameRequestCallbackCollection final
   // VideoFrameCallback that can be stored and executed by this collection.
   class MODULES_EXPORT V8VideoFrameCallback : public VideoFrameCallback {
    public:
-    void Trace(Visitor*) override;
+    void Trace(Visitor*) const override;
     const char* NameInHeapSnapshot() const override {
       return "V8VideoFrameCallback";
     }
@@ -85,7 +86,7 @@ class MODULES_EXPORT VideoFrameRequestCallbackCollection final
 
   bool IsEmpty() const { return !frame_callbacks_.size(); }
 
-  virtual void Trace(Visitor*);
+  virtual void Trace(Visitor*) const;
   const char* NameInHeapSnapshot() const override {
     return "VideoFrameRequestCallbackCollection";
   }

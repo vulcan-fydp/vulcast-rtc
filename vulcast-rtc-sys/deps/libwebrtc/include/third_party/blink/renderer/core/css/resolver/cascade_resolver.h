@@ -15,7 +15,6 @@
 
 namespace blink {
 
-class CascadePriority;
 class CSSProperty;
 class CSSVariableData;
 class CSSProperty;
@@ -34,29 +33,23 @@ class CORE_EXPORT CascadeResolver {
 
  public:
   // TODO(crbug.com/985047): Probably use a HashMap for this.
-  using NameStack = Vector<CSSPropertyName, 8>;
+  using PropertyStack = Vector<const CSSProperty*, 8>;
 
   // A 'locked' property is a property we are in the process of applying.
   // In other words, once a property is locked, locking it again would form
   // a cycle, and is therefore an error.
   bool IsLocked(const CSSProperty&) const;
-  bool IsLocked(const CSSPropertyName&) const;
+
+  // Returns the property we're currently applying.
+  const CSSProperty* CurrentProperty() const {
+    return stack_.size() ? stack_.back() : nullptr;
+  }
 
   // We do not allow substitution of animation-tainted values into
   // an animation-affecting property.
   //
   // https://drafts.csswg.org/css-variables/#animation-tainted
   bool AllowSubstitution(CSSVariableData*) const;
-
-  // Sets the generation of the priority to zero, which has the effect of
-  // marking it as unapplied. (I.e. this can be used to force re-application of
-  // a declaration).
-  void MarkUnapplied(CascadePriority*) const;
-
-  // Sets the generation of the priority to the current generation,
-  // which has the effect of marking it as already applied. (I.e. this can be
-  // used to skip application of a declaration).
-  void MarkApplied(CascadePriority*) const;
 
   // If the incoming origin is kAuthor, collect flags from 'property'.
   // AuthorFlags() can then later be used to see which flags have been observed.
@@ -73,7 +66,6 @@ class CORE_EXPORT CascadeResolver {
 
    public:
     AutoLock(const CSSProperty&, CascadeResolver&);
-    AutoLock(const CSSPropertyName&, CascadeResolver&);
     ~AutoLock();
 
    private:
@@ -89,22 +81,30 @@ class CORE_EXPORT CascadeResolver {
       : filter_(filter), generation_(generation) {}
 
   // If the given property is already being applied, returns true.
-  // The return value is the same value you would get from InCycle(), and
-  // is just returned for convenience.
   //
-  // When a cycle has been detected, the CascadeResolver will *persist the cycle
-  // state* (i.e. InCycle() will continue to return true) until we reach
-  // the start of the cycle.
+  // When a cycle is detected, a portion of the stack is effecively marked
+  // as "in cycle". The function InCycle() may be used to check if we are
+  // currently inside a marked portion of the stack.
   //
-  // The cycle state is cleared by ~AutoLock, once we have moved far enough
-  // up the stack.
+  // The marked range of the stack shrinks during ~AutoLock, such that we won't
+  // be InCycle whenever we move outside that of that range.
   bool DetectCycle(const CSSProperty&);
   // Returns true whenever the CascadeResolver is in a cycle state.
   // This DOES NOT detect cycles; the caller must call DetectCycle first.
   bool InCycle() const;
+  // Returns the index of the given property (compared using the property's
+  // CSSPropertyName), or kNotFound if the property (name) is not present in
+  // stack_.
+  wtf_size_t Find(const CSSProperty&) const;
 
-  NameStack stack_;
-  wtf_size_t cycle_depth_ = kNotFound;
+  PropertyStack stack_;
+  // If we're in a cycle, cycle_start_ is the index of the stack_ item that
+  // "started" the cycle, i.e. the item in the cycle with the smallest index.
+  wtf_size_t cycle_start_ = kNotFound;
+  // If we're in a cycle, cycle_end_ is set to the size of stack_. This causes
+  // InCycle to return true while we're on the portion of the stack between
+  // cycle_start_ and cycle_end_.
+  wtf_size_t cycle_end_ = kNotFound;
   CascadeFilter filter_;
   const uint8_t generation_ = 0;
   CSSProperty::Flags author_flags_ = 0;

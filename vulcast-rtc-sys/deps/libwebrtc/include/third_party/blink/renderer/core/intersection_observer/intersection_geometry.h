@@ -36,10 +36,14 @@ class CORE_EXPORT IntersectionGeometry {
     kShouldUseReplacedContentRect = 1 << 3,
     kShouldConvertToCSSPixels = 1 << 4,
     kShouldUseCachedRects = 1 << 5,
+    // Applies to boxes. If true, OverflowClipRect() is used if necessary
+    // instead of BorderBoundingBox().
+    kUseOverflowClipEdge = 1 << 6,
 
     // These flags will be computed
-    kRootIsImplicit = 1 << 6,
-    kIsVisible = 1 << 7
+    kRootIsImplicit = 1 << 7,
+    kDidComputeGeometry = 1 << 8,
+    kIsVisible = 1 << 9
   };
 
   struct RootGeometry {
@@ -63,6 +67,8 @@ class CORE_EXPORT IntersectionGeometry {
     // True iff unscrolled_unclipped_intersection_rect actually intersects the
     // root, as defined by edge-inclusive intersection rules.
     bool does_intersect;
+    // True iff the target rect before any margins were applied was empty
+    bool pre_margin_target_rect_is_empty;
     // Invalidation flag
     bool valid;
   };
@@ -76,6 +82,7 @@ class CORE_EXPORT IntersectionGeometry {
                        const Element& target,
                        const Vector<Length>& root_margin,
                        const Vector<float>& thresholds,
+                       const Vector<Length>& target_margin,
                        unsigned flags,
                        CachedRects* cached_rects = nullptr);
 
@@ -83,6 +90,7 @@ class CORE_EXPORT IntersectionGeometry {
                        const Node& explicit_root,
                        const Element& target,
                        const Vector<float>& thresholds,
+                       const Vector<Length>& target_margin,
                        unsigned flags,
                        CachedRects* cached_rects = nullptr);
 
@@ -101,8 +109,7 @@ class CORE_EXPORT IntersectionGeometry {
   PhysicalRect TargetRect() const { return target_rect_; }
   PhysicalRect IntersectionRect() const { return intersection_rect_; }
 
-  // The intersection rect without applying viewport clipping in the coordinate
-  // system of the root's viewport.
+  // The intersection rect without applying viewport clipping.
   PhysicalRect UnclippedIntersectionRect() const {
     return unclipped_intersection_rect_;
   }
@@ -119,6 +126,7 @@ class CORE_EXPORT IntersectionGeometry {
   unsigned ThresholdIndex() const { return threshold_index_; }
 
   bool RootIsImplicit() const { return flags_ & kRootIsImplicit; }
+  bool DidComputeGeometry() const { return flags_ & kDidComputeGeometry; }
   bool IsIntersecting() const { return threshold_index_ > 0; }
   bool IsVisible() const { return flags_ & kIsVisible; }
 
@@ -128,6 +136,7 @@ class CORE_EXPORT IntersectionGeometry {
                        const LayoutObject* root,
                        const LayoutObject* target,
                        const Vector<float>& thresholds,
+                       const Vector<Length>& target_margin,
                        CachedRects* cached_rects);
   // Map intersection_rect from the coordinate system of the target to the
   // coordinate system of the root, applying intervening clips.

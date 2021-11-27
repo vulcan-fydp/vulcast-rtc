@@ -11,7 +11,7 @@
 
 #include "mojo/public/cpp/bindings/struct_traits.h"
 #include "third_party/blink/public/common/common_export.h"
-#include "third_party/blink/public/mojom/user_agent/user_agent_metadata.mojom.h"
+#include "third_party/blink/public/mojom/user_agent/user_agent_metadata.mojom-shared.h"
 
 namespace mojo {
 
@@ -63,6 +63,10 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::UserAgentMetadataDataView,
     return data.mobile;
   }
 
+  static const std::string& bitness(const ::blink::UserAgentMetadata& data) {
+    return data.bitness;
+  }
+
   static bool Read(blink::mojom::UserAgentMetadataDataView data,
                    ::blink::UserAgentMetadata* out);
 };
@@ -75,7 +79,7 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::UserAgentOverrideDataView,
     return data.ua_string_override;
   }
 
-  static const base::Optional<::blink::UserAgentMetadata> ua_metadata_override(
+  static const absl::optional<::blink::UserAgentMetadata> ua_metadata_override(
       const ::blink::UserAgentOverride& data) {
     return data.ua_metadata_override;
   }

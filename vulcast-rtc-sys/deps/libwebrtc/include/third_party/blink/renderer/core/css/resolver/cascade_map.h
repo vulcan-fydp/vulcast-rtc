@@ -68,11 +68,13 @@ class CORE_EXPORT CascadeMap {
     // CascadePriority objects. A companion bitset keeps track of which
     // properties are initialized.
     CSSBitset bits_;
-    alignas(CascadePriority) char properties_[numCSSProperties *
+    alignas(CascadePriority) char properties_[kNumCSSProperties *
                                               sizeof(CascadePriority)];
   };
 
   using CustomMap = HashMap<CSSPropertyName, CascadePriority>;
+
+  const CustomMap& GetCustomMap() const { return custom_properties_; }
 
  private:
   uint64_t high_priority_ = 0;

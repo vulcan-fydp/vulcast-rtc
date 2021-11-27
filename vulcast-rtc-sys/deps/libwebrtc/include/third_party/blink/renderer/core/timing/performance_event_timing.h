@@ -49,7 +49,9 @@ class CORE_EXPORT PerformanceEventTiming final : public PerformanceEntry {
 
   void BuildJSONValue(V8ObjectBuilder&) const override;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
+
+  std::unique_ptr<TracedValue> ToTracedValue() const;
 
  private:
   AtomicString entry_type_;

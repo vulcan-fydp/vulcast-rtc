@@ -70,7 +70,7 @@ class PLATFORM_EXPORT ResourceClient : public GarbageCollectedMixin {
   // Name for debugging, e.g. shown in memory-infra.
   virtual String DebugName() const = 0;
 
-  void Trace(Visitor* visitor) override;
+  void Trace(Visitor* visitor) const override;
 
  protected:
   void ClearResource() { SetResource(nullptr, nullptr); }
@@ -97,4 +97,4 @@ class PLATFORM_EXPORT ResourceClient : public GarbageCollectedMixin {
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_LOADER_FETCH_RESOURCE_CLIENT_H_

@@ -28,13 +28,14 @@ class CORE_EXPORT ImageElementBase : public CanvasImageSource,
 
   IntSize BitmapSourceSize() const override;
   ScriptPromise CreateImageBitmap(ScriptState*,
-                                  base::Optional<IntRect>,
+                                  absl::optional<IntRect>,
                                   const ImageBitmapOptions*,
                                   ExceptionState&) override;
 
-  scoped_refptr<Image> GetSourceImageForCanvas(SourceImageStatus*,
-                                               AccelerationHint,
-                                               const FloatSize&) override;
+  scoped_refptr<Image> GetSourceImageForCanvas(
+      SourceImageStatus*,
+      const FloatSize&,
+      const AlphaDisposition alpha_disposition = kPremultiplyAlpha) override;
 
   bool WouldTaintOrigin() const override;
 
@@ -60,11 +61,6 @@ class CORE_EXPORT ImageElementBase : public CanvasImageSource,
   // given the PaintImage::Id that will be used to paint it.
   // Used with HTMLImageElement and SVGImageElement types.
   Image::ImageDecodingMode GetDecodingModeForPainting(PaintImage::Id);
-
-  // Return the image orientation setting from the layout object, if available.
-  // In the absence of a layout object, kRespectImageOrientation will be
-  // returned.
-  RespectImageOrientationEnum RespectImageOrientation() const;
 
  protected:
   Image::ImageDecodingMode decoding_mode_ =

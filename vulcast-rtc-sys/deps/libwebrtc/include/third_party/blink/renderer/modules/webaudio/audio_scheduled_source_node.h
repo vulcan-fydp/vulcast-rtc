@@ -33,6 +33,11 @@
 #include "base/memory/weak_ptr.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node.h"
+#include "third_party/blink/renderer/platform/wtf/threading_primitives.h"
+
+namespace base {
+class SingleThreadTaskRunner;
+}
 
 namespace blink {
 
@@ -177,7 +182,6 @@ class AudioScheduledSourceHandler
 class AudioScheduledSourceNode
     : public AudioNode,
       public ActiveScriptWrappable<AudioScheduledSourceNode> {
-  USING_GARBAGE_COLLECTED_MIXIN(AudioScheduledSourceNode);
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -192,7 +196,7 @@ class AudioScheduledSourceNode
   // ScriptWrappable:
   bool HasPendingActivity() const final;
 
-  void Trace(Visitor* visitor) override { AudioNode::Trace(visitor); }
+  void Trace(Visitor* visitor) const override { AudioNode::Trace(visitor); }
 
   AudioScheduledSourceHandler& GetAudioScheduledSourceHandler() const;
 

@@ -7,11 +7,10 @@
 
 #include <vector>
 
-#include "third_party/blink/public/platform/input/input_predictor.h"
-#include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/widget/input/event_with_callback.h"
 #include "third_party/blink/renderer/platform/widget/input/prediction/filter_factory.h"
-#include "third_party/blink/renderer/platform/widget/input/prediction/prediction_metrics_handler.h"
+#include "ui/base/prediction/input_predictor.h"
+#include "ui/base/prediction/prediction_metrics_handler.h"
 
 namespace blink {
 
@@ -28,6 +27,8 @@ class PLATFORM_EXPORT ScrollPredictor {
   // Select the predictor type from field trial params and initialize the
   // predictor.
   explicit ScrollPredictor();
+  ScrollPredictor(const ScrollPredictor&) = delete;
+  ScrollPredictor& operator=(const ScrollPredictor&) = delete;
   ~ScrollPredictor();
 
   // Reset the predictors on each GSB.
@@ -38,7 +39,8 @@ class PLATFORM_EXPORT ScrollPredictor {
   // event if enable_resampling is true.
   std::unique_ptr<EventWithCallback> ResampleScrollEvents(
       std::unique_ptr<EventWithCallback> event_with_callback,
-      base::TimeTicks frame_time);
+      base::TimeTicks frame_time,
+      base::TimeDelta frame_interval);
 
  private:
   friend class test::InputHandlerProxyEventQueueTest;
@@ -49,11 +51,11 @@ class PLATFORM_EXPORT ScrollPredictor {
   void Reset();
 
   // Update the prediction with GestureScrollUpdate deltaX and deltaY
-  void UpdatePrediction(const std::unique_ptr<WebInputEvent>& event,
-                        base::TimeTicks frame_time);
+  void UpdatePrediction(const WebInputEvent& event, base::TimeTicks frame_time);
 
   // Apply resampled deltaX/deltaY to gesture events
   void ResampleEvent(base::TimeTicks frame_time,
+                     base::TimeDelta frame_interval,
                      WebInputEvent* event,
                      ui::LatencyInfo* latency_info);
 
@@ -61,8 +63,8 @@ class PLATFORM_EXPORT ScrollPredictor {
   // in |PredictionMetricsHandler|
   void EvaluatePrediction();
 
-  std::unique_ptr<InputPredictor> predictor_;
-  std::unique_ptr<InputFilter> filter_;
+  std::unique_ptr<ui::InputPredictor> predictor_;
+  std::unique_ptr<ui::InputFilter> filter_;
 
   std::unique_ptr<FilterFactory> filter_factory_;
 
@@ -80,9 +82,7 @@ class PLATFORM_EXPORT ScrollPredictor {
   bool should_resample_scroll_events_ = false;
 
   // Handler used for evaluating the prediction
-  PredictionMetricsHandler metrics_handler_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScrollPredictor);
+  ui::PredictionMetricsHandler metrics_handler_;
 };
 
 }  // namespace blink

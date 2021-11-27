@@ -39,8 +39,10 @@ class LayoutSVGResourceGradient : public LayoutSVGResourcePaintServer {
   void RemoveAllClientsFromCache() final;
   bool RemoveClientFromCache(SVGResourceClient&) final;
 
-  SVGPaintServer PreparePaintServer(const SVGResourceClient&,
-                                    const FloatRect& object_bounding_box) final;
+  bool ApplyShader(const SVGResourceClient&,
+                   const FloatRect& reference_box,
+                   const AffineTransform* additional_transform,
+                   PaintFlags&) final;
 
   bool IsChildAllowed(LayoutObject* child, const ComputedStyle&) const final;
 
@@ -65,4 +67,4 @@ class LayoutSVGResourceGradient : public LayoutSVGResourcePaintServer {
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_SVG_LAYOUT_SVG_RESOURCE_GRADIENT_H_

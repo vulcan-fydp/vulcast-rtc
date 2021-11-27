@@ -30,7 +30,8 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/dcheck_is_on.h"
+#include "third_party/blink/public/mojom/frame/color_scheme.mojom-blink-forward.h"
 #include "third_party/blink/renderer/platform/fonts/font.h"
 #include "third_party/blink/renderer/platform/graphics/dark_mode_filter.h"
 #include "third_party/blink/renderer/platform/graphics/dark_mode_settings.h"
@@ -66,15 +67,50 @@ class PaintController;
 class Path;
 struct TextRunPaintInfo;
 
+// Tiling parameters for the DrawImageTiled() method.
+struct ImageTilingInfo {
+  // The part of the Image (the |image| argument to the method) to tile. It's in
+  // the space of the image.
+  FloatRect image_rect;
+
+  // Scale factor from image space to destination space. Will include
+  // image-resolution information.
+  FloatSize scale{1.0f, 1.0f};
+
+  // Origin of the full image in destination space.
+  FloatPoint phase;
+
+  // Additional spacing between tiles in destination space.
+  FloatSize spacing;
+};
+
+struct ImageDrawOptions {
+  SkSamplingOptions sampling_options;
+  RespectImageOrientationEnum respect_image_orientation =
+      kRespectImageOrientation;
+  bool apply_dark_mode = false;
+};
+
 class PLATFORM_EXPORT GraphicsContext {
   USING_FAST_MALLOC(GraphicsContext);
 
  public:
-  explicit GraphicsContext(PaintController&,
-                           printing::MetafileSkia* = nullptr,
-                           paint_preview::PaintPreviewTracker* = nullptr);
-
+  explicit GraphicsContext(PaintController&);
+  GraphicsContext(const GraphicsContext&) = delete;
+  GraphicsContext& operator=(const GraphicsContext&) = delete;
   ~GraphicsContext();
+
+  // Copy configs such as printing, dark mode, device scale factor etc. from
+  // another GraphicsContext.
+  void CopyConfigFrom(GraphicsContext&);
+
+  void SetPrintingMetafile(printing::MetafileSkia* metafile) {
+    printing_metafile_ = metafile;
+  }
+
+  void SetPaintPreviewTracker(paint_preview::PaintPreviewTracker* tracker) {
+    paint_preview_tracker_ = tracker;
+  }
 
   cc::PaintCanvas* Canvas() { return canvas_; }
   const cc::PaintCanvas* Canvas() const { return canvas_; }
@@ -84,9 +120,12 @@ class PLATFORM_EXPORT GraphicsContext {
     return paint_controller_;
   }
 
-  const DarkModeSettings& dark_mode_settings() const {
-    return dark_mode_filter_.settings();
-  }
+  bool IsDarkModeEnabled() const { return is_dark_mode_enabled_; }
+  void SetDarkModeEnabled(bool enabled) { is_dark_mode_enabled_ = enabled; }
+
+  DarkModeFilter* GetDarkModeFilter();
+
+  void UpdateDarkModeSettingsForTest(const DarkModeSettings&);
 
   // ---------- State management methods -----------------
   void Save();
@@ -95,8 +134,6 @@ class PLATFORM_EXPORT GraphicsContext {
 #if DCHECK_IS_ON()
   unsigned SaveCount() const;
 #endif
-
-  void SetDarkMode(const DarkModeSettings&);
 
   float StrokeThickness() const {
     return ImmutableState()->GetStrokeData().Thickness();
@@ -146,29 +183,20 @@ class PLATFORM_EXPORT GraphicsContext {
     return ImmutableState()->GetInterpolationQuality();
   }
 
+  SkSamplingOptions ImageSamplingOptions() const {
+    return PaintFlags::FilterQualityToSkSamplingOptions(
+        static_cast<PaintFlags::FilterQuality>(ImageInterpolationQuality()));
+  }
+
   // Specify the device scale factor which may change the way document markers
   // and fonts are rendered.
   void SetDeviceScaleFactor(float factor) { device_scale_factor_ = factor; }
   float DeviceScaleFactor() const { return device_scale_factor_; }
 
-  // Returns if the context is a printing context instead of a display
-  // context. Bitmap shouldn't be resampled when printing to keep the best
-  // possible quality.
-  bool Printing() const { return printing_; }
+  // Set to true if context is for printing. Bitmaps won't be resampled when
+  // printing to keep the best possible quality. When printing text will be
+  // provided along with glyphs.
   void SetPrinting(bool printing) { printing_ = printing; }
-
-  // Returns if the context is saving a paint preview instead of displaying.
-  // In such cases, clipping should not occur.
-  bool IsPaintingPreview() const { return is_painting_preview_; }
-  void SetIsPaintingPreview(bool is_painting_preview) {
-    is_painting_preview_ = is_painting_preview;
-  }
-
-  // Returns if the context is printing or painting a preview. Many of the
-  // behaviors required for printing and paint previews are shared.
-  bool IsPrintingOrPaintingPreview() const {
-    return Printing() || IsPaintingPreview();
-  }
 
   SkColorFilter* GetColorFilter() const;
   void SetColorFilter(ColorFilter);
@@ -183,7 +211,8 @@ class PLATFORM_EXPORT GraphicsContext {
   void DrawLine(const IntPoint&,
                 const IntPoint&,
                 const DarkModeFilter::ElementRole role =
-                    DarkModeFilter::ElementRole::kBackground);
+                    DarkModeFilter::ElementRole::kBackground,
+                bool is_text_line = false);
 
   void FillPath(const Path&);
 
@@ -218,6 +247,9 @@ class PLATFORM_EXPORT GraphicsContext {
   void FillDRRect(const FloatRoundedRect&,
                   const FloatRoundedRect&,
                   const Color&);
+  void FillRectWithRoundedHole(const FloatRect&,
+                               const FloatRoundedRect& rounded_hole_rect,
+                               const Color&);
 
   void StrokeRect(const FloatRect&, float line_width);
 
@@ -231,22 +263,20 @@ class PLATFORM_EXPORT GraphicsContext {
                  Image::ImageDecodingMode,
                  const FloatRect& dest_rect,
                  const FloatRect* src_rect = nullptr,
-                 bool has_filter_property = false,
+                 bool has_disable_dark_mode_style = false,
                  SkBlendMode = SkBlendMode::kSrcOver,
                  RespectImageOrientationEnum = kRespectImageOrientation);
   void DrawImageRRect(Image*,
                       Image::ImageDecodingMode,
                       const FloatRoundedRect& dest,
                       const FloatRect& src_rect,
-                      bool has_filter_property = false,
+                      bool has_disable_dark_mode_style = false,
                       SkBlendMode = SkBlendMode::kSrcOver,
                       RespectImageOrientationEnum = kRespectImageOrientation);
   void DrawImageTiled(Image* image,
                       const FloatRect& dest_rect,
-                      const FloatRect& src_rect,
-                      const FloatSize& scale_src_to_dest,
-                      const FloatPoint& phase,
-                      const FloatSize& repeat_spacing,
+                      const ImageTilingInfo& tiling_info,
+                      bool has_disable_dark_mode_style = false,
                       SkBlendMode = SkBlendMode::kSrcOver,
                       RespectImageOrientationEnum = kRespectImageOrientation);
 
@@ -304,6 +334,14 @@ class PLATFORM_EXPORT GraphicsContext {
                 const PaintFlags&,
                 DOMNodeId);
 
+  // TODO(layout-dev): This method is only used by NGTextPainter, see if the
+  // four parameter overload can be removed or if it can wrap this method.
+  void DrawText(const Font&,
+                const NGTextFragmentPaintInfo&,
+                const FloatPoint&,
+                const PaintFlags&,
+                DOMNodeId);
+
   void DrawEmphasisMarks(const Font&,
                          const TextRunPaintInfo&,
                          const AtomicString& mark,
@@ -348,39 +386,13 @@ class PLATFORM_EXPORT GraphicsContext {
   // not necessarily non-empty), even when the context is disabled.
   sk_sp<PaintRecord> EndRecording();
 
-  void SetShadow(const FloatSize& offset,
-                 float blur,
-                 const Color&,
-                 DrawLooperBuilder::ShadowTransformMode =
-                     DrawLooperBuilder::kShadowRespectsTransforms,
-                 DrawLooperBuilder::ShadowAlphaMode =
-                     DrawLooperBuilder::kShadowRespectsAlpha,
-                 ShadowMode = kDrawShadowAndForeground);
-
   void SetDrawLooper(sk_sp<SkDrawLooper>);
 
-  void DrawFocusRing(const Vector<IntRect>&,
-                     float width,
-                     int offset,
-                     float border_radius,
-                     float min_border_width,
-                     const Color&);
-  void DrawFocusRing(const Path&, float width, int offset, const Color&);
-
-  enum Edge {
-    kNoEdge = 0,
-    kTopEdge = 1 << 1,
-    kRightEdge = 1 << 2,
-    kBottomEdge = 1 << 3,
-    kLeftEdge = 1 << 4
-  };
-  typedef unsigned Edges;
-  void DrawInnerShadow(const FloatRoundedRect&,
-                       const Color& shadow_color,
-                       const FloatSize& shadow_offset,
-                       float shadow_blur,
-                       float shadow_spread,
-                       Edges clipped_edges = kNoEdge);
+  void DrawFocusRingPath(const SkPath&,
+                         const Color&,
+                         float width,
+                         float corner_radius);
+  void DrawFocusRingRect(const SkRRect&, const Color&, float width);
 
   const PaintFlags& FillFlags() const { return ImmutableState()->FillFlags(); }
   // If the length of the path to be stroked is known, pass it in for correct
@@ -400,9 +412,16 @@ class PLATFORM_EXPORT GraphicsContext {
   void Translate(float x, float y);
   // ---------- End transformation methods -----------------
 
-  SkFilterQuality ComputeFilterQuality(Image*,
-                                       const FloatRect& dest,
-                                       const FloatRect& src) const;
+  PaintFlags::FilterQuality ComputeFilterQuality(Image*,
+                                                 const FloatRect& dest,
+                                                 const FloatRect& src) const;
+
+  SkSamplingOptions ComputeSamplingOptions(Image* image,
+                                           const FloatRect& dest,
+                                           const FloatRect& src) const {
+    return PaintFlags::FilterQualityToSkSamplingOptions(
+        ComputeFilterQuality(image, dest, src));
+  }
 
   // Sets target URL of a clickable area.
   void SetURLForRect(const KURL&, const IntRect&);
@@ -420,7 +439,11 @@ class PLATFORM_EXPORT GraphicsContext {
                                           FloatPoint& p2,
                                           float stroke_width);
 
-  static int FocusRingOutsetExtent(int offset, int width);
+  static Path GetPathForTextLine(const FloatPoint&,
+                                 float width,
+                                 float stroke_thickness,
+                                 StrokeStyle);
+  static bool ShouldUseStrokeForTextLine(StrokeStyle);
 
   void SetInDrawingRecorder(bool);
   bool InDrawingRecorder() const { return in_drawing_recorder_; }
@@ -430,6 +453,7 @@ class PLATFORM_EXPORT GraphicsContext {
   // creating a tagged PDF. Callers are responsible for restoring it.
   void SetDOMNodeId(DOMNodeId);
   DOMNodeId GetDOMNodeId() const;
+  bool NeedsDOMNodeId() const { return printing_; }
 
   static sk_sp<SkColorFilter> WebCoreColorFilterToSkiaColorFilter(ColorFilter);
 
@@ -461,22 +485,6 @@ class PLATFORM_EXPORT GraphicsContext {
   void SaveLayer(const SkRect* bounds, const PaintFlags*);
   void RestoreLayer();
 
-  // Helpers for drawing a focus ring (drawFocusRing)
-  void DrawFocusRingPath(const SkPath&,
-                         const Color&,
-                         float width,
-                         float border_radius);
-  void DrawFocusRingRect(const SkRect&,
-                         const Color&,
-                         float width,
-                         float border_radius);
-
-  void DrawFocusRingInternal(const Vector<IntRect>&,
-                             float width,
-                             int offset,
-                             float border_radius,
-                             const Color&);
-
   // SkCanvas wrappers.
   void ClipRRect(const SkRRect&,
                  AntiAliasingMode = kNotAntiAliased,
@@ -500,16 +508,16 @@ class PLATFORM_EXPORT GraphicsContext {
     }
   }
 
-  void FillRectWithRoundedHole(const FloatRect&,
-                               const FloatRoundedRect& rounded_hole_rect,
-                               const Color&);
-
   class DarkModeFlags;
+
+  bool ShouldDrawDarkModeTextContrastOutline(
+      const PaintFlags& original_flags,
+      const DarkModeFlags& dark_flags) const;
 
   // This is owned by paint_recorder_. Never delete this object.
   // Drawing operations are allowed only after the first BeginRecording() which
   // initializes this to not null.
-  cc::PaintCanvas* canvas_;
+  cc::PaintCanvas* canvas_ = nullptr;
 
   PaintController& paint_controller_;
 
@@ -519,34 +527,31 @@ class PLATFORM_EXPORT GraphicsContext {
   Vector<std::unique_ptr<GraphicsContextState>> paint_state_stack_;
 
   // Current index on the stack. May not be the last thing on the stack.
-  unsigned paint_state_index_;
+  wtf_size_t paint_state_index_ = 0;
 
   // Raw pointer to the current state.
-  GraphicsContextState* paint_state_;
+  GraphicsContextState* paint_state_ = nullptr;
 
   PaintRecorder paint_recorder_;
 
-  printing::MetafileSkia* metafile_;
-  paint_preview::PaintPreviewTracker* tracker_;
+  printing::MetafileSkia* printing_metafile_ = nullptr;
+  paint_preview::PaintPreviewTracker* paint_preview_tracker_ = nullptr;
 
 #if DCHECK_IS_ON()
-  int layer_count_;
-  bool disable_destruction_checks_;
+  int layer_count_ = 0;
+  bool disable_destruction_checks_ = false;
 #endif
 
-  float device_scale_factor_;
+  float device_scale_factor_ = 1.0f;
 
-  // TODO(gilmanmh): Investigate making this base::Optional<DarkModeFilter>
-  DarkModeFilter dark_mode_filter_;
+  std::unique_ptr<DarkModeFilter> dark_mode_filter_;
 
-  unsigned printing_ : 1;
-  unsigned is_painting_preview_ : 1;
-  unsigned in_drawing_recorder_ : 1;
+  bool printing_ = false;
+  bool in_drawing_recorder_ = false;
+  bool is_dark_mode_enabled_ = false;
 
   // The current node ID, which is used for marked content in a tagged PDF.
   DOMNodeId dom_node_id_ = kInvalidDOMNodeId;
-
-  DISALLOW_COPY_AND_ASSIGN(GraphicsContext);
 };
 
 }  // namespace blink

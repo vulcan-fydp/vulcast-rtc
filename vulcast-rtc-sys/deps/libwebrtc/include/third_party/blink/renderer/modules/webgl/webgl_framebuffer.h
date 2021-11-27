@@ -48,6 +48,8 @@ class WebGLFramebuffer final : public WebGLContextObject {
   class WebGLAttachment : public GarbageCollected<WebGLAttachment>,
                           public NameClient {
    public:
+    ~WebGLAttachment() override = default;
+
     virtual WebGLSharedObject* Object() const = 0;
     virtual bool IsSharedObject(WebGLSharedObject*) const = 0;
     virtual bool Valid() const = 0;
@@ -59,7 +61,7 @@ class WebGLFramebuffer final : public WebGLContextObject {
                           GLenum target,
                           GLenum attachment) = 0;
 
-    virtual void Trace(Visitor* visitor) {}
+    virtual void Trace(Visitor* visitor) const {}
 
    protected:
     WebGLAttachment();
@@ -122,7 +124,7 @@ class WebGLFramebuffer final : public WebGLContextObject {
 
   GLenum GetReadBuffer() const { return read_buffer_; }
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
   const char* NameInHeapSnapshot() const override { return "WebGLFramebuffer"; }
 
  protected:

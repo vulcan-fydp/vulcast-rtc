@@ -12,6 +12,22 @@
 
 #include <windows.h>
 
+#include "base/allocator/allocator_shim_internals.h"
+
+// Even though most C++ allocation operators can be left alone since the
+// interception works at a lower level, these ones should be
+// overridden. Otherwise they redirect to malloc(), which is configured to crash
+// with an OOM in failure cases, such as allocation requests that are too large.
+SHIM_ALWAYS_EXPORT void* operator new(size_t size,
+                                      const std::nothrow_t&) __THROW {
+  return ShimCppNewNoThrow(size);
+}
+
+SHIM_ALWAYS_EXPORT void* operator new[](size_t size,
+                                        const std::nothrow_t&) __THROW {
+  return ShimCppNewNoThrow(size);
+}
+
 extern "C" {
 
 void* (*malloc_unchecked)(size_t) = &base::allocator::UncheckedAlloc;
@@ -99,6 +115,18 @@ __declspec(restrict) void* _recalloc_base(void* block,
   }
 
   return new_block;
+}
+
+__declspec(restrict) void* _malloc_base(size_t size) {
+  return malloc(size);
+}
+
+__declspec(restrict) void* _calloc_base(size_t n, size_t size) {
+  return calloc(n, size);
+}
+
+void _free_base(void* block) {
+  free(block);
 }
 
 __declspec(restrict) void* _recalloc(void* block, size_t count, size_t size) {

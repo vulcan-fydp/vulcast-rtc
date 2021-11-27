@@ -5,7 +5,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FETCH_FETCH_REQUEST_DATA_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FETCH_FETCH_REQUEST_DATA_H_
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/unguessable_token.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -13,6 +12,7 @@
 #include "services/network/public/mojom/referrer_policy.mojom-blink-forward.h"
 #include "services/network/public/mojom/trust_tokens.mojom-blink.h"
 #include "services/network/public/mojom/url_loader_factory.mojom-blink.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/renderer/core/fetch/body_stream_buffer.h"
@@ -36,24 +36,23 @@ class ScriptState;
 class CORE_EXPORT FetchRequestData final
     : public GarbageCollected<FetchRequestData> {
  public:
-  enum Tainting { kBasicTainting, kCorsTainting, kOpaqueTainting };
   enum class ForServiceWorkerFetchEvent { kFalse, kTrue };
 
   static FetchRequestData* Create(ScriptState*,
-                                  const mojom::blink::FetchAPIRequest&,
+                                  mojom::blink::FetchAPIRequestPtr,
                                   ForServiceWorkerFetchEvent);
   FetchRequestData* Clone(ScriptState*, ExceptionState&);
-  FetchRequestData* Pass(ScriptState*, ExceptionState&);
+  FetchRequestData* Pass(ScriptState*);
 
   explicit FetchRequestData(ExecutionContext* execution_context);
+  FetchRequestData(const FetchRequestData&) = delete;
+  FetchRequestData& operator=(const FetchRequestData&) = delete;
   ~FetchRequestData();
 
   void SetMethod(AtomicString method) { method_ = method; }
   const AtomicString& Method() const { return method_; }
   void SetURL(const KURL& url) { url_ = url; }
   const KURL& Url() const { return url_; }
-  mojom::RequestContextType Context() const { return context_; }
-  void SetContext(mojom::RequestContextType context) { context_ = context; }
   network::mojom::RequestDestination Destination() const {
     return destination_;
   }
@@ -97,8 +96,6 @@ class CORE_EXPORT FetchRequestData final
     importance_ = importance;
   }
   mojom::FetchImportanceMode Importance() const { return importance_; }
-  void SetResponseTainting(Tainting tainting) { response_tainting_ = tainting; }
-  Tainting ResponseTainting() const { return response_tainting_; }
   FetchHeaderList* HeaderList() const { return header_list_.Get(); }
   void SetHeaderList(FetchHeaderList* header_list) {
     header_list_ = header_list;
@@ -128,17 +125,24 @@ class CORE_EXPORT FetchRequestData final
   const base::UnguessableToken& WindowId() const { return window_id_; }
   void SetWindowId(const base::UnguessableToken& id) { window_id_ = id; }
 
-  const base::Optional<network::mojom::blink::TrustTokenParams>&
+  const absl::optional<network::mojom::blink::TrustTokenParams>&
   TrustTokenParams() const {
     return trust_token_params_;
   }
   void SetTrustTokenParams(
-      base::Optional<network::mojom::blink::TrustTokenParams>
+      absl::optional<network::mojom::blink::TrustTokenParams>
           trust_token_params) {
     trust_token_params_ = std::move(trust_token_params);
   }
 
-  void Trace(Visitor*);
+  void SetAllowHTTP1ForStreamingUpload(bool allow) {
+    allow_http1_for_streaming_upload_ = allow;
+  }
+  bool AllowHTTP1ForStreamingUpload() const {
+    return allow_http1_for_streaming_upload_;
+  }
+
+  void Trace(Visitor*) const;
 
  private:
   FetchRequestData* CloneExceptBody();
@@ -147,7 +151,6 @@ class CORE_EXPORT FetchRequestData final
   KURL url_;
   Member<FetchHeaderList> header_list_;
   // FIXME: Support m_skipServiceWorkerFlag;
-  mojom::RequestContextType context_;
   network::mojom::RequestDestination destination_;
   scoped_refptr<const SecurityOrigin> origin_;
   scoped_refptr<const SecurityOrigin> isolated_world_origin_;
@@ -164,10 +167,9 @@ class CORE_EXPORT FetchRequestData final
   mojom::FetchCacheMode cache_mode_;
   network::mojom::RedirectMode redirect_;
   mojom::FetchImportanceMode importance_;
-  base::Optional<network::mojom::blink::TrustTokenParams> trust_token_params_;
+  absl::optional<network::mojom::blink::TrustTokenParams> trust_token_params_;
   // FIXME: Support m_useURLCredentialsFlag;
   // FIXME: Support m_redirectCount;
-  Tainting response_tainting_;
   Member<BodyStreamBuffer> buffer_;
   String mime_type_;
   String integrity_;
@@ -178,13 +180,10 @@ class CORE_EXPORT FetchRequestData final
   // the system would otherwise decide to use to load this request.
   // Currently used for blob: URLs, to ensure they can still be loaded even if
   // the URL got revoked after creating the request.
-  HeapMojoRemote<network::mojom::blink::URLLoaderFactory,
-                 HeapMojoWrapperMode::kWithoutContextObserver>
-      url_loader_factory_;
+  HeapMojoRemote<network::mojom::blink::URLLoaderFactory> url_loader_factory_;
   base::UnguessableToken window_id_;
   Member<ExecutionContext> execution_context_;
-
-  DISALLOW_COPY_AND_ASSIGN(FetchRequestData);
+  bool allow_http1_for_streaming_upload_ = false;
 };
 
 }  // namespace blink

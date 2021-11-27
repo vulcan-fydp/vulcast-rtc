@@ -7,6 +7,7 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/event_target_modules.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
 #include "ui/gfx/geometry/size.h"
@@ -21,7 +22,6 @@ class PictureInPictureWindow
     : public EventTargetWithInlineData,
       public ActiveScriptWrappable<PictureInPictureWindow>,
       public ExecutionContextClient {
-  USING_GARBAGE_COLLECTED_MIXIN(PictureInPictureWindow);
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -48,7 +48,7 @@ class PictureInPictureWindow
   // ActiveScriptWrappable overrides.
   bool HasPendingActivity() const override;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  protected:
   // EventTarget overrides.

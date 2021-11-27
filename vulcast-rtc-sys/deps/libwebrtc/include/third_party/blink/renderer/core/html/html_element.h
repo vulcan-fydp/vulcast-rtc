@@ -23,8 +23,10 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_HTML_ELEMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_HTML_ELEMENT_H_
 
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/element.h"
+#include "third_party/blink/renderer/core/dom/events/simulated_click_options.h"
 #include "third_party/blink/renderer/core/html/forms/labels_node_list.h"
 #include "third_party/blink/renderer/platform/text/text_direction.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
@@ -39,13 +41,19 @@ class ExceptionState;
 class FormAssociated;
 class HTMLFormElement;
 class KeyboardEvent;
-class StringOrTrustedScript;
-class StringTreatNullAsEmptyStringOrTrustedScript;
+class V8UnionStringTreatNullAsEmptyStringOrTrustedScript;
 
 enum TranslateAttributeMode {
   kTranslateAttributeYes,
   kTranslateAttributeNo,
   kTranslateAttributeInherit
+};
+
+enum class ContentEditableType {
+  kInherit,
+  kContentEditable,
+  kNotContentEditable,
+  kPlaintextOnly,
 };
 
 class CORE_EXPORT HTMLElement : public Element {
@@ -61,17 +69,18 @@ class CORE_EXPORT HTMLElement : public Element {
 
   String title() const final;
 
-  void setInnerText(const String&, ExceptionState&);
-  virtual void setInnerText(const StringOrTrustedScript&, ExceptionState&);
-  virtual void setInnerText(const StringTreatNullAsEmptyStringOrTrustedScript&,
-                            ExceptionState&);
   String innerText();
-  void innerText(StringOrTrustedScript& result);
-  void innerText(StringTreatNullAsEmptyStringOrTrustedScript& result);
+  void setInnerText(const String&, ExceptionState&);
+  V8UnionStringTreatNullAsEmptyStringOrTrustedScript* innerTextForBinding();
+  virtual void setInnerTextForBinding(
+      const V8UnionStringTreatNullAsEmptyStringOrTrustedScript*
+          string_or_trusted_script,
+      ExceptionState& exception_state);
   void setOuterText(const String&, ExceptionState&);
 
   virtual bool HasCustomFocusLogic() const;
 
+  ContentEditableType contentEditableNormalized() const;
   String contentEditable() const;
   void setContentEditable(const String&, ExceptionState&);
   // For HTMLElement.prototype.isContentEditable. This matches to neither
@@ -96,18 +105,20 @@ class CORE_EXPORT HTMLElement : public Element {
 
   void click();
 
-  void AccessKeyAction(bool send_mouse_events) override;
+  void AccessKeyAction(SimulatedClickCreationScope creation_scope) override;
 
   bool ShouldSerializeEndTag() const;
 
-  virtual HTMLFormElement* formOwner() const { return nullptr; }
+  virtual HTMLFormElement* formOwner() const;
 
   HTMLFormElement* FindFormAncestor() const;
 
   bool HasDirectionAuto() const;
-  TextDirection DirectionalityIfhasDirAutoAttribute(bool& is_auto) const;
 
   virtual bool IsHTMLBodyElement() const { return false; }
+  // TODO(crbug.com/1123606): Remove this virtual method once the fenced frame
+  // origin trial is over.
+  virtual bool IsHTMLFencedFrameElement() const { return false; }
   virtual bool IsHTMLFrameSetElement() const { return false; }
   virtual bool IsHTMLPortalElement() const { return false; }
   virtual bool IsHTMLUnknownElement() const { return false; }
@@ -153,16 +164,29 @@ class CORE_EXPORT HTMLElement : public Element {
   virtual FormAssociated* ToFormAssociatedOrNull() { return nullptr; }
   bool IsFormAssociatedCustomElement() const;
 
+  static void AdjustCandidateDirectionalityForSlot(
+      HeapHashSet<Member<Node>> candidate_set);
+  void UpdateDescendantHasDirAutoAttribute(bool has_dir_auto);
+  void UpdateDirectionalityAndDescendant(TextDirection direction);
+  void UpdateDescendantDirectionality(TextDirection direction);
+  void AdjustDirectionalityIfNeededAfterShadowRootChanged();
+  void BeginParsingChildren() override;
+
  protected:
   enum AllowPercentage { kDontAllowPercentageValues, kAllowPercentageValues };
+  enum AllowZero { kDontAllowZeroValues, kAllowZeroValues };
   void AddHTMLLengthToStyle(MutableCSSPropertyValueSet*,
                             CSSPropertyID,
                             const String& value,
-                            AllowPercentage = kAllowPercentageValues);
+                            AllowPercentage = kAllowPercentageValues,
+                            AllowZero = kAllowZeroValues);
   void AddHTMLColorToStyle(MutableCSSPropertyValueSet*,
                            CSSPropertyID,
                            const String& color);
 
+  void ApplyAspectRatioToStyle(const AtomicString& width,
+                               const AtomicString& height,
+                               MutableCSSPropertyValueSet*);
   void ApplyAlignmentAttributeToStyle(const AtomicString&,
                                       MutableCSSPropertyValueSet*);
   void ApplyBorderAttributeToStyle(const AtomicString&,
@@ -180,7 +204,7 @@ class CORE_EXPORT HTMLElement : public Element {
   unsigned ParseBorderWidthAttribute(const AtomicString&) const;
 
   void ChildrenChanged(const ChildrenChange&) override;
-  void CalculateAndAdjustDirectionality();
+  bool CalculateAndAdjustAutoDirectionality(Node* stay_within);
 
   InsertionNotificationRequest InsertedInto(ContainerNode&) override;
   void RemovedFrom(ContainerNode& insertion_point) override;
@@ -201,10 +225,14 @@ class CORE_EXPORT HTMLElement : public Element {
 
   DocumentFragment* TextToFragment(const String&, ExceptionState&);
 
-  bool SelfOrAncestorHasDirAutoAttribute() const;
   void AdjustDirectionalityIfNeededAfterChildAttributeChanged(Element* child);
-  void AdjustDirectionalityIfNeededAfterChildrenChanged(const ChildrenChange&);
-  TextDirection Directionality() const;
+  void AdjustDirectionalityIfNeededAfterChildrenChanged(
+      const ChildrenChange& change);
+
+  template <typename Traversal>
+  absl::optional<TextDirection> ResolveAutoDirectionality(
+      bool& is_deferred,
+      Node* stay_within) const;
 
   TranslateAttributeMode GetTranslateAttributeMode() const;
 

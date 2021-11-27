@@ -8,8 +8,8 @@
 #ifndef BASE_MAC_SDK_FORWARD_DECLARATIONS_H_
 #define BASE_MAC_SDK_FORWARD_DECLARATIONS_H_
 
-#import <AppKit/AppKit.h>
 #include <AvailabilityMacros.h>
+#include <AvailabilityVersions.h>
 #include <os/availability.h>
 
 // NOTE: If an #import is needed only for a newer SDK, it might be found below.
@@ -63,8 +63,5 @@
 //   #endif  // MAC_OS_X_VERSION_10_77
 //
 // ----------------------------------------------------------------------------
-
-// Chromium currently is building with the most recent SDK. WWDC is not far
-// away, though....
 
 #endif  // BASE_MAC_SDK_FORWARD_DECLARATIONS_H_

@@ -24,8 +24,6 @@ class ScriptPromiseResolver;
 class BarcodeDetectorStatics final
     : public GarbageCollected<BarcodeDetectorStatics>,
       public Supplement<ExecutionContext> {
-  USING_GARBAGE_COLLECTED_MIXIN(BarcodeDetectorStatics);
-
  public:
   static const char kSupplementName[];
 
@@ -39,7 +37,7 @@ class BarcodeDetectorStatics final
       shape_detection::mojom::blink::BarcodeDetectorOptionsPtr);
   ScriptPromise EnumerateSupportedFormats(ScriptState*);
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   void EnsureServiceConnection();
@@ -48,8 +46,7 @@ class BarcodeDetectorStatics final
       const Vector<shape_detection::mojom::blink::BarcodeFormat>&);
   void OnConnectionError();
 
-  HeapMojoRemote<shape_detection::mojom::blink::BarcodeDetectionProvider,
-                 HeapMojoWrapperMode::kWithoutContextObserver>
+  HeapMojoRemote<shape_detection::mojom::blink::BarcodeDetectionProvider>
       service_;
 
   // Holds Promises returned by EnumerateSupportedFormats() so that they can be

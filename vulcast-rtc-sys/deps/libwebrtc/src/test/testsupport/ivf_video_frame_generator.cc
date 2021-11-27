@@ -7,11 +7,8 @@
  *  in the file PATENTS.  All contributing project authors may
  *  be found in the AUTHORS file in the root of the source tree.
  */
-
 #include "test/testsupport/ivf_video_frame_generator.h"
-
 #include <limits>
-
 #include "api/video/encoded_image.h"
 #include "api/video/i420_buffer.h"
 #include "api/video_codecs/video_codec.h"
@@ -22,15 +19,11 @@
 #include "modules/video_coding/include/video_error_codes.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/system/file_wrapper.h"
-
 namespace webrtc {
 namespace test {
 namespace {
-
 constexpr int kMaxNextFrameWaitTemeoutMs = 1000;
-
 }  // namespace
-
 IvfVideoFrameGenerator::IvfVideoFrameGenerator(const std::string& file_name)
     : callback_(this),
       file_reader_(IvfFileReader::Create(FileWrapper::OpenReadOnly(file_name))),
@@ -53,24 +46,23 @@ IvfVideoFrameGenerator::IvfVideoFrameGenerator(const std::string& file_name)
       WEBRTC_VIDEO_CODEC_OK);
 }
 IvfVideoFrameGenerator::~IvfVideoFrameGenerator() {
-  rtc::CritScope crit(&lock_);
+  MutexLock lock(&lock_);
   if (!file_reader_) {
     return;
   }
   file_reader_->Close();
   file_reader_.reset();
-  // Reset decoder to prevent it from async access to |this|.
+  // Reset decoder to prevent it from async access to `this`.
   video_decoder_.reset();
   {
-    rtc::CritScope frame_crit(&frame_decode_lock_);
+    MutexLock frame_lock(&frame_decode_lock_);
     next_frame_ = absl::nullopt;
     // Set event in case another thread is waiting on it.
     next_frame_decoded_.Set();
   }
 }
-
 FrameGeneratorInterface::VideoFrameData IvfVideoFrameGenerator::NextFrame() {
-  rtc::CritScope crit(&lock_);
+  MutexLock lock(&lock_);
   next_frame_decoded_.Reset();
   RTC_CHECK(file_reader_);
   if (!file_reader_->HasMoreFrames()) {
@@ -85,8 +77,7 @@ FrameGeneratorInterface::VideoFrameData IvfVideoFrameGenerator::NextFrame() {
   bool decoded = next_frame_decoded_.Wait(kMaxNextFrameWaitTemeoutMs);
   RTC_CHECK(decoded) << "Failed to decode next frame in "
                      << kMaxNextFrameWaitTemeoutMs << "ms. Can't continue";
-
-  rtc::CritScope frame_crit(&frame_decode_lock_);
+  MutexLock frame_lock(&frame_decode_lock_);
   rtc::scoped_refptr<VideoFrameBuffer> buffer =
       next_frame_->video_frame_buffer();
   if (width_ != static_cast<size_t>(buffer->width()) ||
@@ -100,13 +91,11 @@ FrameGeneratorInterface::VideoFrameData IvfVideoFrameGenerator::NextFrame() {
   }
   return VideoFrameData(buffer, next_frame_->update_rect());
 }
-
 void IvfVideoFrameGenerator::ChangeResolution(size_t width, size_t height) {
-  rtc::CritScope crit(&lock_);
+  MutexLock lock(&lock_);
   width_ = width;
   height_ = height;
 }
-
 int32_t IvfVideoFrameGenerator::DecodedCallback::Decoded(
     VideoFrame& decoded_image) {
   Decoded(decoded_image, 0, 0);
@@ -124,13 +113,11 @@ void IvfVideoFrameGenerator::DecodedCallback::Decoded(
     absl::optional<uint8_t> qp) {
   reader_->OnFrameDecoded(decoded_image);
 }
-
 void IvfVideoFrameGenerator::OnFrameDecoded(const VideoFrame& decoded_frame) {
-  rtc::CritScope crit(&frame_decode_lock_);
+  MutexLock lock(&frame_decode_lock_);
   next_frame_ = decoded_frame;
   next_frame_decoded_.Set();
 }
-
 std::unique_ptr<VideoDecoder> IvfVideoFrameGenerator::CreateVideoDecoder(
     VideoCodecType codec_type) {
   if (codec_type == VideoCodecType::kVideoCodecVP8) {
@@ -144,6 +131,5 @@ std::unique_ptr<VideoDecoder> IvfVideoFrameGenerator::CreateVideoDecoder(
   }
   return nullptr;
 }
-
 }  // namespace test
 }  // namespace webrtc

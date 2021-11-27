@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_NG_INLINE_NG_INLINE_BREAK_TOKEN_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_NG_INLINE_NG_INLINE_BREAK_TOKEN_H_
 
+#include "base/dcheck_is_on.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/ng/inline/ng_inline_node.h"
 #include "third_party/blink/renderer/core/layout/ng/ng_break_token.h"
@@ -12,13 +13,17 @@
 
 namespace blink {
 
+class NGBlockBreakToken;
+
 // Represents a break token for an inline node.
 class CORE_EXPORT NGInlineBreakToken final : public NGBreakToken {
  public:
   enum NGInlineBreakTokenFlags {
     kDefault = 0,
     kIsForcedBreak = 1 << 0,
-    kUseFirstLineStyle = 1 << 1
+    kHasBlockInInlineToken = 1 << 1,
+    kUseFirstLineStyle = 1 << 2,
+    kHasClonedBoxDecorations = 1 << 3,
     // When adding values, ensure |flags_| has enough storage.
   };
 
@@ -30,52 +35,50 @@ class CORE_EXPORT NGInlineBreakToken final : public NGBreakToken {
       const ComputedStyle* style,
       unsigned item_index,
       unsigned text_offset,
-      unsigned flags /* NGInlineBreakTokenFlags */) {
-    return base::AdoptRef(new NGInlineBreakToken(
-        PassKey(), node, style, item_index, text_offset, flags));
-  }
-
-  // Creates a break token for a node which cannot produce any more fragments.
-  static scoped_refptr<NGInlineBreakToken> Create(NGLayoutInputNode node) {
-    return base::AdoptRef(new NGInlineBreakToken(PassKey(), node));
-  }
-
+      unsigned flags /* NGInlineBreakTokenFlags */,
+      const NGBlockBreakToken* block_in_inline_break_token = nullptr);
   ~NGInlineBreakToken() override;
 
   // The style at the end of this break token. The next line should start with
   // this style.
-  const ComputedStyle* Style() const {
-    DCHECK(!IsFinished());
-    return style_.get();
-  }
+  const ComputedStyle* Style() const { return style_.get(); }
 
   unsigned ItemIndex() const {
-    DCHECK(!IsFinished());
     return item_index_;
   }
 
   unsigned TextOffset() const {
-    DCHECK(!IsFinished());
     return text_offset_;
   }
 
   bool UseFirstLineStyle() const {
-    DCHECK(!IsFinished());
     return flags_ & kUseFirstLineStyle;
   }
 
   bool IsForcedBreak() const {
-    DCHECK(!IsFinished());
     return flags_ & kIsForcedBreak;
   }
 
-  using PassKey = util::PassKey<NGInlineBreakToken>;
+  // True if this is after a block-in-inline.
+  bool IsAfterBlockInInline() const;
+
+  // The BreakToken when a block-in-inline is block-fragmented.
+  const NGBlockBreakToken* BlockInInlineBreakToken() const;
+
+  // True if the current position has open tags that has `box-decoration-break:
+  // clone`. They should be cloned to the start of the next line.
+  bool HasClonedBoxDecorations() const {
+    return flags_ & kHasClonedBoxDecorations;
+  }
+
+  using PassKey = base::PassKey<NGInlineBreakToken>;
   NGInlineBreakToken(PassKey,
                      NGInlineNode node,
                      const ComputedStyle*,
                      unsigned item_index,
                      unsigned text_offset,
-                     unsigned flags /* NGInlineBreakTokenFlags */);
+                     unsigned flags /* NGInlineBreakTokenFlags */,
+                     const NGBlockBreakToken* block_in_inline_break_token);
 
   explicit NGInlineBreakToken(PassKey, NGLayoutInputNode node);
 
@@ -84,9 +87,14 @@ class CORE_EXPORT NGInlineBreakToken final : public NGBreakToken {
 #endif
 
  private:
+  const NGBlockBreakToken* const* BlockInInlineBreakTokenAddress() const;
+
   scoped_refptr<const ComputedStyle> style_;
   unsigned item_index_;
   unsigned text_offset_;
+
+  // This is an array of one item if |kHasBlockInInlineToken|, or zero.
+  NGBlockBreakToken* block_in_inline_break_token_[];
 };
 
 template <>

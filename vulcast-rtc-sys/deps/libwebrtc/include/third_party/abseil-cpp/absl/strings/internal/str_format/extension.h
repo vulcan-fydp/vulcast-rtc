@@ -31,9 +31,10 @@
 namespace absl {
 ABSL_NAMESPACE_BEGIN
 
-namespace str_format_internal {
-enum class FormatConversionCharSet : uint64_t;
 enum class FormatConversionChar : uint8_t;
+enum class FormatConversionCharSet : uint64_t;
+
+namespace str_format_internal {
 
 class FormatRawSinkImpl {
  public:
@@ -106,7 +107,7 @@ class FormatSinkImpl {
   size_t size() const { return size_; }
 
   // Put 'v' to 'sink' with specified width, precision, and left flag.
-  bool PutPaddedString(string_view v, int w, int p, bool l);
+  bool PutPaddedString(string_view v, int width, int precision, bool left);
 
   template <typename T>
   T Wrap() {
@@ -127,18 +128,32 @@ class FormatSinkImpl {
   char buf_[1024];
 };
 
-struct Flags {
-  bool basic : 1;     // fastest conversion: no flags, width, or precision
-  bool left : 1;      // "-"
-  bool show_pos : 1;  // "+"
-  bool sign_col : 1;  // " "
-  bool alt : 1;       // "#"
-  bool zero : 1;      // "0"
-  std::string ToString() const;
-  friend std::ostream& operator<<(std::ostream& os, const Flags& v) {
-    return os << v.ToString();
-  }
+enum class Flags : uint8_t {
+  kBasic = 0,
+  kLeft = 1 << 0,
+  kShowPos = 1 << 1,
+  kSignCol = 1 << 2,
+  kAlt = 1 << 3,
+  kZero = 1 << 4,
+  // This is not a real flag. It just exists to turn off kBasic when no other
+  // flags are set. This is for when width/precision are specified.
+  kNonBasic = 1 << 5,
 };
+
+constexpr Flags operator|(Flags a, Flags b) {
+  return static_cast<Flags>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+}
+
+constexpr bool FlagsContains(Flags haystack, Flags needle) {
+  return (static_cast<uint8_t>(haystack) & static_cast<uint8_t>(needle)) ==
+         static_cast<uint8_t>(needle);
+}
+
+std::string FlagsToString(Flags v);
+
+inline std::ostream& operator<<(std::ostream& os, Flags v) {
+  return os << FlagsToString(v);
+}
 
 // clang-format off
 #define ABSL_INTERNAL_CONVERSION_CHARS_EXPAND_(X_VAL, X_SEP) \
@@ -256,12 +271,16 @@ struct FormatConversionSpecImplFriend;
 class FormatConversionSpecImpl {
  public:
   // Width and precison are not specified, no flags are set.
-  bool is_basic() const { return flags_.basic; }
-  bool has_left_flag() const { return flags_.left; }
-  bool has_show_pos_flag() const { return flags_.show_pos; }
-  bool has_sign_col_flag() const { return flags_.sign_col; }
-  bool has_alt_flag() const { return flags_.alt; }
-  bool has_zero_flag() const { return flags_.zero; }
+  bool is_basic() const { return flags_ == Flags::kBasic; }
+  bool has_left_flag() const { return FlagsContains(flags_, Flags::kLeft); }
+  bool has_show_pos_flag() const {
+    return FlagsContains(flags_, Flags::kShowPos);
+  }
+  bool has_sign_col_flag() const {
+    return FlagsContains(flags_, Flags::kSignCol);
+  }
+  bool has_alt_flag() const { return FlagsContains(flags_, Flags::kAlt); }
+  bool has_zero_flag() const { return FlagsContains(flags_, Flags::kZero); }
 
   FormatConversionChar conversion_char() const {
     // Keep this field first in the struct . It generates better code when
@@ -305,7 +324,7 @@ struct FormatConversionSpecImplFriend final {
     conv->precision_ = p;
   }
   static std::string FlagsToString(const FormatConversionSpecImpl& spec) {
-    return spec.flags_.ToString();
+    return str_format_internal::FlagsToString(spec.flags_);
   }
 };
 
@@ -327,12 +346,16 @@ constexpr FormatConversionCharSet FormatConversionCharSetUnion(
       static_cast<uint64_t>(FormatConversionCharSetUnion(rest...)));
 }
 
+constexpr uint64_t FormatConversionCharToConvInt(FormatConversionChar c) {
+  return uint64_t{1} << (1 + static_cast<uint8_t>(c));
+}
+
 constexpr uint64_t FormatConversionCharToConvInt(char conv) {
   return
-#define ABSL_INTERNAL_CHAR_SET_CASE(c)                                        \
-  conv == #c[0] ? (uint64_t{1} << (1 + static_cast<uint8_t>(                  \
-                                           FormatConversionCharInternal::c))) \
-                :
+#define ABSL_INTERNAL_CHAR_SET_CASE(c)                                 \
+  conv == #c[0]                                                        \
+      ? FormatConversionCharToConvInt(FormatConversionCharInternal::c) \
+      :
       ABSL_INTERNAL_CONVERSION_CHARS_EXPAND_(ABSL_INTERNAL_CHAR_SET_CASE, )
 #undef ABSL_INTERNAL_CHAR_SET_CASE
                   conv == '*'
@@ -356,14 +379,12 @@ struct FormatConversionCharSetInternal {
   static constexpr FormatConversionCharSet kStar =
       FormatConversionCharToConvValue('*');
 
-  // Some predefined values (TODO(matthewbr), delete any that are unused).
   static constexpr FormatConversionCharSet kIntegral =
       FormatConversionCharSetUnion(d, i, u, o, x, X);
   static constexpr FormatConversionCharSet kFloating =
       FormatConversionCharSetUnion(a, e, f, g, A, E, F, G);
   static constexpr FormatConversionCharSet kNumeric =
       FormatConversionCharSetUnion(kIntegral, kFloating);
-  static constexpr FormatConversionCharSet kString = s;
   static constexpr FormatConversionCharSet kPointer = p;
 };
 
@@ -406,85 +427,15 @@ constexpr bool Contains(FormatConversionCharSet set,
          static_cast<uint64_t>(c);
 }
 
+// Checks whether all the characters in `c` are contained in `set`
+constexpr bool Contains(FormatConversionCharSet set, FormatConversionChar c) {
+  return (static_cast<uint64_t>(set) & FormatConversionCharToConvInt(c)) != 0;
+}
+
 // Return capacity - used, clipped to a minimum of 0.
 inline size_t Excess(size_t used, size_t capacity) {
   return used < capacity ? capacity - used : 0;
 }
-
-class FormatConversionSpec {
- public:
-  // Width and precison are not specified, no flags are set.
-  bool is_basic() const { return impl_.is_basic(); }
-  bool has_left_flag() const { return impl_.has_left_flag(); }
-  bool has_show_pos_flag() const { return impl_.has_show_pos_flag(); }
-  bool has_sign_col_flag() const { return impl_.has_sign_col_flag(); }
-  bool has_alt_flag() const { return impl_.has_alt_flag(); }
-  bool has_zero_flag() const { return impl_.has_zero_flag(); }
-
-  FormatConversionChar conversion_char() const {
-    return impl_.conversion_char();
-  }
-
-  // Returns the specified width. If width is unspecfied, it returns a negative
-  // value.
-  int width() const { return impl_.width(); }
-  // Returns the specified precision. If precision is unspecfied, it returns a
-  // negative value.
-  int precision() const { return impl_.precision(); }
-
- private:
-  explicit FormatConversionSpec(
-      str_format_internal::FormatConversionSpecImpl impl)
-      : impl_(impl) {}
-
-  friend str_format_internal::FormatConversionSpecImpl;
-
-  absl::str_format_internal::FormatConversionSpecImpl impl_;
-};
-
-// clang-format off
-enum class FormatConversionChar : uint8_t {
-  c, s,                    // text
-  d, i, o, u, x, X,        // int
-  f, F, e, E, g, G, a, A,  // float
-  n, p                     // misc
-};
-// clang-format on
-
-enum class FormatConversionCharSet : uint64_t {
-  // text
-  c = str_format_internal::FormatConversionCharToConvInt('c'),
-  s = str_format_internal::FormatConversionCharToConvInt('s'),
-  // integer
-  d = str_format_internal::FormatConversionCharToConvInt('d'),
-  i = str_format_internal::FormatConversionCharToConvInt('i'),
-  o = str_format_internal::FormatConversionCharToConvInt('o'),
-  u = str_format_internal::FormatConversionCharToConvInt('u'),
-  x = str_format_internal::FormatConversionCharToConvInt('x'),
-  X = str_format_internal::FormatConversionCharToConvInt('X'),
-  // Float
-  f = str_format_internal::FormatConversionCharToConvInt('f'),
-  F = str_format_internal::FormatConversionCharToConvInt('F'),
-  e = str_format_internal::FormatConversionCharToConvInt('e'),
-  E = str_format_internal::FormatConversionCharToConvInt('E'),
-  g = str_format_internal::FormatConversionCharToConvInt('g'),
-  G = str_format_internal::FormatConversionCharToConvInt('G'),
-  a = str_format_internal::FormatConversionCharToConvInt('a'),
-  A = str_format_internal::FormatConversionCharToConvInt('A'),
-  // misc
-  n = str_format_internal::FormatConversionCharToConvInt('n'),
-  p = str_format_internal::FormatConversionCharToConvInt('p'),
-
-  // Used for width/precision '*' specification.
-  kStar = str_format_internal::FormatConversionCharToConvInt('*'),
-
-  // Some predefined values:
-  kIntegral = d | i | u | o | x | X,
-  kFloating = a | e | f | g | A | E | F | G,
-  kNumeric = kIntegral | kFloating,
-  kString = s,
-  kPointer = p,
-};
 
 }  // namespace str_format_internal
 

@@ -27,7 +27,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_PARSER_HTML_CONSTRUCTION_SITE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_PARSER_HTML_CONSTRUCTION_SITE_H_
 
-#include "base/macros.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/parser_content_policy.h"
 #include "third_party/blink/renderer/core/html/parser/html_element_stack.h"
@@ -53,7 +52,7 @@ struct HTMLConstructionSiteTask {
   explicit HTMLConstructionSiteTask(Operation op)
       : operation(op), self_closing(false) {}
 
-  void Trace(Visitor* visitor) {
+  void Trace(Visitor* visitor) const {
     visitor->Trace(parent);
     visitor->Trace(next_child);
     visitor->Trace(child);
@@ -111,8 +110,10 @@ class HTMLConstructionSite final {
   HTMLConstructionSite(HTMLParserReentryPermit*,
                        Document&,
                        ParserContentPolicy);
+  HTMLConstructionSite(const HTMLConstructionSite&) = delete;
+  HTMLConstructionSite& operator=(const HTMLConstructionSite&) = delete;
   ~HTMLConstructionSite();
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
   void InitFragmentParsing(DocumentFragment*, Element* context_element);
 
@@ -149,9 +150,7 @@ class HTMLConstructionSite final {
   void InsertCommentOnDocument(AtomicHTMLToken*);
   void InsertCommentOnHTMLHtmlElement(AtomicHTMLToken*);
   void InsertHTMLElement(AtomicHTMLToken*);
-  void InsertHTMLTemplateElement(
-      AtomicHTMLToken*,
-      DeclarativeShadowRootType declarative_shadow_root_type);
+  void InsertHTMLTemplateElement(AtomicHTMLToken*, DeclarativeShadowRootType);
   void InsertSelfClosingHTMLElementDestroyingToken(AtomicHTMLToken*);
   void InsertFormattingElement(AtomicHTMLToken*);
   void InsertHTMLHeadElement(AtomicHTMLToken*);
@@ -224,7 +223,6 @@ class HTMLConstructionSite final {
 
   class RedirectToFosterParentGuard {
     STACK_ALLOCATED();
-    DISALLOW_COPY_AND_ASSIGN(RedirectToFosterParentGuard);
 
    public:
     RedirectToFosterParentGuard(HTMLConstructionSite& tree)
@@ -232,6 +230,10 @@ class HTMLConstructionSite final {
           was_redirecting_before_(tree.redirect_attach_to_foster_parent_) {
       tree_.redirect_attach_to_foster_parent_ = true;
     }
+
+    RedirectToFosterParentGuard(const RedirectToFosterParentGuard&) = delete;
+    RedirectToFosterParentGuard& operator=(const RedirectToFosterParentGuard&) =
+        delete;
 
     ~RedirectToFosterParentGuard() {
       tree_.redirect_attach_to_foster_parent_ = was_redirecting_before_;
@@ -271,7 +273,7 @@ class HTMLConstructionSite final {
       const QualifiedName&,
       const AtomicString& is);
 
-  HTMLParserReentryPermit* reentry_permit_;
+  Member<HTMLParserReentryPermit> reentry_permit_;
   Member<Document> document_;
 
   // This is the root ContainerNode to which the parser attaches all newly
@@ -328,7 +330,7 @@ class HTMLConstructionSite final {
       return string_builder.IsEmpty();
     }
 
-    void Trace(Visitor*);
+    void Trace(Visitor*) const;
 
     Member<ContainerNode> parent;
     Member<Node> next_child;
@@ -348,8 +350,6 @@ class HTMLConstructionSite final {
   bool redirect_attach_to_foster_parent_;
 
   bool in_quirks_mode_;
-
-  DISALLOW_COPY_AND_ASSIGN(HTMLConstructionSite);
 };
 
 }  // namespace blink

@@ -28,7 +28,7 @@ class HitRegion final : public GarbageCollected<HitRegion> {
   const Path& GetPath() const { return path_; }
   Element* Control() const { return control_.Get(); }
 
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
  private:
   String id_;
@@ -56,7 +56,7 @@ class HitRegionManager final : public GarbageCollected<HitRegionManager> {
 
   unsigned GetHitRegionsCount() const;
 
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
  private:
   typedef HeapLinkedHashSet<Member<HitRegion>> HitRegionList;
@@ -74,4 +74,4 @@ class HitRegionManager final : public GarbageCollected<HitRegionManager> {
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_MODULES_CANVAS_CANVAS2D_HIT_REGION_H_

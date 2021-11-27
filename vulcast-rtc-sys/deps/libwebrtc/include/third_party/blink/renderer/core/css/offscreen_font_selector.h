@@ -7,6 +7,7 @@
 
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/font_face_cache.h"
+#include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/platform/fonts/font_selector.h"
 #include "third_party/blink/renderer/platform/fonts/generic_font_family_settings.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
@@ -21,12 +22,10 @@ class FontDescription;
 
 class CORE_EXPORT OffscreenFontSelector : public FontSelector {
  public:
-  explicit OffscreenFontSelector(ExecutionContext*);
+  explicit OffscreenFontSelector(WorkerGlobalScope*);
   ~OffscreenFontSelector() override;
 
   unsigned Version() const override { return 1; }
-
-  void ReportNotDefGlyph() const override;
 
   void ReportSuccessfulFontFamilyMatch(
       const AtomicString& font_family_name) override;
@@ -37,6 +36,32 @@ class CORE_EXPORT OffscreenFontSelector : public FontSelector {
   void ReportSuccessfulLocalFontMatch(const AtomicString& font_name) override;
 
   void ReportFailedLocalFontMatch(const AtomicString& font_name) override;
+
+  void ReportFontLookupByUniqueOrFamilyName(
+      const AtomicString& name,
+      const FontDescription& font_description,
+      SimpleFontData* resulting_font_data) override;
+
+  void ReportFontLookupByUniqueNameOnly(
+      const AtomicString& name,
+      const FontDescription& font_description,
+      SimpleFontData* resulting_font_data,
+      bool is_loading_fallback = false) override;
+
+  void ReportFontLookupByFallbackCharacter(
+      UChar32 fallback_character,
+      FontFallbackPriority fallback_priority,
+      const FontDescription& font_description,
+      SimpleFontData* resulting_font_data) override;
+
+  void ReportLastResortFallbackFontLookup(
+      const FontDescription& font_description,
+      SimpleFontData* resulting_font_data) override;
+
+  void ReportNotDefGlyph() const override;
+
+  void ReportEmojiSegmentGlyphCoverage(unsigned num_clusters,
+                                       unsigned num_broken_clusters) override;
 
   scoped_refptr<FontData> GetFontData(const FontDescription&,
                                       const AtomicString&) override;
@@ -59,17 +84,17 @@ class CORE_EXPORT OffscreenFontSelector : public FontSelector {
 
   void UpdateGenericFontFamilySettings(const GenericFontFamilySettings&);
 
-  FontFaceCache* GetFontFaceCache() override { return &font_face_cache_; }
+  FontFaceCache* GetFontFaceCache() override { return font_face_cache_; }
 
   bool IsPlatformFamilyMatchAvailable(
       const FontDescription&,
       const AtomicString& passed_family) override;
 
   ExecutionContext* GetExecutionContext() const override {
-    return execution_context_;
+    return worker_ ? worker_->GetExecutionContext() : nullptr;
   }
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  protected:
   void DispatchInvalidationCallbacks();
@@ -77,9 +102,9 @@ class CORE_EXPORT OffscreenFontSelector : public FontSelector {
  private:
   GenericFontFamilySettings generic_font_family_settings_;
 
-  FontFaceCache font_face_cache_;
+  Member<FontFaceCache> font_face_cache_;
 
-  Member<ExecutionContext> execution_context_;
+  Member<WorkerGlobalScope> worker_;
 };
 
 }  // namespace blink

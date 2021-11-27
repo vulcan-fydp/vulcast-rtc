@@ -18,6 +18,7 @@ namespace blink {
 
 class ExecutionContext;
 class ScriptPromiseResolver;
+class Permissions;
 
 // Expose the status of a given permission type for the current
 // ExecutionContext.
@@ -25,27 +26,27 @@ class PermissionStatus final : public EventTargetWithInlineData,
                                public ActiveScriptWrappable<PermissionStatus>,
                                public ExecutionContextLifecycleStateObserver,
                                public mojom::blink::PermissionObserver {
-  USING_GARBAGE_COLLECTED_MIXIN(PermissionStatus);
   DEFINE_WRAPPERTYPEINFO();
-  USING_PRE_FINALIZER(PermissionStatus, Dispose);
 
   using MojoPermissionDescriptor = mojom::blink::PermissionDescriptorPtr;
   using MojoPermissionStatus = mojom::blink::PermissionStatus;
 
  public:
-  static PermissionStatus* Take(ScriptPromiseResolver*,
+  static PermissionStatus* Take(Permissions&,
+                                ScriptPromiseResolver*,
                                 MojoPermissionStatus,
                                 MojoPermissionDescriptor);
 
-  static PermissionStatus* CreateAndListen(ExecutionContext*,
+  static PermissionStatus* CreateAndListen(Permissions&,
+                                           ExecutionContext*,
                                            MojoPermissionStatus,
                                            MojoPermissionDescriptor);
 
-  PermissionStatus(ExecutionContext*,
+  PermissionStatus(Permissions&,
+                   ExecutionContext*,
                    MojoPermissionStatus,
                    MojoPermissionDescriptor);
   ~PermissionStatus() override;
-  void Dispose();
 
   // EventTarget implementation.
   const AtomicString& InterfaceName() const override;
@@ -62,7 +63,7 @@ class PermissionStatus final : public EventTargetWithInlineData,
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(change, kChange)
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   void StartListening();

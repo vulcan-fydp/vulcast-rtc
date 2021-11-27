@@ -20,7 +20,7 @@
 #ifndef __GDK_SNAPSHOT_H__
 #define __GDK_SNAPSHOT_H__
 
-#if !defined (__GDK_H_INSIDE__) && !defined (GDK_COMPILATION)
+#if !defined (__GDK_H_INSIDE__) && !defined (GTK_COMPILATION)
 #error "Only <gdk/gdk.h> can be included directly."
 #endif
 
@@ -29,7 +29,13 @@
 
 G_BEGIN_DECLS
 
-typedef struct _GdkSnapshotClass       GdkSnapshotClass;
+/**
+ * GdkSnapshot:
+ *
+ * Base type for snapshot operations.
+ */
+
+typedef struct _GdkSnapshotClass        GdkSnapshotClass;
 
 #define GDK_TYPE_SNAPSHOT               (gdk_snapshot_get_type ())
 

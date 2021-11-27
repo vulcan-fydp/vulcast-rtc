@@ -19,7 +19,7 @@ class ExecutionContext;
 class ScriptPromiseResolver;
 class WakeLockSentinel;
 
-// https://w3c.github.io/wake-lock/#concepts-and-state-record
+// https://w3c.github.io/screen-wake-lock/#dfn-activelocks
 // Per-document and per-wake lock type internal data.
 class MODULES_EXPORT WakeLockManager final
     : public GarbageCollected<WakeLockManager> {
@@ -31,7 +31,7 @@ class MODULES_EXPORT WakeLockManager final
 
   void UnregisterSentinel(WakeLockSentinel*);
 
-  void Trace(Visitor* visitor);
+  void Trace(Visitor* visitor) const;
 
  private:
   // Handle connection errors from |wake_lock_|.
@@ -43,9 +43,7 @@ class MODULES_EXPORT WakeLockManager final
 
   // An actual platform WakeLock. If bound, it means there is an active wake
   // lock for a given type.
-  HeapMojoRemote<device::mojom::blink::WakeLock,
-                 HeapMojoWrapperMode::kWithoutContextObserver>
-      wake_lock_;
+  HeapMojoRemote<device::mojom::blink::WakeLock> wake_lock_;
   WakeLockType wake_lock_type_;
 
   // ExecutionContext from which we will connect to |wake_lock_service_|.

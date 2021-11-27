@@ -17,8 +17,6 @@ constexpr TaskType kTaskTypeNone = 0;
 
 namespace internal {
 
-enum class WakeUpResolution { kLow, kHigh };
-
 // Wrapper around PostTask method arguments and the assigned task type.
 // Eventually it becomes a PendingTask once accepted by a TaskQueueImpl.
 struct BASE_EXPORT PostedTask {
@@ -29,6 +27,8 @@ struct BASE_EXPORT PostedTask {
                       Nestable nestable = Nestable::kNestable,
                       TaskType task_type = kTaskTypeNone);
   PostedTask(PostedTask&& move_from) noexcept;
+  PostedTask(const PostedTask&) = delete;
+  PostedTask& operator=(const PostedTask&) = delete;
   ~PostedTask();
 
   OnceClosure callback;
@@ -41,18 +41,19 @@ struct BASE_EXPORT PostedTask {
   scoped_refptr<SequencedTaskRunner> task_runner;
   // The time at which the task was queued.
   TimeTicks queue_time;
-
-  DISALLOW_COPY_AND_ASSIGN(PostedTask);
 };
 
-// Represents a time at which a task wants to run. Tasks scheduled for the
-// same point in time will be ordered by their sequence numbers.
+}  // namespace internal
+
+enum class WakeUpResolution { kLow, kHigh };
+
+// Represents a time at which a task wants to run.
 struct DelayedWakeUp {
   TimeTicks time;
-  int sequence_num;
+  WakeUpResolution resolution;
 
   bool operator!=(const DelayedWakeUp& other) const {
-    return time != other.time || other.sequence_num != sequence_num;
+    return time != other.time || resolution != other.resolution;
   }
 
   bool operator==(const DelayedWakeUp& other) const {
@@ -61,17 +62,14 @@ struct DelayedWakeUp {
 
   bool operator<=(const DelayedWakeUp& other) const {
     if (time == other.time) {
-      // Debug gcc builds can compare an element against itself.
-      DCHECK(sequence_num != other.sequence_num || this == &other);
-      // |sequence_num| is int and might wrap around to a negative number when
-      // casted from EnqueueOrder. This way of comparison handles that properly.
-      return (sequence_num - other.sequence_num) <= 0;
+      if (resolution == other.resolution)
+        return true;
+
+      return resolution < other.resolution;
     }
     return time < other.time;
   }
 };
-
-}  // namespace internal
 
 // PendingTask with extra metadata for SequenceManager.
 struct BASE_EXPORT Task : public PendingTask {
@@ -79,15 +77,10 @@ struct BASE_EXPORT Task : public PendingTask {
        TimeTicks delayed_run_time,
        EnqueueOrder sequence_order,
        EnqueueOrder enqueue_order = EnqueueOrder(),
-       internal::WakeUpResolution wake_up_resolution =
-           internal::WakeUpResolution::kLow);
+       WakeUpResolution wake_up_resolution = WakeUpResolution::kLow);
   Task(Task&& move_from);
   ~Task();
   Task& operator=(Task&& other);
-
-  internal::DelayedWakeUp delayed_wake_up() const {
-    return internal::DelayedWakeUp{delayed_run_time, sequence_num};
-  }
 
   // SequenceManager is particularly sensitive to enqueue order,
   // so we have accessors for safety.
@@ -102,6 +95,12 @@ struct BASE_EXPORT Task : public PendingTask {
   }
 
   bool enqueue_order_set() const { return enqueue_order_; }
+
+  // OK to dispatch from a nested loop.
+  Nestable nestable = Nestable::kNonNestable;
+
+  // Needs high resolution timers.
+  bool is_high_res = false;
 
   TaskType task_type;
 

@@ -5,18 +5,22 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_BINDINGS_TO_V8_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_BINDINGS_TO_V8_H_
 
+// ToV8() is a legacy API and deprecated. Use ToV8Traits<T>::ToV8() instead.
+// TODO(crbug.com/1172074): Replace this old ToV8 with ToV8Traits.
+
 // ToV8() provides C++ -> V8 conversion. Note that ToV8() can return an empty
 // handle. Call sites must check IsEmpty() before using return value.
 
 #include <utility>
 
 #include "base/containers/span.h"
-#include "base/optional.h"
 #include "base/time/time.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/bindings/callback_function_base.h"
 #include "third_party/blink/renderer/platform/bindings/callback_interface_base.h"
 #include "third_party/blink/renderer/platform/bindings/dictionary_base.h"
 #include "third_party/blink/renderer/platform/bindings/dom_data_store.h"
+#include "third_party/blink/renderer/platform/bindings/enumeration_base.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/bindings/union_base.h"
@@ -38,7 +42,9 @@ inline v8::Local<v8::Value> ToV8(ScriptWrappable* impl,
   if (!wrapper.IsEmpty())
     return wrapper;
 
-  wrapper = impl->Wrap(isolate, creation_context);
+  ScriptState* script_state =
+      ScriptState::From(creation_context->CreationContext());
+  wrapper = impl->Wrap(script_state).ToLocalChecked();
   DCHECK(!wrapper.IsEmpty());
   return wrapper;
 }
@@ -50,10 +56,9 @@ inline v8::Local<v8::Value> ToV8(const bindings::DictionaryBase* dictionary,
                                  v8::Isolate* isolate) {
   if (UNLIKELY(!dictionary))
     return v8::Null(isolate);
-  v8::Local<v8::Value> v8_value =
-      dictionary->CreateV8Object(isolate, creation_context);
-  DCHECK(!v8_value.IsEmpty());
-  return v8_value;
+  ScriptState* script_state =
+      ScriptState::From(creation_context->CreationContext());
+  return dictionary->ToV8Value(script_state).ToLocalChecked();
 }
 
 // Callback function
@@ -86,15 +91,21 @@ inline v8::Local<v8::Value> ToV8(CallbackInterfaceBase* callback,
                   : v8::Null(isolate).As<v8::Value>();
 }
 
-// Union type
+// Enumeration
 
-inline v8::Local<v8::Value> ToV8(const bindings::UnionBase& value,
+inline v8::Local<v8::Value> ToV8(const bindings::EnumerationBase& enumeration,
                                  v8::Local<v8::Object> creation_context,
                                  v8::Isolate* isolate) {
-  v8::Local<v8::Value> v8_value =
-      value.CreateV8Object(isolate, creation_context);
-  DCHECK(!v8_value.IsEmpty());
-  return v8_value;
+  return V8String(isolate, enumeration.AsCStr());
+}
+
+// Union
+inline v8::Local<v8::Value> ToV8(const bindings::UnionBase* union_value,
+                                 v8::Local<v8::Object> creation_context,
+                                 v8::Isolate* isolate) {
+  return union_value
+      ->ToV8Value(ScriptState::From(creation_context->CreationContext()))
+      .ToLocalChecked();
 }
 
 // Primitives
@@ -211,7 +222,7 @@ inline v8::Local<v8::Value> ToV8(const ToV8UndefinedGenerator& value,
 
 // Forward declaration to allow interleaving with sequences.
 template <typename InnerType>
-inline v8::Local<v8::Value> ToV8(const base::Optional<InnerType>& value,
+inline v8::Local<v8::Value> ToV8(const absl::optional<InnerType>& value,
                                  v8::Local<v8::Object> creation_context,
                                  v8::Isolate*);
 
@@ -333,7 +344,7 @@ inline v8::Local<v8::Array> ToV8SequenceInternal(
 // Nullable
 
 template <typename InnerType>
-inline v8::Local<v8::Value> ToV8(const base::Optional<InnerType>& value,
+inline v8::Local<v8::Value> ToV8(const absl::optional<InnerType>& value,
                                  v8::Local<v8::Object> creation_context,
                                  v8::Isolate* isolate) {
   if (!value)
@@ -357,17 +368,21 @@ inline v8::Local<v8::Value> ToV8(base::Time date, ScriptState* script_state) {
 }
 
 // Only declare ToV8(void*,...) for checking function overload mismatch.
-// This ToV8(void*,...) should be never used. So we will find mismatch
-// because of "unresolved external symbol".
+// This ToV8(void*,...) should be never used.
 // Without ToV8(void*, ...), call to toV8 with T* will match with
 // ToV8(bool, ...) if T is not a subclass of ScriptWrappable or if T is
 // declared but not defined (so it's not clear that T is a subclass of
 // ScriptWrappable).
 // This hack helps detect such unwanted implicit conversions from T* to bool.
 v8::Local<v8::Value> ToV8(void* value,
-                          v8::Local<v8::Object> creation_context,
+                          v8::Local<v8::Object>,
+                          v8::Isolate*) = delete;
+// Similarly, this helps detect unwanted implicit conversion from const T* to
+// bool, e.g. ToV8(const Element*).
+v8::Local<v8::Value> ToV8(const void* value,
+                          v8::Local<v8::Object>,
                           v8::Isolate*) = delete;
 
 }  // namespace blink
 
-#endif  // ToV8ForPlatform_h
+#endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_BINDINGS_TO_V8_H_

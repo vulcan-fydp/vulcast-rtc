@@ -29,6 +29,7 @@
 #include "libavutil/common.h"
 #include "libavutil/intreadwrite.h"
 #include "libavutil/log.h"
+#include "libavutil/mem_internal.h"
 #include "libavutil/pixfmt.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/ppc/util_altivec.h"
@@ -119,7 +120,8 @@ typedef void (*yuv2planarX_fn)(const int16_t *filter, int filterSize,
  * Write one line of horizontally scaled chroma to interleaved output
  * with multi-point vertical scaling between input pixels.
  *
- * @param c             SWS scaling context
+ * @param dstFormat     destination pixel format
+ * @param chrDither     ordered dither array of type uint8_t and size 8
  * @param chrFilter     vertical chroma scaling coefficients, 12 bits [0,4096]
  * @param chrUSrc       scaled chroma (U) source data, 15 bits for 8-10-bit
  *                      output, 19 bits for 16-bit output (in int32_t)
@@ -130,7 +132,8 @@ typedef void (*yuv2planarX_fn)(const int16_t *filter, int filterSize,
  *                      output, this is in uint16_t
  * @param dstW          width of chroma planes
  */
-typedef void (*yuv2interleavedX_fn)(struct SwsContext *c,
+typedef void (*yuv2interleavedX_fn)(enum AVPixelFormat dstFormat,
+                                    const uint8_t *chrDither,
                                     const int16_t *chrFilter,
                                     int chrFilterSize,
                                     const int16_t **chrUSrc,
@@ -287,7 +290,7 @@ typedef struct SwsContext {
      * Note that src, dst, srcStride, dstStride will be copied in the
      * sws_scale() wrapper so they can be freely modified here.
      */
-    SwsFunc swscale;
+    SwsFunc convert_unscaled;
     int srcW;                     ///< Width  of source      luma/alpha planes.
     int srcH;                     ///< Height of source      luma/alpha planes.
     int dstH;                     ///< Height of destination luma/alpha planes.
@@ -623,6 +626,18 @@ typedef struct SwsContext {
     SwsDither dither;
 
     SwsAlphaBlend alphablend;
+
+    // scratch buffer for converting packed rgb0 sources
+    // filled with a copy of the input frame + fully opaque alpha,
+    // then passed as input to further conversion
+    uint8_t     *rgb0_scratch;
+    unsigned int rgb0_scratch_allocated;
+
+    // scratch buffer for converting XYZ sources
+    // filled with the input converted to rgb48
+    // then passed as input to further conversion
+    uint8_t     *xyz_scratch;
+    unsigned int xyz_scratch_allocated;
 } SwsContext;
 //FIXME check init (where 0)
 
@@ -645,6 +660,13 @@ static av_always_inline int is16BPS(enum AVPixelFormat pix_fmt)
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
     av_assert0(desc);
     return desc->comp[0].depth == 16;
+}
+
+static av_always_inline int is32BPS(enum AVPixelFormat pix_fmt)
+{
+    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
+    av_assert0(desc);
+    return desc->comp[0].depth == 32;
 }
 
 static av_always_inline int isNBPS(enum AVPixelFormat pix_fmt)
@@ -755,6 +777,13 @@ static av_always_inline int isBayer(enum AVPixelFormat pix_fmt)
     return !!(desc->flags & AV_PIX_FMT_FLAG_BAYER);
 }
 
+static av_always_inline int isBayer16BPS(enum AVPixelFormat pix_fmt)
+{
+    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
+    av_assert0(desc);
+    return desc->comp[1].depth == 8;
+}
+
 static av_always_inline int isAnyRGB(enum AVPixelFormat pix_fmt)
 {
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
@@ -841,19 +870,15 @@ extern const int32_t ff_yuv2rgb_coeffs[11][4];
 extern const AVClass ff_sws_context_class;
 
 /**
- * Set c->swscale to an unscaled converter if one exists for the specific
- * source and destination formats, bit depths, flags, etc.
+ * Set c->convert_unscaled to an unscaled converter if one exists for the
+ * specific source and destination formats, bit depths, flags, etc.
  */
 void ff_get_unscaled_swscale(SwsContext *c);
 void ff_get_unscaled_swscale_ppc(SwsContext *c);
 void ff_get_unscaled_swscale_arm(SwsContext *c);
 void ff_get_unscaled_swscale_aarch64(SwsContext *c);
 
-/**
- * Return function pointer to fastest main scaler path function depending
- * on architecture and available optimizations.
- */
-SwsFunc ff_getSwsFunc(SwsContext *c);
+void ff_sws_init_scale(SwsContext *c);
 
 void ff_sws_init_input_funcs(SwsContext *c);
 void ff_sws_init_output_funcs(SwsContext *c,
@@ -918,7 +943,36 @@ static inline void fillPlane16(uint8_t *plane, int stride, int width, int height
         }
         ptr += stride;
     }
+#undef FILL
 }
+
+static inline void fillPlane32(uint8_t *plane, int stride, int width, int height, int y,
+                               int alpha, int bits, const int big_endian, int is_float)
+{
+    int i, j;
+    uint8_t *ptr = plane + stride * y;
+    uint32_t v;
+    uint32_t onef32 = 0x3f800000;
+    if (is_float)
+        v = alpha ? onef32 : 0;
+    else
+        v = alpha ? 0xFFFFFFFF>>(32-bits) : (1<<(bits-1));
+
+    for (i = 0; i < height; i++) {
+#define FILL(wfunc) \
+        for (j = 0; j < width; j++) {\
+            wfunc(ptr+4*j, v);\
+        }
+        if (big_endian) {
+            FILL(AV_WB32);
+        } else {
+            FILL(AV_WL32);
+        }
+        ptr += stride;
+    }
+#undef FILL
+}
+
 
 #define MAX_SLICE_PLANES 4
 

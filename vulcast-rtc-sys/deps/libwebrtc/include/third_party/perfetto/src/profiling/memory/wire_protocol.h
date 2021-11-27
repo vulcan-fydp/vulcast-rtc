@@ -20,7 +20,8 @@
 #ifndef SRC_PROFILING_MEMORY_WIRE_PROTOCOL_H_
 #define SRC_PROFILING_MEMORY_WIRE_PROTOCOL_H_
 
-#include <inttypes.h>
+#include <cinttypes>
+
 #include <unwindstack/Elf.h>
 #include <unwindstack/MachineArm.h>
 #include <unwindstack/MachineArm64.h>
@@ -29,8 +30,9 @@
 #include <unwindstack/MachineX86.h>
 #include <unwindstack/MachineX86_64.h>
 
-#include "perfetto/profiling/memory/client_ext.h"
+#include "perfetto/heap_profile.h"
 #include "src/profiling/memory/shared_ring_buffer.h"
+#include "src/profiling/memory/util.h"
 
 namespace perfetto {
 
@@ -39,31 +41,6 @@ class UnixSocketRaw;
 }
 
 namespace profiling {
-
-struct ClientConfiguration {
-  // On average, sample one allocation every interval bytes,
-  // If interval == 1, sample every allocation.
-  // Must be >= 1.
-  uint64_t interval;
-  bool block_client;
-  uint64_t block_client_timeout_us;
-  bool disable_fork_teardown;
-  bool disable_vfork_detection;
-  bool all_heaps;
-  char heaps[64][HEAPPROFD_HEAP_NAME_SZ];
-  uint64_t num_heaps;
-  // Just double check that the array sizes are in correct order.
-  static_assert(sizeof(heaps[0]) == HEAPPROFD_HEAP_NAME_SZ, "");
-};
-
-// Types needed for the wire format used for communication between the client
-// and heapprofd. The basic format of a record is
-// record size (uint64_t) | record type (RecordType = uint64_t) | record
-// If record type is malloc, the record format is AllocMetdata | raw stack.
-// If the record type is free, the record is a sequence of FreeBatchEntry.
-
-// Use uint64_t to make sure the following data is aligned as 64bit is the
-// strongest alignment requirement.
 
 // C++11 std::max is not constexpr.
 constexpr size_t constexpr_max(size_t x, size_t y) {
@@ -87,44 +64,92 @@ constexpr size_t kMaxRegisterDataSize =
   );
 // clang-format on
 
+// Types needed for the wire format used for communication between the client
+// and heapprofd. The basic format of a record sent by the client is
+// record size (uint64_t) | record type (RecordType = uint64_t) | record
+// If record type is Malloc, the record format is AllocMetdata | raw stack.
+// If the record type is Free, the record is a FreeEntry.
+// If record type is HeapName, the record is a HeapName.
+// On connect, heapprofd sends one ClientConfiguration struct over the control
+// socket.
+
+// Use uint64_t to make sure the following data is aligned as 64bit is the
+// strongest alignment requirement.
+
+struct ClientConfigurationHeap {
+  char name[HEAPPROFD_HEAP_NAME_SZ];
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t) interval;
+};
+
+struct ClientConfiguration {
+  // On average, sample one allocation every interval bytes,
+  // If interval == 1, sample every allocation.
+  // Must be >= 1.
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t) default_interval;
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t) block_client_timeout_us;
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t) num_heaps;
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t) adaptive_sampling_shmem_threshold;
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t)
+  adaptive_sampling_max_sampling_interval_bytes;
+  alignas(8) ClientConfigurationHeap heaps[64];
+  PERFETTO_CROSS_ABI_ALIGNED(bool) block_client;
+  PERFETTO_CROSS_ABI_ALIGNED(bool) disable_fork_teardown;
+  PERFETTO_CROSS_ABI_ALIGNED(bool) disable_vfork_detection;
+  PERFETTO_CROSS_ABI_ALIGNED(bool) all_heaps;
+  // Just double check that the array sizes are in correct order.
+};
+
 enum class RecordType : uint64_t {
   Free = 0,
   Malloc = 1,
   HeapName = 2,
 };
 
-struct AllocMetadata {
-  uint64_t sequence_number;
+// Make the whole struct 8-aligned. This is to make sizeof(AllocMetdata)
+// the same on 32 and 64-bit.
+struct alignas(8) AllocMetadata {
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t) sequence_number;
   // Size of the allocation that was made.
-  uint64_t alloc_size;
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t) alloc_size;
   // Total number of bytes attributed to this allocation.
-  uint64_t sample_size;
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t) sample_size;
   // Pointer returned by malloc(2) for this allocation.
-  uint64_t alloc_address;
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t) alloc_address;
   // Current value of the stack pointer.
-  uint64_t stack_pointer;
-  uint64_t clock_monotonic_coarse_timestamp;
-  alignas(uint64_t) char register_data[kMaxRegisterDataSize];
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t) stack_pointer;
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t) clock_monotonic_coarse_timestamp;
+  // unwindstack::AsmGetRegs assumes this is aligned.
+  alignas(8) char register_data[kMaxRegisterDataSize];
+  PERFETTO_CROSS_ABI_ALIGNED(uint32_t) heap_id;
   // CPU architecture of the client.
-  unwindstack::ArchEnum arch;
-  uint32_t heap_id;
+  PERFETTO_CROSS_ABI_ALIGNED(unwindstack::ArchEnum) arch;
 };
 
 struct FreeEntry {
-  uint64_t sequence_number;
-  uint64_t addr;
-  uint32_t heap_id;
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t) sequence_number;
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t) addr;
+  PERFETTO_CROSS_ABI_ALIGNED(uint32_t) heap_id;
 };
 
 struct HeapName {
-  uint32_t heap_id;
-  char heap_name[HEAPPROFD_HEAP_NAME_SZ];
+  PERFETTO_CROSS_ABI_ALIGNED(uint64_t) sample_interval;
+  PERFETTO_CROSS_ABI_ALIGNED(uint32_t) heap_id;
+  PERFETTO_CROSS_ABI_ALIGNED(char) heap_name[HEAPPROFD_HEAP_NAME_SZ];
 };
+
+// Make sure the sizes do not change on different architectures.
+static_assert(sizeof(AllocMetadata) == 328,
+              "AllocMetadata needs to be the same size across ABIs.");
+static_assert(sizeof(FreeEntry) == 24,
+              "FreeEntry needs to be the same size across ABIs.");
+static_assert(sizeof(HeapName) == 80,
+              "HeapName needs to be the same size across ABIs.");
+static_assert(sizeof(ClientConfiguration) == 4656,
+              "ClientConfiguration needs to be the same size across ABIs.");
 
 enum HandshakeFDs : size_t {
   kHandshakeMaps = 0,
   kHandshakeMem,
-  kHandshakePageIdle,
   kHandshakeSize,
 };
 
@@ -145,6 +170,9 @@ int64_t SendWireMessage(SharedRingBuffer* buf, const WireMessage& msg);
 // |buf| has to outlive |out|.
 // If buf is not a valid message, return false.
 bool ReceiveWireMessage(char* buf, size_t size, WireMessage* out);
+
+uint64_t GetHeapSamplingInterval(const ClientConfiguration& cli_config,
+                                 const char* heap_name);
 
 constexpr const char* kHeapprofdSocketEnvVar = "ANDROID_SOCKET_heapprofd";
 constexpr const char* kHeapprofdSocketFile = "/dev/socket/heapprofd";

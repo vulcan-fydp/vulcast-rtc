@@ -6,15 +6,19 @@
 #define BASE_THREADING_HANG_WATCHER_H_
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 #include "base/atomicops.h"
+#include "base/bits.h"
 #include "base/callback.h"
 #include "base/callback_forward.h"
 #include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
-#include "base/feature_list.h"
+#include "base/debug/crash_logging.h"
+#include "base/memory/memory_pressure_listener.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
 #include "base/threading/platform_thread.h"
@@ -23,9 +27,10 @@
 #include "base/threading/thread_local.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
+#include "build/build_config.h"
 
 namespace base {
-class HangWatchScope;
+class WatchHangsInScope;
 namespace internal {
 class HangWatchState;
 }  // namespace internal
@@ -33,13 +38,13 @@ class HangWatchState;
 
 namespace base {
 
-// Instantiate a HangWatchScope in a scope to register to be
+// Instantiate a WatchHangsInScope in a code scope to register to be
 // watched for hangs of more than |timeout| by the HangWatcher.
 //
 // Example usage:
 //
 //  void FooBar(){
-//    HangWatchScope scope(base::TimeDelta::FromSeconds(5));
+//    WatchHangsInScope scope(base::TimeDelta::FromSeconds(5));
 //    DoWork();
 //  }
 //
@@ -47,11 +52,12 @@ namespace base {
 // inspects the thread state before Foobar returns a hang will be
 // reported.
 //
-// HangWatchScopes are typically meant to live on the stack. In some cases it's
-// necessary to keep a HangWatchScope instance as a class member but special
-// care is required when doing so as a HangWatchScope that stays alive longer
-// than intended will generate non-actionable hang reports.
-class BASE_EXPORT HangWatchScope {
+// WatchHangsInScopes are typically meant to live on the stack. In some
+// cases it's necessary to keep a WatchHangsInScope instance as a class
+// member but special care is required when doing so as a WatchHangsInScope
+// that stays alive longer than intended will generate non-actionable hang
+// reports.
+class BASE_EXPORT WatchHangsInScope {
  public:
   // A good default value needs to be large enough to represent a significant
   // hang and avoid noise while being small enough to not exclude too many
@@ -61,23 +67,32 @@ class BASE_EXPORT HangWatchScope {
   static const base::TimeDelta kDefaultHangWatchTime;
 
   // Constructing/destructing thread must be the same thread.
-  explicit HangWatchScope(TimeDelta timeout);
-  ~HangWatchScope();
+  explicit WatchHangsInScope(TimeDelta timeout);
+  ~WatchHangsInScope();
 
-  HangWatchScope(const HangWatchScope&) = delete;
-  HangWatchScope& operator=(const HangWatchScope&) = delete;
+  WatchHangsInScope(const WatchHangsInScope&) = delete;
+  WatchHangsInScope& operator=(const WatchHangsInScope&) = delete;
 
  private:
+  // Will be true if the object actually set a deadline and false if not.
+  bool took_effect_ = true;
+
   // This object should always be constructed and destructed on the same thread.
   THREAD_CHECKER(thread_checker_);
 
-  // The deadline set by the previous HangWatchScope created on this thread.
-  // Stored so it can be restored when this HangWatchScope is destroyed.
+  // The deadline set by the previous WatchHangsInScope created on this
+  // thread. Stored so it can be restored when this WatchHangsInScope is
+  // destroyed.
   TimeTicks previous_deadline_;
 
+  // Indicates whether the kIgnoreCurrentWatchHangsInScope flag must be set upon
+  // exiting this WatchHangsInScope if a call to InvalidateActiveExpectations()
+  // previously suspended hang watching.
+  bool set_hangs_ignored_on_exit_ = false;
+
 #if DCHECK_IS_ON()
-  // The previous HangWatchScope created on this thread.
-  HangWatchScope* previous_scope_;
+  // The previous WatchHangsInScope created on this thread.
+  WatchHangsInScope* previous_watch_hangs_in_scope_;
 #endif
 };
 
@@ -87,7 +102,13 @@ class BASE_EXPORT HangWatchScope {
 // within a single process. This instance must outlive all monitored threads.
 class BASE_EXPORT HangWatcher : public DelegateSimpleThread::Delegate {
  public:
-  static const base::Feature kEnableHangWatcher;
+  // Describes the type of a thread for logging purposes.
+  enum class ThreadType {
+    kIOThread = 0,
+    kUIThread = 1,
+    kThreadPoolThread = 2,
+    kMax = kThreadPoolThread
+  };
 
   // The first invocation of the constructor will set the global instance
   // accessible through GetInstance(). This means that only one instance can
@@ -103,11 +124,57 @@ class BASE_EXPORT HangWatcher : public DelegateSimpleThread::Delegate {
   // Returns a non-owning pointer to the global HangWatcher instance.
   static HangWatcher* GetInstance();
 
+  // Initializes HangWatcher. Must be called once on the main thread during
+  // startup while single-threaded.
+  static void InitializeOnMainThread();
+
+  // Returns the values that were set through InitializeOnMainThread() to their
+  // default value. Used for testing since in prod initialization should happen
+  // only once.
+  static void UnitializeOnMainThreadForTesting();
+
+  // Thread safe functions to verify if hang watching is activated. If called
+  // before InitializeOnMainThread returns the default value which is false.
+  static bool IsEnabled();
+  static bool IsThreadPoolHangWatchingEnabled();
+  static bool IsIOThreadHangWatchingEnabled();
+
+  // Returns true if crash dump reporting is configured for any thread type.
+  static bool IsCrashReportingEnabled();
+
+  // Use to avoid capturing hangs for operations known to take unbounded time
+  // like waiting for user input. WatchHangsInScope objects created after this
+  // call will take effect. To resume watching for hangs create a new
+  // WatchHangsInScope after the unbounded operation finishes.
+  //
+  // Example usage:
+  //  {
+  //    WatchHangsInScope scope_1;
+  //    {
+  //      WatchHangsInScope scope_2;
+  //      InvalidateActiveExpectations();
+  //      WaitForUserInput();
+  //    }
+  //
+  //    WatchHangsInScope scope_4;
+  //  }
+  //
+  // WatchHangsInScope scope_5;
+  //
+  // In this example hang watching is disabled for WatchHangsInScopes 1 and 2
+  // since they were both active at the time of the invalidation.
+  // WatchHangsInScopes 4 and 5 are unaffected since they were created after the
+  // end of the WatchHangsInScope that was current at the time of invalidation.
+  //
+  static void InvalidateActiveExpectations();
+
   // Sets up the calling thread to be monitored for threads. Returns a
   // ScopedClosureRunner that unregisters the thread. This closure has to be
-  // called from the registered thread before it's joined.
-  ScopedClosureRunner RegisterThread()
-      LOCKS_EXCLUDED(watch_state_lock_) WARN_UNUSED_RESULT;
+  // called from the registered thread before it's joined. Returns a null
+  // closure in the case where there is no HangWatcher instance to register the
+  // thread with.
+  static ScopedClosureRunner RegisterThread(ThreadType thread_type)
+      WARN_UNUSED_RESULT;
 
   // Choose a closure to be run at the end of each call to Monitor(). Use only
   // for testing. Reentering the HangWatcher in the closure must be done with
@@ -150,12 +217,30 @@ class BASE_EXPORT HangWatcher : public DelegateSimpleThread::Delegate {
   // non-actionable stack trace in the crash recorded.
   void BlockIfCaptureInProgress();
 
+  // Begin executing the monitoring loop on the HangWatcher thread.
+  void Start();
+
  private:
+  // See comment of ::RegisterThread() for details.
+  ScopedClosureRunner RegisterThreadInternal(ThreadType thread_type)
+      LOCKS_EXCLUDED(watch_state_lock_) WARN_UNUSED_RESULT;
+
   // Use to assert that functions are called on the monitoring thread.
   THREAD_CHECKER(hang_watcher_thread_checker_);
 
   // Use to assert that functions are called on the constructing thread.
   THREAD_CHECKER(constructing_thread_checker_);
+
+  // Invoked on memory pressure signal.
+  void OnMemoryPressure(
+      base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level);
+
+#if not defined(OS_NACL)
+  // Returns a ScopedCrashKeyString that sets the crash key with the time since
+  // last critical memory pressure signal.
+  debug::ScopedCrashKeyString GetTimeSinceLastCriticalMemoryPressureCrashKey()
+      WARN_UNUSED_RESULT;
+#endif
 
   // Invoke base::debug::DumpWithoutCrashing() insuring that the stack frame
   // right under it in the trace belongs to HangWatcher for easier attribution.
@@ -175,24 +260,32 @@ class BASE_EXPORT HangWatcher : public DelegateSimpleThread::Delegate {
 
     // Construct the snapshot from provided data. |snapshot_time| can be
     // different than now() to be coherent with other operations recently done
-    // on |watch_states|. If any deadline in |watch_states| is before
-    // |deadline_ignore_threshold|, the snapshot is empty.
+    // on |watch_states|. The snapshot can be empty for a number of reasons:
+    // 1. If any deadline in |watch_states| is before
+    // |deadline_ignore_threshold|.
+    // 2. If some of the hung threads could not be marked as blocking on
+    // capture.
+    // 3. If none of the hung threads are of a type configured to trigger a
+    // crash dump.
     WatchStateSnapShot(const HangWatchStates& watch_states,
-                       base::TimeTicks snapshot_time,
                        base::TimeTicks deadline_ignore_threshold);
     WatchStateSnapShot(const WatchStateSnapShot& other);
     ~WatchStateSnapShot();
 
     // Returns a string that contains the ids of the hung threads separated by a
     // '|'. The size of the string is capped at debug::CrashKeySize::Size256. If
-    // no threads are hung returns an empty string.
+    // no threads are hung returns an empty string. Can only be invoked if
+    // IsActionable().
     std::string PrepareHungThreadListCrashKey() const;
 
     // Return the highest deadline included in this snapshot.
     base::TimeTicks GetHighestDeadline() const;
 
+    // Returns true if the snapshot can be used to record an actionable hang
+    // report and false if not.
+    bool IsActionable() const;
+
    private:
-    base::TimeTicks snapshot_time_;
     std::vector<WatchStateCopy> hung_watch_state_copies_;
   };
 
@@ -207,12 +300,10 @@ class BASE_EXPORT HangWatcher : public DelegateSimpleThread::Delegate {
   // invokes the appropriate closure if so.
   void Monitor() LOCKS_EXCLUDED(watch_state_lock_);
 
-  // Record the hang and perform the necessary housekeeping before and after.
-  void CaptureHang(base::TimeTicks capture_time)
+  // Record the hang crash dump and perform the necessary housekeeping before
+  // and after.
+  void DoDumpWithoutCrashing(const WatchStateSnapShot& watch_state_snapshot)
       EXCLUSIVE_LOCKS_REQUIRED(watch_state_lock_) LOCKS_EXCLUDED(capture_lock_);
-
-  // Call Run() on the HangWatcher thread.
-  void Start();
 
   // Stop all monitoring and join the HangWatcher thread.
   void Stop();
@@ -251,9 +342,18 @@ class BASE_EXPORT HangWatcher : public DelegateSimpleThread::Delegate {
   RepeatingCallback<void(TimeTicks)> after_wait_callback_;
 
   base::Lock capture_lock_ ACQUIRED_AFTER(watch_state_lock_);
-  std::atomic<bool> capture_in_progress{false};
+  std::atomic<bool> capture_in_progress_{false};
 
   const base::TickClock* tick_clock_;
+
+  // Registration to receive memory pressure signals.
+  base::MemoryPressureListener memory_pressure_listener_;
+
+  // The last time at which a critical memory pressure signal was received, or
+  // null if no signal was ever received. Atomic because it's set and read from
+  // different threads.
+  std::atomic<base::TimeTicks> last_critical_memory_pressure_{
+      base::TimeTicks()};
 
   // The time after which all deadlines in |watch_states_| need to be for a hang
   // to be reported.
@@ -261,11 +361,156 @@ class BASE_EXPORT HangWatcher : public DelegateSimpleThread::Delegate {
 
   FRIEND_TEST_ALL_PREFIXES(HangWatcherTest, NestedScopes);
   FRIEND_TEST_ALL_PREFIXES(HangWatcherSnapshotTest, HungThreadIDs);
+  FRIEND_TEST_ALL_PREFIXES(HangWatcherSnapshotTest, NonActionableReport);
 };
 
 // Classes here are exposed in the header only for testing. They are not
 // intended to be used outside of base.
 namespace internal {
+
+// Threadsafe class that manages a deadline of type TimeTicks alongside hang
+// watching specific flags. The flags are stored in the higher bits of the
+// underlying TimeTicks deadline. This enables setting the flags on thread T1 in
+// a way that's resilient to concurrent deadline or flag changes from thread T2.
+// Flags can be queried separately from the deadline and users of this class
+// should not have to care about them when doing so.
+class BASE_EXPORT HangWatchDeadline {
+ public:
+  // Masks to set flags by flipping a single bit in the TimeTicks value. There
+  // are two types of flags. Persistent flags remain set through a deadline
+  // change and non-persistent flags are cleared when the deadline changes.
+  enum class Flag : uint64_t {
+    // Minimum value for validation purposes. Not currently used.
+    kMinValue = bits::LeftmostBit<uint64_t>() >> 7,
+    // Persistent because if hang detection is disabled on a thread it should
+    // be re-enabled manually.
+    kIgnoreCurrentWatchHangsInScope = bits::LeftmostBit<uint64_t>() >> 1,
+    // Non-persistent because a new value means a new WatchHangsInScope started
+    // after the beginning of capture. It can't be implicated in the hang so we
+    // don't want it to block.
+    kShouldBlockOnHang = bits::LeftmostBit<uint64_t>() >> 0,
+    kMaxValue = kShouldBlockOnHang
+  };
+
+  HangWatchDeadline();
+  ~HangWatchDeadline();
+
+  // HangWatchDeadline should never be copied. To keep a copy of the deadline or
+  // flags use the appropriate accessors.
+  HangWatchDeadline(const HangWatchDeadline&) = delete;
+  HangWatchDeadline& operator=(const HangWatchDeadline&) = delete;
+
+  // Returns the underlying TimeTicks deadline. WARNING: The deadline and flags
+  // can change concurrently. To inspect both, use GetFlagsAndDeadline() to get
+  // a coherent race-free view of the state.
+  TimeTicks GetDeadline() const;
+
+  // Returns a mask containing the flags and the deadline as a pair. Use to
+  // inspect the flags and deadline and then optionally call
+  // SetShouldBlockOnHang() .
+  std::pair<uint64_t, TimeTicks> GetFlagsAndDeadline() const;
+
+  // Returns true if the flag is set and false if not. WARNING: The deadline and
+  // flags can change concurrently. To inspect both, use GetFlagsAndDeadline()
+  // to get a coherent race-free view of the state.
+  bool IsFlagSet(Flag flag) const;
+
+  // Returns true if a flag is set in |flags| and false if not. Use to inspect
+  // the flags mask returned by GetFlagsAndDeadline(). WARNING: The deadline and
+  // flags can change concurrently. If you need to inspect both you need to use
+  // GetFlagsAndDeadline() to get a coherent race-free view of the state.
+  static bool IsFlagSet(Flag flag, uint64_t flags);
+
+  // Replace the deadline value. |new_value| needs to be within [0,
+  // Max()]. This function can never fail.
+  void SetDeadline(TimeTicks new_value);
+
+  // Sets the kShouldBlockOnHang flag and returns true if current flags and
+  // deadline are still equal to |old_flags| and  |old_deadline|. Otherwise does
+  // not set the flag and returns false.
+  bool SetShouldBlockOnHang(uint64_t old_flags, TimeTicks old_deadline);
+
+  // Sets the kIgnoreCurrentWatchHangsInScope flag.
+  void SetIgnoreCurrentWatchHangsInScope();
+
+  // Clears the kIgnoreCurrentWatchHangsInScope flag.
+  void UnsetIgnoreCurrentWatchHangsInScope();
+
+  // Use to simulate the value of |bits_| changing between the calling a
+  // Set* function and the moment of atomically switching the values. The
+  // callback should return a value containing the desired flags and deadline
+  // bits. The flags that are already set will be preserved upon applying. Use
+  // only for testing.
+  void SetSwitchBitsClosureForTesting(
+      RepeatingCallback<uint64_t(void)> closure);
+
+  // Remove the deadline modification callback for when testing is done. Use
+  // only for testing.
+  void ResetSwitchBitsClosureForTesting();
+
+ private:
+  using TimeTicksInternalRepresentation =
+      std::result_of<decltype (&TimeTicks::ToInternalValue)(TimeTicks)>::type;
+  static_assert(std::is_same<TimeTicksInternalRepresentation, int64_t>::value,
+                "Bit manipulations made by HangWatchDeadline need to be"
+                "adapted if internal representation of TimeTicks changes.");
+
+  // Replace the bits with the ones provided through the callback. Preserves the
+  // flags that were already set. Returns the switched in bits. Only call if
+  // |switch_bits_callback_for_testing_| is installed.
+  uint64_t SwitchBitsForTesting();
+
+  // Atomically sets persitent flag |flag|. Cannot fail.
+  void SetPersistentFlag(Flag flag);
+
+  // Atomically clears persitent flag |flag|. Cannot fail.
+  void ClearPersistentFlag(Flag flag);
+
+  // Converts bits to TimeTicks with some sanity checks. Use to return the
+  // deadline outside of this class.
+  static TimeTicks DeadlineFromBits(uint64_t bits);
+
+  // Returns the largest representable deadline.
+  static TimeTicks Max();
+
+  // Extract the flag bits from |bits|.
+  static uint64_t ExtractFlags(uint64_t bits);
+
+  // Extract the deadline bits from |bits|.
+  static uint64_t ExtractDeadline(uint64_t bits);
+
+  // BitsType is uint64_t. This type is chosen for having
+  // std::atomic<BitsType>{}.is_lock_free() true on many platforms and having no
+  // undefined behaviors with regards to bit shift operations. Throughout this
+  // class this is the only type that is used to store, retrieve and manipulate
+  // the bits. When returning a TimeTicks value outside this class it's
+  // necessary to run the proper checks to insure correctness of the conversion
+  // that has to go through int_64t. (See DeadlineFromBits()).
+  using BitsType = uint64_t;
+  static_assert(std::is_same<std::underlying_type<Flag>::type, BitsType>::value,
+                "Flag should have the same underlying type as bits_ to "
+                "simplify thinking about bit operations");
+
+  // Holds the bits of both the flags and the TimeTicks deadline.
+  // TimeTicks values represent a count of microseconds since boot which may or
+  // may not include suspend time depending on the platform. Using the seven
+  // highest order bits and the sign bit to store flags still enables the
+  // storing of TimeTicks values that can represent up to ~1142 years of uptime
+  // in the remaining bits. Should never be directly accessed from outside the
+  // class. Starts out at Max() to provide a base-line deadline that will not be
+  // reached during normal execution.
+  //
+  // Binary format: 0xFFDDDDDDDDDDDDDDDD
+  // F = Flags
+  // D = Deadline
+  std::atomic<BitsType> bits_{static_cast<uint64_t>(Max().ToInternalValue())};
+
+  RepeatingCallback<uint64_t(void)> switch_bits_callback_for_testing_;
+
+  THREAD_CHECKER(thread_checker_);
+
+  FRIEND_TEST_ALL_PREFIXES(HangWatchDeadlineTest, BitsPreservedThroughExtract);
+};
 
 // Contains the information necessary for hang watching a specific
 // thread. Instances of this class are accessed concurrently by the associated
@@ -274,7 +519,10 @@ namespace internal {
 // GetHangWatchStateForCurrentThread().
 class BASE_EXPORT HangWatchState {
  public:
-  HangWatchState();
+  // |thread_type| is the type of thread the watch state will
+  // be associated with. It's the responsibility of the creating
+  // code to choose the correct type.
+  explicit HangWatchState(HangWatcher::ThreadType thread_type);
   ~HangWatchState();
 
   HangWatchState(const HangWatchState&) = delete;
@@ -282,7 +530,8 @@ class BASE_EXPORT HangWatchState {
 
   // Allocates a new state object bound to the calling thread and returns an
   // owning pointer to it.
-  static std::unique_ptr<HangWatchState> CreateHangWatchStateForCurrentThread();
+  static std::unique_ptr<HangWatchState> CreateHangWatchStateForCurrentThread(
+      HangWatcher::ThreadType thread_type);
 
   // Retrieves the hang watch state associated with the calling thread.
   // Returns nullptr if no HangWatchState exists for the current thread (see
@@ -290,25 +539,66 @@ class BASE_EXPORT HangWatchState {
   static ThreadLocalPointer<HangWatchState>*
   GetHangWatchStateForCurrentThread();
 
-  // Returns the value of the current deadline. Use this function if you need to
+  // Returns the current deadline. Use this function if you need to
   // store the value. To test if the deadline has expired use IsOverDeadline().
+  // WARNING: The deadline and flags can change concurrently. If you need to
+  // inspect both you need to use GetFlagsAndDeadline() to get a coherent
+  // race-free view of the state.
   TimeTicks GetDeadline() const;
 
-  // Atomically sets the deadline to a new value.
+  // Returns a mask containing the hang watching flags and the value as a pair.
+  // Use to inspect the flags and deadline and optionally call
+  // SetShouldBlockOnHang(flags, deadline).
+  std::pair<uint64_t, TimeTicks> GetFlagsAndDeadline() const;
+
+  // Sets the deadline to a new value.
   void SetDeadline(TimeTicks deadline);
+
+  // Mark this thread as ignored for hang watching. This means existing
+  // WatchHangsInScope will not trigger hangs.
+  void SetIgnoreCurrentWatchHangsInScope();
+
+  // Reactivate hang watching on this thread. Should be called when all
+  // WatchHangsInScope instances that were ignored have completed.
+  void UnsetIgnoreCurrentWatchHangsInScope();
+
+  // Mark the current state as having to block in its destruction until hang
+  // capture completes.
+  bool SetShouldBlockOnHang(uint64_t old_flags, TimeTicks old_deadline);
+
+  // Returns true if |flag| is set and false if not. WARNING: The deadline and
+  // flags can change concurrently. If you need to inspect both you need to use
+  // GetFlagsAndDeadline() to get a coherent race-free view of the state.
+  bool IsFlagSet(HangWatchDeadline::Flag flag);
 
   // Tests whether the associated thread's execution has gone over the deadline.
   bool IsOverDeadline() const;
 
 #if DCHECK_IS_ON()
-  // Saves the supplied HangWatchScope as the currently active scope.
-  void SetCurrentHangWatchScope(HangWatchScope* scope);
+  // Saves the supplied WatchHangsInScope as the currently active
+  // WatchHangsInScope.
+  void SetCurrentWatchHangsInScope(WatchHangsInScope* scope);
 
   // Retrieve the currently active scope.
-  HangWatchScope* GetCurrentHangWatchScope();
+  WatchHangsInScope* GetCurrentWatchHangsInScope();
 #endif
 
-  PlatformThreadId GetThreadID() const;
+  uint64_t GetThreadID() const;
+
+  // Retrieve the current hang watch deadline directly. For testing only.
+  HangWatchDeadline* GetHangWatchDeadlineForTesting();
+
+  // Returns the current nesting level.
+  int nesting_level() { return nesting_level_; }
+
+  // Increase the nesting level by 1;
+  void IncrementNestingLevel();
+
+  // Reduce the nesting level by 1;
+  void DecrementNestingLevel();
+
+  // Returns the type of the thread under watch.
+  HangWatcher::ThreadType thread_type() const { return thread_type_; }
 
  private:
   // The thread that creates the instance should be the class that updates
@@ -317,14 +607,23 @@ class BASE_EXPORT HangWatchState {
 
   // If the deadline fails to be updated before TimeTicks::Now() ever
   // reaches the value contained in it this constistutes a hang.
-  std::atomic<TimeTicks> deadline_{base::TimeTicks::Max()};
+  HangWatchDeadline deadline_;
 
-  const PlatformThreadId thread_id_;
+  // A unique ID of the thread under watch. Used for logging in crash reports
+  // only. Unsigned type is used as it provides a correct behavior for all
+  // platforms for positive thread ids. Any valid thread id should be positive.
+  uint64_t thread_id_;
+
+  // Number of active HangWatchScopeEnables on this thread.
+  int nesting_level_ = 0;
+
+  // The type of the thread under watch.
+  const HangWatcher::ThreadType thread_type_;
 
 #if DCHECK_IS_ON()
-  // Used to keep track of the current HangWatchScope and detect improper usage.
-  // Scopes should always be destructed in reverse order from the one they were
-  // constructed in. Example of improper use:
+  // Used to keep track of the current WatchHangsInScope and detect improper
+  // usage. Scopes should always be destructed in reverse order from the one
+  // they were constructed in. Example of improper use:
   //
   // {
   //   std::unique_ptr<Scope> scope = std::make_unique<Scope>(...);
@@ -332,7 +631,7 @@ class BASE_EXPORT HangWatchState {
   //   |scope| gets deallocated first, violating reverse destruction order.
   //   scope.reset();
   // }
-  HangWatchScope* current_hang_watch_scope_{nullptr};
+  WatchHangsInScope* current_watch_hangs_in_scope_{nullptr};
 #endif
 };
 

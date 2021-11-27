@@ -26,7 +26,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_DOM_RANGE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_DOM_RANGE_H_
 
+#include "base/dcheck_is_on.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/dom/abstract_range.h"
 #include "third_party/blink/renderer/core/dom/range_boundary_point.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
@@ -48,7 +50,7 @@ class Node;
 class NodeWithIndex;
 class Text;
 
-class CORE_EXPORT Range final : public ScriptWrappable {
+class CORE_EXPORT Range final : public AbstractRange {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -64,16 +66,16 @@ class CORE_EXPORT Range final : public ScriptWrappable {
 
   void Dispose();
 
-  Document& OwnerDocument() const {
+  Document& OwnerDocument() const override {
     DCHECK(owner_document_);
     return *owner_document_.Get();
   }
-  Node* startContainer() const { return &start_.Container(); }
-  unsigned startOffset() const { return start_.Offset(); }
-  Node* endContainer() const { return &end_.Container(); }
-  unsigned endOffset() const { return end_.Offset(); }
+  Node* startContainer() const override { return &start_.Container(); }
+  unsigned startOffset() const override { return start_.Offset(); }
+  Node* endContainer() const override { return &end_.Container(); }
+  unsigned endOffset() const override { return end_.Offset(); }
 
-  bool collapsed() const { return start_ == end_; }
+  bool collapsed() const override { return start_ == end_; }
   bool IsConnected() const;
 
   Node* commonAncestorContainer() const;
@@ -170,7 +172,8 @@ class CORE_EXPORT Range final : public ScriptWrappable {
 
   static Node* CheckNodeWOffset(Node*, unsigned offset, ExceptionState&);
 
-  void Trace(Visitor*) override;
+  bool IsStaticRange() const override { return false; }
+  void Trace(Visitor*) const override;
 
  private:
   void SetDocument(Document&);
@@ -203,6 +206,7 @@ class CORE_EXPORT Range final : public ScriptWrappable {
                                                 Node* common_root,
                                                 ExceptionState&);
   void UpdateSelectionIfAddedToSelection();
+  void ScheduleVisualUpdateIfInRegisteredHighlight();
   void RemoveFromSelectionIfInDifferentRoot(Document& old_document);
 
   Member<Document> owner_document_;  // Cannot be null.

@@ -18,6 +18,7 @@
 #include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
+#include "third_party/blink/renderer/platform/supplementable.h"
 
 namespace WTF {
 
@@ -28,25 +29,29 @@ class String;
 namespace blink {
 
 class ExceptionState;
-class LocalDOMWindow;
+class NavigatorBase;
 class ScriptState;
 class WakeLockManager;
 
 class MODULES_EXPORT WakeLock final : public ScriptWrappable,
+                                      public Supplement<NavigatorBase>,
                                       public ExecutionContextLifecycleObserver,
                                       public PageVisibilityObserver {
-  USING_GARBAGE_COLLECTED_MIXIN(WakeLock);
   DEFINE_WRAPPERTYPEINFO();
 
  public:
-  explicit WakeLock(LocalDOMWindow&);
-  explicit WakeLock(DedicatedWorkerGlobalScope&);
+  static const char kSupplementName[];
+
+  // Getter for navigator.wakelock
+  static WakeLock* wakeLock(NavigatorBase&);
+
+  explicit WakeLock(NavigatorBase&);
 
   ScriptPromise request(ScriptState*,
                         const WTF::String& type,
                         ExceptionState& exception_state);
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   // While this could be part of request() itself, having it as a separate
@@ -65,18 +70,13 @@ class MODULES_EXPORT WakeLock final : public ScriptWrappable,
   void PageVisibilityChanged() override;
 
   // Permission handling
-  void ObtainPermission(
-      WakeLockType,
-      base::OnceCallback<void(mojom::blink::PermissionStatus)> callback);
   mojom::blink::PermissionService* GetPermissionService();
 
-  HeapMojoRemote<mojom::blink::PermissionService,
-                 HeapMojoWrapperMode::kWithoutContextObserver>
-      permission_service_;
+  HeapMojoRemote<mojom::blink::PermissionService> permission_service_;
 
-  // https://w3c.github.io/wake-lock/#concepts-and-state-record
-  // Each platform wake lock (one per wake lock type) has an associated state
-  // record per responsible document [...] internal slots.
+  // https://w3c.github.io/screen-wake-lock/#dfn-activelocks
+  // An ordered map of wake lock types to a list of WakeLockSentinel objects
+  // associated with this Document.
   Member<WakeLockManager> managers_[kWakeLockTypeCount];
 
   FRIEND_TEST_ALL_PREFIXES(WakeLockSentinelTest, ContextDestruction);

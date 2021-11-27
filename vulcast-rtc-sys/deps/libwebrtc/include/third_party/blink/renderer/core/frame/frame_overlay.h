@@ -63,6 +63,7 @@ class CORE_EXPORT FrameOverlay : public GraphicsLayerClient,
   };
 
   FrameOverlay(LocalFrame*, std::unique_ptr<FrameOverlay::Delegate>);
+  ~FrameOverlay() override;
 
   void UpdatePrePaint();
 
@@ -83,19 +84,20 @@ class CORE_EXPORT FrameOverlay : public GraphicsLayerClient,
   // Services any animations that the overlay may be managing.
   void ServiceScriptedAnimations(base::TimeTicks monotonic_frame_begin_time);
 
-  // DisplayItemClient methods.
+  // DisplayItemClient.
   String DebugName() const final { return "FrameOverlay"; }
-  IntRect VisualRect() const override;
 
   // GraphicsLayerClient implementation. Not needed for CompositeAfterPaint.
   bool NeedsRepaint(const GraphicsLayer&) const override { return true; }
   IntRect ComputeInterestRect(const GraphicsLayer*,
                               const IntRect&) const override;
+  IntRect PaintableRegion(const GraphicsLayer*) const override;
   void PaintContents(const GraphicsLayer*,
                      GraphicsContext&,
                      GraphicsLayerPaintingPhase,
                      const IntRect& interest_rect) const override;
   void GraphicsLayersDidChange() override;
+  PaintArtifactCompositor* GetPaintArtifactCompositor() override;
   String DebugName(const GraphicsLayer*) const override;
 
   PropertyTreeState DefaultPropertyTreeState() const;
@@ -108,4 +110,4 @@ class CORE_EXPORT FrameOverlay : public GraphicsLayerClient,
 
 }  // namespace blink
 
-#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_PAGE_PAGE_OVERLAY_H_
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_FRAME_OVERLAY_H_

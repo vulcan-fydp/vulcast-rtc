@@ -45,13 +45,17 @@ class CORE_EXPORT ScrollbarThemeOverlay : public ScrollbarTheme {
       float old_position,
       float new_position) const override;
 
-  int ScrollbarThickness(ScrollbarControlSize) override;
-  int ScrollbarMargin() const override;
+  int ScrollbarThickness(float scale_from_dip,
+                         EScrollbarWidth scrollbar_width) override;
+  int ScrollbarMargin(float scale_from_dip,
+                      EScrollbarWidth scrollbar_width) const override;
   bool UsesOverlayScrollbars() const override;
   base::TimeDelta OverlayScrollbarFadeOutDelay() const override;
   base::TimeDelta OverlayScrollbarFadeOutDuration() const override;
 
   int ThumbLength(const Scrollbar&) override;
+  int ThumbThickness(float scale_from_dip,
+                     EScrollbarWidth scrollbar_width) const;
 
   bool NativeThemeHasButtons() override { return false; }
   bool HasThumb(const Scrollbar&) override;
@@ -60,8 +64,6 @@ class CORE_EXPORT ScrollbarThemeOverlay : public ScrollbarTheme {
   IntRect ForwardButtonRect(const Scrollbar&) override;
   IntRect TrackRect(const Scrollbar&) override;
   IntRect ThumbRect(const Scrollbar&) override;
-  int ThumbThickness(const Scrollbar&) override;
-  int ThumbThickness() { return thumb_thickness_; }
 
   void PaintThumb(GraphicsContext&, const Scrollbar&, const IntRect&) override;
 
@@ -74,14 +76,20 @@ class CORE_EXPORT ScrollbarThemeOverlay : public ScrollbarTheme {
  protected:
   FRIEND_TEST_ALL_PREFIXES(ScrollbarThemeOverlayTest, PaintInvalidation);
 
+  ScrollbarThemeOverlay(int thumb_thickness_default_dip,
+                        int scrollbar_margin_default_dip,
+                        int thumb_thickness_thin_dip,
+                        int scrollbar_margin_thin_dip);
+
   ScrollbarPart HitTest(const Scrollbar&, const IntPoint&) override;
-  ScrollbarThemeOverlay(int thumb_thickness, int scrollbar_margin);
 
  private:
-  int thumb_thickness_;
-  int scrollbar_margin_;
+  int thumb_thickness_default_dip_;
+  int scrollbar_margin_default_dip_;
+  int thumb_thickness_thin_dip_;
+  int scrollbar_margin_thin_dip_;
 };
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_SCROLL_SCROLLBAR_THEME_OVERLAY_H_

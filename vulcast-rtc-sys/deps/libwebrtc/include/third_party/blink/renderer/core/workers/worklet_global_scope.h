@@ -7,6 +7,7 @@
 
 #include <memory>
 #include "base/single_thread_task_runner.h"
+#include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/core/core_export.h"
@@ -36,7 +37,6 @@ class CORE_EXPORT WorkletGlobalScope
     : public WorkerOrWorkletGlobalScope,
       public ActiveScriptWrappable<WorkletGlobalScope> {
   DEFINE_WRAPPERTYPEINFO();
-  USING_GARBAGE_COLLECTED_MIXIN(WorkletGlobalScope);
 
  public:
   ~WorkletGlobalScope() override;
@@ -60,14 +60,20 @@ class CORE_EXPORT WorkletGlobalScope
   bool IsContextThread() const final;
   void AddConsoleMessageImpl(ConsoleMessage*, bool discard_duplicates) final;
   void AddInspectorIssue(mojom::blink::InspectorIssueInfoPtr) final;
+  void AddInspectorIssue(AuditsIssue) final;
   void ExceptionThrown(ErrorEvent*) final;
   CoreProbeSink* GetProbeSink() final;
   scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner(TaskType) final;
   FrameOrWorkerScheduler* GetScheduler() final;
+  bool CrossOriginIsolatedCapability() const final;
+  bool DirectSocketCapability() const final;
+  ukm::UkmRecorder* UkmRecorder() final;
 
   // WorkerOrWorkletGlobalScope
   void Dispose() override;
   WorkerThread* GetThread() const final;
+  const base::UnguessableToken& GetDevToolsToken() const override;
+  bool IsInitialized() const final { return true; }
 
   virtual LocalFrame* GetFrame() const;
 
@@ -101,7 +107,7 @@ class CORE_EXPORT WorkletGlobalScope
   // document.
   bool DocumentSecureContext() const { return document_secure_context_; }
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
   HttpsState GetHttpsState() const override { return https_state_; }
 
@@ -120,7 +126,18 @@ class CORE_EXPORT WorkletGlobalScope
                      WorkerReportingProxy&,
                      WorkerThread*);
 
-  BrowserInterfaceBrokerProxy& GetBrowserInterfaceBroker() override;
+  const BrowserInterfaceBrokerProxy& GetBrowserInterfaceBroker() const override;
+
+  // Returns the WorkletToken that uniquely identifies this worklet.
+  virtual WorkletToken GetWorkletToken() const = 0;
+
+  // Returns the ExecutionContextToken that uniquely identifies the parent
+  // context that created this worklet. Note that this will always be a
+  // LocalFrameToken.
+  absl::optional<ExecutionContextToken> GetParentExecutionContextToken()
+      const final {
+    return frame_token_;
+  }
 
  private:
   enum class ThreadType {
@@ -144,8 +161,6 @@ class CORE_EXPORT WorkletGlobalScope
 
   EventTarget* ErrorEventTarget() final { return nullptr; }
 
-  void BindContentSecurityPolicyToExecutionContext() override;
-
   // The |url_| and |user_agent_| are inherited from the parent Document.
   const KURL url_;
   const String user_agent_;
@@ -166,6 +181,22 @@ class CORE_EXPORT WorkletGlobalScope
   Member<LocalFrame> frame_;
   // |worker_thread_| is available only when |thread_type_| is kOffMainThread.
   WorkerThread* worker_thread_;
+
+  // The token identifying the LocalFrame that caused this scope to be created.
+  const LocalFrameToken frame_token_;
+
+  std::unique_ptr<ukm::UkmRecorder> ukm_recorder_;
+
+  // This is inherited at construction to make sure it is possible to used
+  // restricted API between the document and the worklet (e.g.
+  // SharedArrayBuffer passing via postMessage).
+  const bool parent_cross_origin_isolated_capability_;
+
+  // This is inherited at construction to ensure it's possible to use APIs
+  // like Direct Sockets if they're made available in Worklets.
+  //
+  // TODO(mkwst): We need a spec for this capability.
+  const bool parent_direct_socket_capability_;
 };
 
 template <>

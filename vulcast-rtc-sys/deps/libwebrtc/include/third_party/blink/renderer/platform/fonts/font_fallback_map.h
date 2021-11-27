@@ -19,18 +19,18 @@ namespace blink {
 
 class PLATFORM_EXPORT FontFallbackMap : public FontCacheClient,
                                         public FontSelectorClient {
-  USING_GARBAGE_COLLECTED_MIXIN(FontFallbackMap);
-
  public:
   explicit FontFallbackMap(FontSelector* font_selector)
       : font_selector_(font_selector) {}
 
   ~FontFallbackMap() override;
 
+  FontSelector* GetFontSelector() const { return font_selector_; }
+
   scoped_refptr<FontFallbackList> Get(const FontDescription& font_description);
   void Remove(const FontDescription& font_description);
 
-  void Trace(Visitor* visitor) override;
+  void Trace(Visitor* visitor) const override;
 
  private:
   // FontSelectorClient
@@ -51,4 +51,4 @@ class PLATFORM_EXPORT FontFallbackMap : public FontCacheClient,
 
 }  // namespace blink
 
-#endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_FONT_SELECTOR_H_
+#endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_FONT_FALLBACK_MAP_H_

@@ -41,37 +41,45 @@ extern "C" {
 /*!\brief Control functions
  *
  * The set of macros define the control functions of AOM interface
+ * The range for common control IDs is 230-255(max).
  */
 enum aom_com_control_id {
-  /*!\brief pass in an external frame into decoder to be used as reference frame
+  /*!\brief Codec control function to get a pointer to a reference frame
+   *
+   * av1_ref_frame_t* parameter
    */
-  AOM_SET_DBG_COLOR_REF_FRAME = 4, /**< set the reference frames to color for
-                                      each macroblock, int parameter */
-  AOM_SET_DBG_COLOR_MB_MODES =
-      5, /**< set which macro block modes to color, int parameter */
-  AOM_SET_DBG_COLOR_B_MODES =
-      6, /**< set which blocks modes to color, int parameter */
-  AOM_SET_DBG_DISPLAY_MV =
-      7, /**< set which motion vector modes to draw, int parameter */
+  AV1_GET_REFERENCE = 230,
 
-  /* TODO(jkoleszar): The encoder incorrectly reuses some of these values (5+)
-   * for its control ids. These should be migrated to something like the
-   * AOM_DECODER_CTRL_ID_START range next time we're ready to break the ABI.
+  /*!\brief Codec control function to write a frame into a reference buffer
+   *
+   * av1_ref_frame_t* parameter
    */
-  AV1_GET_REFERENCE = 128,  /**< get a pointer to a reference frame,
-                               av1_ref_frame_t* parameter */
-  AV1_SET_REFERENCE = 129,  /**< write a frame into a reference buffer,
-                               av1_ref_frame_t* parameter */
-  AV1_COPY_REFERENCE = 130, /**< get a copy of reference frame from the decoderm
-                               av1_ref_frame_t* parameter */
-  AOM_COMMON_CTRL_ID_MAX,
+  AV1_SET_REFERENCE = 231,
 
-  AV1_GET_NEW_FRAME_IMAGE =
-      192, /**< get a pointer to the new frame, aom_image_t* parameter */
-  AV1_COPY_NEW_FRAME_IMAGE = 193, /**< copy the new frame to an external buffer,
-                                     aom_image_t* parameter */
+  /*!\brief Codec control function to get a copy of reference frame from the
+   * decoder
+   *
+   * av1_ref_frame_t* parameter
+   */
+  AV1_COPY_REFERENCE = 232,
 
+  /*!\brief Codec control function to get a pointer to the new frame
+   *
+   * aom_image_t* parameter
+   */
+  AV1_GET_NEW_FRAME_IMAGE = 233,
+
+  /*!\brief Codec control function to copy the new frame to an external buffer
+   *
+   * aom_image_t* parameter
+   */
+  AV1_COPY_NEW_FRAME_IMAGE = 234,
+
+  /*!\brief Start point of control IDs for aom_dec_control_id.
+   * Any new common control IDs should be added above.
+   */
   AOM_DECODER_CTRL_ID_START = 256
+  // No common control IDs should be added after AOM_DECODER_CTRL_ID_START.
 };
 
 /*!\brief AV1 specific reference frame data struct
@@ -87,24 +95,25 @@ typedef struct av1_ref_frame {
 /*!\cond */
 /*!\brief aom decoder control function parameter type
  *
- * defines the data type for each of AOM decoder control function requires
+ * Defines the data type for each of AOM decoder control function requires.
+ *
+ * \note For each control ID "X", a macro-define of
+ * AOM_CTRL_X is provided. It is used at compile time to determine
+ * if the control ID is supported by the libaom library available,
+ * when the libaom version cannot be controlled.
  */
-AOM_CTRL_USE_TYPE(AOM_SET_DBG_COLOR_REF_FRAME, int)
-#define AOM_CTRL_AOM_SET_DBG_COLOR_REF_FRAME
-AOM_CTRL_USE_TYPE(AOM_SET_DBG_COLOR_MB_MODES, int)
-#define AOM_CTRL_AOM_SET_DBG_COLOR_MB_MODES
-AOM_CTRL_USE_TYPE(AOM_SET_DBG_COLOR_B_MODES, int)
-#define AOM_CTRL_AOM_SET_DBG_COLOR_B_MODES
-AOM_CTRL_USE_TYPE(AOM_SET_DBG_DISPLAY_MV, int)
-#define AOM_CTRL_AOM_SET_DBG_DISPLAY_MV
 AOM_CTRL_USE_TYPE(AV1_GET_REFERENCE, av1_ref_frame_t *)
 #define AOM_CTRL_AV1_GET_REFERENCE
+
 AOM_CTRL_USE_TYPE(AV1_SET_REFERENCE, av1_ref_frame_t *)
 #define AOM_CTRL_AV1_SET_REFERENCE
+
 AOM_CTRL_USE_TYPE(AV1_COPY_REFERENCE, av1_ref_frame_t *)
 #define AOM_CTRL_AV1_COPY_REFERENCE
+
 AOM_CTRL_USE_TYPE(AV1_GET_NEW_FRAME_IMAGE, aom_image_t *)
 #define AOM_CTRL_AV1_GET_NEW_FRAME_IMAGE
+
 AOM_CTRL_USE_TYPE(AV1_COPY_NEW_FRAME_IMAGE, aom_image_t *)
 #define AOM_CTRL_AV1_COPY_NEW_FRAME_IMAGE
 

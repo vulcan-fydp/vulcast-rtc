@@ -47,7 +47,7 @@ class MediaRemotingInterstitial final : public HTMLDivElement {
 
   HTMLVideoElement& GetVideoElement() const { return *video_element_; }
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   // Node override.
@@ -65,7 +65,7 @@ class MediaRemotingInterstitial final : public HTMLDivElement {
   };
   State state_ = HIDDEN;
 
-  TaskRunnerTimer<MediaRemotingInterstitial> toggle_interstitial_timer_;
+  HeapTaskRunnerTimer<MediaRemotingInterstitial> toggle_interstitial_timer_;
   Member<HTMLVideoElement> video_element_;
   Member<HTMLImageElement> background_image_;
   Member<HTMLDivElement> cast_icon_;

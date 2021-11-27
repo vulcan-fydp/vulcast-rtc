@@ -18,24 +18,23 @@
 namespace blink {
 
 class ScriptState;
-class QuicTransport;
+class WebTransport;
 
 class MODULES_EXPORT BidirectionalStream final : public ScriptWrappable,
                                                  public WebTransportStream,
                                                  public OutgoingStream::Client {
   DEFINE_WRAPPERTYPEINFO();
-  USING_GARBAGE_COLLECTED_MIXIN(BidirectionalStream);
 
  public:
   // BidirectionalStream doesn't have a JavaScript constructor. It is only
   // constructed from C++.
   explicit BidirectionalStream(ScriptState*,
-                               QuicTransport*,
+                               WebTransport*,
                                uint32_t stream_id,
                                mojo::ScopedDataPipeProducerHandle,
                                mojo::ScopedDataPipeConsumerHandle);
 
-  void Init();
+  void Init(ExceptionState&);
 
   // Implementation of bidirectional_stream.idl. As noted in the IDL file, these
   // properties are implemented on OutgoingStream and IncomingStream in the
@@ -69,16 +68,15 @@ class MODULES_EXPORT BidirectionalStream final : public ScriptWrappable,
   void SendFin() override;
   void OnOutgoingStreamAbort() override;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   void OnIncomingStreamAbort();
 
   const Member<OutgoingStream> outgoing_stream_;
   const Member<IncomingStream> incoming_stream_;
-  const Member<QuicTransport> quic_transport_;
+  const Member<WebTransport> web_transport_;
   const uint32_t stream_id_;
-  bool sent_fin_ = false;
 };
 
 }  // namespace blink

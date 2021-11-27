@@ -26,21 +26,18 @@ class MODULES_EXPORT FaceDetector final : public ShapeDetector {
   static FaceDetector* Create(ExecutionContext*, const FaceDetectorOptions*);
 
   FaceDetector(ExecutionContext*, const FaceDetectorOptions*);
-
-  void Trace(Visitor*) override;
-
- private:
   ~FaceDetector() override = default;
 
+  void Trace(Visitor*) const override;
+
+ private:
   ScriptPromise DoDetect(ScriptPromiseResolver*, SkBitmap) override;
   void OnDetectFaces(
       ScriptPromiseResolver*,
       Vector<shape_detection::mojom::blink::FaceDetectionResultPtr>);
   void OnFaceServiceConnectionError();
 
-  HeapMojoRemote<shape_detection::mojom::blink::FaceDetection,
-                 HeapMojoWrapperMode::kWithoutContextObserver>
-      face_service_;
+  HeapMojoRemote<shape_detection::mojom::blink::FaceDetection> face_service_;
 
   HeapHashSet<Member<ScriptPromiseResolver>> face_service_requests_;
 };

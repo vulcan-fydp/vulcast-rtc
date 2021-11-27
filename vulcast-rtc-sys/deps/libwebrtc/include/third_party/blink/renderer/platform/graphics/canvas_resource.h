@@ -2,9 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/logging.h"
+#include "base/check_op.h"
+#include "base/dcheck_is_on.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/weak_ptr.h"
+#include "base/notreached.h"
+#include "components/viz/common/resources/release_callback.h"
 #include "components/viz/common/resources/shared_bitmap.h"
 #include "gpu/command_buffer/client/gles2_interface.h"
 #include "gpu/command_buffer/common/mailbox.h"
@@ -12,7 +15,7 @@
 #include "gpu/ipc/common/mailbox.mojom-blink.h"
 #include "skia/buildflags.h"
 #include "third_party/blink/renderer/platform/geometry/int_size.h"
-#include "third_party/blink/renderer/platform/graphics/canvas_color_params.h"
+#include "third_party/blink/renderer/platform/graphics/canvas_resource_params.h"
 #include "third_party/blink/renderer/platform/graphics/web_graphics_context_3d_provider_wrapper.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/wtf/thread_safe_ref_counted.h"
@@ -39,7 +42,6 @@ class RasterInterface;
 
 namespace viz {
 
-class SingleReleaseCallback;
 struct TransferableResource;
 
 }  // namespace viz
@@ -113,7 +115,7 @@ class PLATFORM_EXPORT CanvasResource
   // Provides a TransferableResource representation of this resource to share it
   // with the compositor.
   bool PrepareTransferableResource(viz::TransferableResource*,
-                                   std::unique_ptr<viz::SingleReleaseCallback>*,
+                                   viz::ReleaseCallback*,
                                    MailboxSyncMode);
 
   // Issues a wait for this sync token on the context used by this resource for
@@ -140,9 +142,13 @@ class PLATFORM_EXPORT CanvasResource
   // should not be recycled for writing again but can be safely read from.
   virtual void NotifyResourceLost() = 0;
 
-  void SetFilterQuality(SkFilterQuality filter) { filter_quality_ = filter; }
+  void SetFilterQuality(cc::PaintFlags::FilterQuality filter) {
+    filter_quality_ = filter;
+  }
   // The filter quality to use when the resource is drawn by the compositor.
-  SkFilterQuality FilterQuality() const { return filter_quality_; }
+  cc::PaintFlags::FilterQuality FilterQuality() const {
+    return filter_quality_;
+  }
 
   SkImageInfo CreateSkImageInfo() const;
 
@@ -157,8 +163,8 @@ class PLATFORM_EXPORT CanvasResource
 
  protected:
   CanvasResource(base::WeakPtr<CanvasResourceProvider>,
-                 SkFilterQuality,
-                 const CanvasColorParams&);
+                 cc::PaintFlags::FilterQuality,
+                 const CanvasResourceParams&);
 
   // Called during resource destruction if the resource is destroyed on a thread
   // other than where it was created. This implies that no context associated
@@ -186,7 +192,7 @@ class PLATFORM_EXPORT CanvasResource
   gpu::raster::RasterInterface* RasterInterface() const;
   gpu::webgpu::WebGPUInterface* WebGPUInterface() const;
   GLenum GLFilter() const;
-  GrContext* GetGrContext() const;
+  GrDirectContext* GetGrContext() const;
   virtual base::WeakPtr<WebGraphicsContext3DProviderWrapper>
   ContextProviderWrapper() const {
     NOTREACHED();
@@ -197,7 +203,7 @@ class PLATFORM_EXPORT CanvasResource
       MailboxSyncMode);
   bool PrepareUnacceleratedTransferableResource(
       viz::TransferableResource* out_resource);
-  const CanvasColorParams& ColorParams() const { return color_params_; }
+  const CanvasResourceParams& ColorParams() const { return params_; }
   void OnDestroy();
   CanvasResourceProvider* Provider() { return provider_.get(); }
   base::WeakPtr<CanvasResourceProvider> WeakProvider() { return provider_; }
@@ -209,8 +215,9 @@ class PLATFORM_EXPORT CanvasResource
   // Sync token that was provided when resource was released
   gpu::SyncToken sync_token_for_release_;
   base::WeakPtr<CanvasResourceProvider> provider_;
-  SkFilterQuality filter_quality_;
-  CanvasColorParams color_params_;
+  // TODO(https://crbug.com/1157747): Merge |filter_quality_| into |params_|.
+  cc::PaintFlags::FilterQuality filter_quality_;
+  CanvasResourceParams params_;
 #if DCHECK_IS_ON()
   bool did_call_on_destroy_ = false;
 #endif
@@ -221,9 +228,9 @@ class PLATFORM_EXPORT CanvasResourceSharedBitmap final : public CanvasResource {
  public:
   static scoped_refptr<CanvasResourceSharedBitmap> Create(
       const IntSize&,
-      const CanvasColorParams&,
+      const CanvasResourceParams&,
       base::WeakPtr<CanvasResourceProvider>,
-      SkFilterQuality);
+      cc::PaintFlags::FilterQuality);
   ~CanvasResourceSharedBitmap() override;
   bool IsRecycleable() const final { return IsValid(); }
   bool IsAccelerated() const final { return false; }
@@ -244,9 +251,9 @@ class PLATFORM_EXPORT CanvasResourceSharedBitmap final : public CanvasResource {
   bool HasGpuMailbox() const override;
 
   CanvasResourceSharedBitmap(const IntSize&,
-                             const CanvasColorParams&,
+                             const CanvasResourceParams&,
                              base::WeakPtr<CanvasResourceProvider>,
-                             SkFilterQuality);
+                             cc::PaintFlags::FilterQuality);
 
   viz::SharedBitmapId shared_bitmap_id_;
   base::WritableSharedMemoryMapping shared_mapping_;
@@ -269,8 +276,8 @@ class PLATFORM_EXPORT CanvasResourceSharedImage : public CanvasResource {
 
  protected:
   CanvasResourceSharedImage(base::WeakPtr<CanvasResourceProvider>,
-                            SkFilterQuality,
-                            const CanvasColorParams&);
+                            cc::PaintFlags::FilterQuality,
+                            const CanvasResourceParams&);
 };
 
 // Resource type for Raster-based SharedImage
@@ -281,8 +288,8 @@ class PLATFORM_EXPORT CanvasResourceRasterSharedImage final
       const IntSize&,
       base::WeakPtr<WebGraphicsContext3DProviderWrapper>,
       base::WeakPtr<CanvasResourceProvider>,
-      SkFilterQuality,
-      const CanvasColorParams&,
+      cc::PaintFlags::FilterQuality,
+      const CanvasResourceParams&,
       bool is_origin_top_left,
       bool is_accelerated,
       uint32_t shared_image_usage_flags);
@@ -338,7 +345,7 @@ class PLATFORM_EXPORT CanvasResourceRasterSharedImage final
     gpu::Mailbox shared_image_mailbox;
     gpu::SyncToken sync_token;
     size_t bitmap_image_read_refs = 0u;
-    MailboxSyncMode mailbox_sync_mode = kVerifiedSyncToken;
+    MailboxSyncMode mailbox_sync_mode = kUnverifiedSyncToken;
     bool is_lost = false;
 
     // We need to create 2 representations if canvas is operating in single
@@ -368,8 +375,8 @@ class PLATFORM_EXPORT CanvasResourceRasterSharedImage final
       const IntSize&,
       base::WeakPtr<WebGraphicsContext3DProviderWrapper>,
       base::WeakPtr<CanvasResourceProvider>,
-      SkFilterQuality,
-      const CanvasColorParams&,
+      cc::PaintFlags::FilterQuality,
+      const CanvasResourceParams&,
       bool is_origin_top_left,
       bool is_accelerated,
       uint32_t shared_image_usage_flags);
@@ -418,19 +425,19 @@ class PLATFORM_EXPORT CanvasResourceRasterSharedImage final
 };
 
 #if BUILDFLAG(SKIA_USE_DAWN)
-// Resource type for WebGPU SharedImage
-class PLATFORM_EXPORT CanvasResourceWebGPUSharedImage final
+// Resource type for SharedImage that uses Skia and Dawn backend
+class PLATFORM_EXPORT CanvasResourceSkiaDawnSharedImage final
     : public CanvasResourceSharedImage {
  public:
-  static scoped_refptr<CanvasResourceWebGPUSharedImage> Create(
+  static scoped_refptr<CanvasResourceSkiaDawnSharedImage> Create(
       const IntSize&,
       base::WeakPtr<WebGraphicsContext3DProviderWrapper>,
       base::WeakPtr<CanvasResourceProvider>,
-      SkFilterQuality,
-      const CanvasColorParams&,
+      cc::PaintFlags::FilterQuality,
+      const CanvasResourceParams&,
       bool is_origin_top_left,
       uint32_t shared_image_usage_flags);
-  ~CanvasResourceWebGPUSharedImage() override;
+  ~CanvasResourceSkiaDawnSharedImage() override;
 
   bool IsRecycleable() const final { return true; }
   bool IsAccelerated() const final { return true; }
@@ -477,12 +484,12 @@ class PLATFORM_EXPORT CanvasResourceWebGPUSharedImage final
     GLuint id;
     GLuint generation;
     size_t bitmap_image_read_refs = 0u;
-    MailboxSyncMode mailbox_sync_mode = kVerifiedSyncToken;
+    MailboxSyncMode mailbox_sync_mode = kUnverifiedSyncToken;
     bool is_lost = false;
   };
 
   static void OnBitmapImageDestroyed(
-      scoped_refptr<CanvasResourceWebGPUSharedImage> resource,
+      scoped_refptr<CanvasResourceSkiaDawnSharedImage> resource,
       bool has_read_ref_on_texture,
       const gpu::SyncToken& sync_token,
       bool is_lost);
@@ -495,12 +502,12 @@ class PLATFORM_EXPORT CanvasResourceWebGPUSharedImage final
   const gpu::SyncToken GetSyncToken() override;
   bool IsOverlayCandidate() const final { return false; }
 
-  CanvasResourceWebGPUSharedImage(
+  CanvasResourceSkiaDawnSharedImage(
       const IntSize&,
       base::WeakPtr<WebGraphicsContext3DProviderWrapper>,
       base::WeakPtr<CanvasResourceProvider>,
-      SkFilterQuality,
-      const CanvasColorParams&,
+      cc::PaintFlags::FilterQuality,
+      const CanvasResourceParams&,
       bool is_origin_top_left,
       uint32_t shared_image_usage_flags);
 
@@ -549,17 +556,24 @@ class PLATFORM_EXPORT CanvasResourceWebGPUSharedImage final
 
 // Resource type for a given opaque external resource described on construction
 // via a Mailbox; this CanvasResource IsAccelerated() by definition.
+// This resource can also encapsulate an external mailbox, synctoken and release
+// callback, exported from WebGL. This CanvasResource should only be used with
+// context that support GL.
 class PLATFORM_EXPORT ExternalCanvasResource final : public CanvasResource {
  public:
   static scoped_refptr<ExternalCanvasResource> Create(
-      const gpu::Mailbox&,
+      const gpu::Mailbox& mailbox,
+      viz::ReleaseCallback release_callback,
+      gpu::SyncToken sync_token,
       const IntSize&,
       GLenum texture_target,
-      const CanvasColorParams&,
+      const CanvasResourceParams&,
       base::WeakPtr<WebGraphicsContext3DProviderWrapper>,
       base::WeakPtr<CanvasResourceProvider>,
-      SkFilterQuality,
-      bool is_origin_top_left);
+      cc::PaintFlags::FilterQuality,
+      bool is_origin_top_left,
+      bool is_overlay_candidate);
+
   ~ExternalCanvasResource() override;
   bool IsRecycleable() const final { return IsValid(); }
   bool IsAccelerated() const final { return true; }
@@ -571,10 +585,7 @@ class PLATFORM_EXPORT ExternalCanvasResource final : public CanvasResource {
   void Abandon() final;
   IntSize Size() const final { return size_; }
   void TakeSkImage(sk_sp<SkImage> image) final;
-  void NotifyResourceLost() override {
-    // Used for single buffering mode which doesn't need to care about sync
-    // token synchronization.
-  }
+  void NotifyResourceLost() override { resource_is_lost_ = true; }
 
   scoped_refptr<StaticBitmapImage> Bitmap() override;
   const gpu::Mailbox& GetOrCreateGpuMailbox(MailboxSyncMode) override;
@@ -582,41 +593,46 @@ class PLATFORM_EXPORT ExternalCanvasResource final : public CanvasResource {
  private:
   void TearDown() override;
   GLenum TextureTarget() const final { return texture_target_; }
-  bool IsOverlayCandidate() const final { return true; }
+  bool IsOverlayCandidate() const final { return is_overlay_candidate_; }
   bool HasGpuMailbox() const override;
   const gpu::SyncToken GetSyncToken() override;
   base::WeakPtr<WebGraphicsContext3DProviderWrapper> ContextProviderWrapper()
       const override;
 
-  ExternalCanvasResource(const gpu::Mailbox&,
+  ExternalCanvasResource(const gpu::Mailbox& mailbox,
+                         viz::ReleaseCallback out_callback,
+                         gpu::SyncToken sync_token,
                          const IntSize&,
                          GLenum texture_target,
-                         const CanvasColorParams&,
+                         const CanvasResourceParams&,
                          base::WeakPtr<WebGraphicsContext3DProviderWrapper>,
                          base::WeakPtr<CanvasResourceProvider>,
-                         SkFilterQuality,
-                         bool is_origin_top_left);
+                         cc::PaintFlags::FilterQuality,
+                         bool is_origin_top_left,
+                         bool is_overlay_candidate);
 
   const base::WeakPtr<WebGraphicsContext3DProviderWrapper>
       context_provider_wrapper_;
   const IntSize size_;
   const gpu::Mailbox mailbox_;
   const GLenum texture_target_;
-  const bool is_origin_top_left_;
-
+  viz::ReleaseCallback release_callback_;
   gpu::SyncToken sync_token_;
 
+  const bool is_origin_top_left_;
   bool is_origin_clean_ = true;
+  bool resource_is_lost_ = false;
+  const bool is_overlay_candidate_;
 };
 
 class PLATFORM_EXPORT CanvasResourceSwapChain final : public CanvasResource {
  public:
   static scoped_refptr<CanvasResourceSwapChain> Create(
       const IntSize&,
-      const CanvasColorParams&,
+      const CanvasResourceParams&,
       base::WeakPtr<WebGraphicsContext3DProviderWrapper>,
       base::WeakPtr<CanvasResourceProvider>,
-      SkFilterQuality);
+      cc::PaintFlags::FilterQuality);
   ~CanvasResourceSwapChain() override;
   bool IsRecycleable() const final { return IsValid(); }
   bool IsAccelerated() const final { return true; }
@@ -636,9 +652,9 @@ class PLATFORM_EXPORT CanvasResourceSwapChain final : public CanvasResource {
   scoped_refptr<StaticBitmapImage> Bitmap() override;
 
   GLenum TextureTarget() const final { return GL_TEXTURE_2D; }
-  GLuint GetBackingTextureHandleForOverwrite() {
-    return back_buffer_texture_id_;
-  }
+
+  GLuint GetBackBufferTextureId() const { return back_buffer_texture_id_; }
+  const gpu::Mailbox& GetBackBufferMailbox() { return back_buffer_mailbox_; }
 
   void PresentSwapChain();
   const gpu::Mailbox& GetOrCreateGpuMailbox(MailboxSyncMode) override;
@@ -652,19 +668,19 @@ class PLATFORM_EXPORT CanvasResourceSwapChain final : public CanvasResource {
       const override;
 
   CanvasResourceSwapChain(const IntSize&,
-                          const CanvasColorParams&,
+                          const CanvasResourceParams&,
                           base::WeakPtr<WebGraphicsContext3DProviderWrapper>,
                           base::WeakPtr<CanvasResourceProvider>,
-                          SkFilterQuality);
+                          cc::PaintFlags::FilterQuality);
 
   const base::WeakPtr<WebGraphicsContext3DProviderWrapper>
       context_provider_wrapper_;
   const IntSize size_;
   gpu::Mailbox front_buffer_mailbox_;
   gpu::Mailbox back_buffer_mailbox_;
-  GLuint front_buffer_texture_id_ = 0u;
   GLuint back_buffer_texture_id_ = 0u;
   gpu::SyncToken sync_token_;
+  const bool use_oop_rasterization_;
 
   bool is_origin_clean_ = true;
 };

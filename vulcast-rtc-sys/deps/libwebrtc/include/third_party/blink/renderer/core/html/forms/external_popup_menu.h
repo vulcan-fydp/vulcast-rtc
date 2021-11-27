@@ -69,7 +69,7 @@ class CORE_EXPORT ExternalPopupMenu final
   static int ToPopupMenuItemIndex(int index, HTMLSelectElement&);
   static int ToExternalPopupMenuItemIndex(int index, HTMLSelectElement&);
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   // PopupMenu methods:
@@ -90,12 +90,9 @@ class CORE_EXPORT ExternalPopupMenu final
   Member<HTMLSelectElement> owner_element_;
   Member<LocalFrame> local_frame_;
   std::unique_ptr<WebMouseEvent> synthetic_event_;
-  TaskRunnerTimer<ExternalPopupMenu> dispatch_event_timer_;
+  HeapTaskRunnerTimer<ExternalPopupMenu> dispatch_event_timer_;
   // The actual implementor of the show menu.
-  HeapMojoReceiver<mojom::blink::PopupMenuClient,
-                   ExternalPopupMenu,
-                   HeapMojoWrapperMode::kWithoutContextObserver>
-      receiver_;
+  HeapMojoReceiver<mojom::blink::PopupMenuClient, ExternalPopupMenu> receiver_;
   bool needs_update_ = false;
 };
 

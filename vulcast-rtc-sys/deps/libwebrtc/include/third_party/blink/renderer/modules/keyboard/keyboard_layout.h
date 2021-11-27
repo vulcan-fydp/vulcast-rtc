@@ -21,15 +21,13 @@ class ScriptPromiseResolver;
 
 class KeyboardLayout final : public GarbageCollected<KeyboardLayout>,
                              public ExecutionContextClient {
-  USING_GARBAGE_COLLECTED_MIXIN(KeyboardLayout);
-
  public:
   explicit KeyboardLayout(ExecutionContext*);
   virtual ~KeyboardLayout() = default;
 
   ScriptPromise GetKeyboardLayoutMap(ScriptState*, ExceptionState&);
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   // Returns true if the local frame is attached to the renderer.
@@ -46,9 +44,7 @@ class KeyboardLayout final : public GarbageCollected<KeyboardLayout>,
 
   Member<ScriptPromiseResolver> script_promise_resolver_;
 
-  HeapMojoRemote<mojom::blink::KeyboardLockService,
-                 HeapMojoWrapperMode::kWithoutContextObserver>
-      service_;
+  HeapMojoRemote<mojom::blink::KeyboardLockService> service_;
 
   DISALLOW_COPY_AND_ASSIGN(KeyboardLayout);
 };

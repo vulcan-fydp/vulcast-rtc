@@ -20,7 +20,7 @@
 #ifndef __GDK_MEMORY_TEXTURE__H__
 #define __GDK_MEMORY_TEXTURE__H__
 
-#if !defined (__GDK_H_INSIDE__) && !defined (GDK_COMPILATION)
+#if !defined (__GDK_H_INSIDE__) && !defined (GTK_COMPILATION)
 #error "Only <gdk/gdk.h> can be included directly."
 #endif
 
@@ -33,6 +33,8 @@ G_BEGIN_DECLS
  * @GDK_MEMORY_B8G8R8A8_PREMULTIPLIED: 4 bytes; for blue, green, red, alpha.
  *     The color values are premultiplied with the alpha value.
  * @GDK_MEMORY_A8R8G8B8_PREMULTIPLIED: 4 bytes; for alpha, red, green, blue.
+ *     The color values are premultiplied with the alpha value.
+ * @GDK_MEMORY_R8G8B8A8_PREMULTIPLIED: 4 bytes; for red, green, blue, alpha
  *     The color values are premultiplied with the alpha value.
  * @GDK_MEMORY_B8G8R8A8: 4 bytes; for blue, green, red, alpha.
  * @GDK_MEMORY_A8R8G8B8: 4 bytes; for alpha, red, green, blue.
@@ -58,6 +60,7 @@ G_BEGIN_DECLS
 typedef enum {
   GDK_MEMORY_B8G8R8A8_PREMULTIPLIED,
   GDK_MEMORY_A8R8G8B8_PREMULTIPLIED,
+  GDK_MEMORY_R8G8B8A8_PREMULTIPLIED,
   GDK_MEMORY_B8G8R8A8,
   GDK_MEMORY_A8R8G8B8,
   GDK_MEMORY_R8G8B8A8,
@@ -91,6 +94,11 @@ typedef enum {
 #define GDK_MEMORY_TEXTURE(obj)             (G_TYPE_CHECK_INSTANCE_CAST ((obj), GDK_TYPE_MEMORY_TEXTURE, GdkMemoryTexture))
 #define GDK_IS_MEMORY_TEXTURE(obj)          (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GDK_TYPE_MEMORY_TEXTURE))
 
+/**
+ * GdkMemoryTexture:
+ *
+ * A #GdkTexture representing image data in memory.
+ */
 typedef struct _GdkMemoryTexture        GdkMemoryTexture;
 typedef struct _GdkMemoryTextureClass   GdkMemoryTextureClass;
 

@@ -5,7 +5,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_PAINT_SCOPED_PAINT_CHUNK_PROPERTIES_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_PAINT_SCOPED_PAINT_CHUNK_PROPERTIES_H_
 
-#include "base/macros.h"
 #include "third_party/blink/renderer/platform/graphics/paint/display_item.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_chunk.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_controller.h"
@@ -20,7 +19,7 @@ class ScopedPaintChunkProperties {
  public:
   // Use new PropertyTreeState for the scope.
   ScopedPaintChunkProperties(PaintController& paint_controller,
-                             const PropertyTreeState& properties,
+                             const PropertyTreeStateOrAlias& properties,
                              const DisplayItemClient& client,
                              DisplayItem::Type type)
       : paint_controller_(paint_controller),
@@ -31,7 +30,7 @@ class ScopedPaintChunkProperties {
 
   // Use new transform state, and keep the current other properties.
   ScopedPaintChunkProperties(PaintController& paint_controller,
-                             const TransformPaintPropertyNode& transform,
+                             const TransformPaintPropertyNodeOrAlias& transform,
                              const DisplayItemClient& client,
                              DisplayItem::Type type)
       : ScopedPaintChunkProperties(
@@ -42,7 +41,7 @@ class ScopedPaintChunkProperties {
 
   // Use new clip state, and keep the current other properties.
   ScopedPaintChunkProperties(PaintController& paint_controller,
-                             const ClipPaintPropertyNode& clip,
+                             const ClipPaintPropertyNodeOrAlias& clip,
                              const DisplayItemClient& client,
                              DisplayItem::Type type)
       : ScopedPaintChunkProperties(
@@ -53,7 +52,7 @@ class ScopedPaintChunkProperties {
 
   // Use new effect state, and keep the current other properties.
   ScopedPaintChunkProperties(PaintController& paint_controller,
-                             const EffectPaintPropertyNode& effect,
+                             const EffectPaintPropertyNodeOrAlias& effect,
                              const DisplayItemClient& client,
                              DisplayItem::Type type)
       : ScopedPaintChunkProperties(
@@ -61,6 +60,10 @@ class ScopedPaintChunkProperties {
             GetPaintChunkProperties(effect, paint_controller),
             client,
             type) {}
+
+  ScopedPaintChunkProperties(const ScopedPaintChunkProperties&) = delete;
+  ScopedPaintChunkProperties& operator=(const ScopedPaintChunkProperties&) =
+      delete;
 
   ~ScopedPaintChunkProperties() {
     // We should not return to the previous id, because that may cause a new
@@ -73,37 +76,35 @@ class ScopedPaintChunkProperties {
   }
 
  private:
-  static PropertyTreeState GetPaintChunkProperties(
-      const TransformPaintPropertyNode& transform,
+  static PropertyTreeStateOrAlias GetPaintChunkProperties(
+      const TransformPaintPropertyNodeOrAlias& transform,
       PaintController& paint_controller) {
-    PropertyTreeState properties(
+    PropertyTreeStateOrAlias properties(
         paint_controller.CurrentPaintChunkProperties());
     properties.SetTransform(transform);
     return properties;
   }
 
-  static PropertyTreeState GetPaintChunkProperties(
-      const ClipPaintPropertyNode& clip,
+  static PropertyTreeStateOrAlias GetPaintChunkProperties(
+      const ClipPaintPropertyNodeOrAlias& clip,
       PaintController& paint_controller) {
-    PropertyTreeState properties(
+    PropertyTreeStateOrAlias properties(
         paint_controller.CurrentPaintChunkProperties());
     properties.SetClip(clip);
     return properties;
   }
 
-  static PropertyTreeState GetPaintChunkProperties(
-      const EffectPaintPropertyNode& effect,
+  static PropertyTreeStateOrAlias GetPaintChunkProperties(
+      const EffectPaintPropertyNodeOrAlias& effect,
       PaintController& paint_controller) {
-    PropertyTreeState properties(
+    PropertyTreeStateOrAlias properties(
         paint_controller.CurrentPaintChunkProperties());
     properties.SetEffect(effect);
     return properties;
   }
 
   PaintController& paint_controller_;
-  PropertyTreeState previous_properties_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedPaintChunkProperties);
+  PropertyTreeStateOrAlias previous_properties_;
 };
 
 }  // namespace blink

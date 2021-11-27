@@ -31,8 +31,6 @@ class MODULES_EXPORT HTMLMediaElementEncryptedMedia final
     : public GarbageCollected<HTMLMediaElementEncryptedMedia>,
       public Supplement<HTMLMediaElement>,
       public WebMediaPlayerEncryptedMediaClient {
-  USING_GARBAGE_COLLECTED_MIXIN(HTMLMediaElementEncryptedMedia);
-
  public:
   static const char kSupplementName[];
 
@@ -57,7 +55,7 @@ class MODULES_EXPORT HTMLMediaElementEncryptedMedia final
   HTMLMediaElementEncryptedMedia(HTMLMediaElement&);
   ~HTMLMediaElementEncryptedMedia();
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   friend class SetMediaKeysHandler;
@@ -66,8 +64,6 @@ class MODULES_EXPORT HTMLMediaElementEncryptedMedia final
   bool SetAttributeEventListener(const AtomicString& event_type,
                                  EventListener*);
   EventListener* GetAttributeEventListener(const AtomicString& event_type);
-
-  Member<HTMLMediaElement> media_element_;
 
   // Internal values specified by the EME spec:
   // http://w3c.github.io/encrypted-media/#idl-def-HTMLMediaElement
@@ -82,4 +78,4 @@ class MODULES_EXPORT HTMLMediaElementEncryptedMedia final
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_MODULES_ENCRYPTEDMEDIA_HTML_MEDIA_ELEMENT_ENCRYPTED_MEDIA_H_

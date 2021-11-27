@@ -6,12 +6,14 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_CSS_PROPERTIES_COMPUTED_STYLE_UTILS_H_
 
 #include "cc/input/scroll_snap_data.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/css/css_border_image_slice_value.h"
 #include "third_party/blink/renderer/core/css/css_function_value.h"
 #include "third_party/blink/renderer/core/css/css_identifier_value.h"
 #include "third_party/blink/renderer/core/css/css_value_list.h"
 #include "third_party/blink/renderer/core/css/css_value_pair.h"
 #include "third_party/blink/renderer/core/css/zoom_adjusted_pixel_value.h"
+#include "third_party/blink/renderer/core/layout/counter_node.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/style/computed_style_constants.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -24,6 +26,8 @@ class CSSValue;
 class ComputedStyle;
 class StyleColor;
 class StylePropertyShorthand;
+
+enum class CSSValuePhase { kComputedValue, kUsedValue };
 
 class CORE_EXPORT ComputedStyleUtils {
   STATIC_ONLY(ComputedStyleUtils);
@@ -38,7 +42,8 @@ class CORE_EXPORT ComputedStyleUtils {
   }
 
   static CSSValue* CurrentColorOrValidColor(const ComputedStyle&,
-                                            const StyleColor&);
+                                            const StyleColor&,
+                                            CSSValuePhase);
   static const blink::Color BorderSideColor(const ComputedStyle&,
                                             const StyleColor&,
                                             EBorderStyle,
@@ -181,22 +186,25 @@ class CORE_EXPORT ComputedStyleUtils {
   static CSSValue* ValueForTransitionProperty(const CSSTransitionData*);
   static CSSValue* ValueForContentData(const ComputedStyle&,
                                        bool allow_visited_style);
+
   static CSSValue* ValueForCounterDirectives(const ComputedStyle&,
-                                             bool is_increment);
+                                             CounterNode::Type type);
   static CSSValue* ValueForShape(const ComputedStyle&,
                                  bool allow_visited_style,
                                  ShapeValue*);
   static CSSValueList* ValueForBorderRadiusShorthand(const ComputedStyle&);
   static CSSValue* StrokeDashArrayToCSSValueList(const SVGDashArray&,
                                                  const ComputedStyle&);
-  static CSSValue* AdjustSVGPaintForCurrentColor(const SVGPaint&, const Color&);
+  static CSSValue* ValueForSVGPaint(const SVGPaint&, const ComputedStyle&);
   static CSSValue* ValueForSVGResource(const StyleSVGResource*);
   static CSSValue* ValueForShadowData(const ShadowData&,
                                       const ComputedStyle&,
-                                      bool use_spread);
+                                      bool use_spread,
+                                      CSSValuePhase);
   static CSSValue* ValueForShadowList(const ShadowList*,
                                       const ComputedStyle&,
-                                      bool use_spread);
+                                      bool use_spread,
+                                      CSSValuePhase);
   static CSSValue* ValueForFilter(const ComputedStyle&,
                                   const FilterOperations&);
   static CSSValue* ValueForScrollSnapType(const cc::ScrollSnapType&,
@@ -236,9 +244,18 @@ class CORE_EXPORT ComputedStyleUtils {
   static CSSValue* ValuesForFontVariantProperty(const ComputedStyle&,
                                                 const LayoutObject*,
                                                 bool allow_visited_style);
+  static CSSValueList* ValuesForContainerShorthand(const ComputedStyle&,
+                                                   const LayoutObject*,
+                                                   bool allow_visited_style);
   static CSSValue* ScrollCustomizationFlagsToCSSValue(
       scroll_customization::ScrollDirection);
-  static CSSValue* ValueForGapLength(const GapLength&, const ComputedStyle&);
+  static CSSValue* ValueForGapLength(const absl::optional<Length>&,
+                                     const ComputedStyle&);
+  static CSSValue* ValueForStyleName(const StyleName&);
+  static CSSValue* ValueForStyleNameOrKeyword(const StyleNameOrKeyword&);
+  static const CSSValue* ValueForStyleAutoColor(const ComputedStyle&,
+                                                const StyleAutoColor&,
+                                                CSSValuePhase);
   static std::unique_ptr<CrossThreadStyleValue>
   CrossThreadStyleValueFromCSSStyleValue(CSSStyleValue* style_value);
 

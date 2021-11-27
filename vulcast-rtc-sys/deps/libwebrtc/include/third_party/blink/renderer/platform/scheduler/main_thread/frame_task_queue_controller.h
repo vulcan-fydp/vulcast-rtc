@@ -9,7 +9,6 @@
 #include <utility>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_task_queue.h"
@@ -18,6 +17,7 @@
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
+#include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 
 namespace base {
 namespace sequence_manager {
@@ -52,19 +52,20 @@ class PLATFORM_EXPORT FrameTaskQueueController {
   class Delegate {
    public:
     Delegate() = default;
+    Delegate(const Delegate&) = delete;
+    Delegate& operator=(const Delegate&) = delete;
     virtual ~Delegate() = default;
 
     virtual void OnTaskQueueCreated(
         MainThreadTaskQueue*,
         base::sequence_manager::TaskQueue::QueueEnabledVoter*) = 0;
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(Delegate);
   };
 
   FrameTaskQueueController(MainThreadSchedulerImpl*,
                            FrameSchedulerImpl*,
                            Delegate*);
+  FrameTaskQueueController(const FrameTaskQueueController&) = delete;
+  FrameTaskQueueController& operator=(const FrameTaskQueueController&) = delete;
   ~FrameTaskQueueController();
 
   // Return the task queue associated with the given queue traits,
@@ -95,7 +96,7 @@ class PLATFORM_EXPORT FrameTaskQueueController {
   bool RemoveResourceLoadingTaskQueue(
       const scoped_refptr<MainThreadTaskQueue>&);
 
-  void AsValueInto(base::trace_event::TracedValue* state) const;
+  void WriteIntoTrace(perfetto::TracedValue context) const;
 
  private:
   friend class FrameTaskQueueControllerTest;
@@ -136,8 +137,6 @@ class PLATFORM_EXPORT FrameTaskQueueController {
   // The list of all task queue and voter pairs for all QueueTypeInternal queue
   // types.
   Vector<TaskQueueAndEnabledVoterPair> all_task_queues_and_voters_;
-
-  DISALLOW_COPY_AND_ASSIGN(FrameTaskQueueController);
 };
 
 }  // namespace scheduler

@@ -56,7 +56,7 @@ class DocumentTiming final {
   }
   base::TimeTicks DomComplete() const { return dom_complete_; }
 
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
  private:
   LocalFrame* GetFrame() const;
@@ -73,4 +73,4 @@ class DocumentTiming final {
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_DOM_DOCUMENT_TIMING_H_

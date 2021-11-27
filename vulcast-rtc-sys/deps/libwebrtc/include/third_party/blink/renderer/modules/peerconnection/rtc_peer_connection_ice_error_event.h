@@ -17,7 +17,7 @@ class MODULES_EXPORT RTCPeerConnectionIceErrorEvent final : public Event {
 
  public:
   RTCPeerConnectionIceErrorEvent(const String& address,
-                                 base::Optional<uint16_t> port,
+                                 absl::optional<uint16_t> port,
                                  const String& host_candidate,
                                  const String& url,
                                  uint16_t error_code,
@@ -28,7 +28,7 @@ class MODULES_EXPORT RTCPeerConnectionIceErrorEvent final : public Event {
   ~RTCPeerConnectionIceErrorEvent() override;
 
   static RTCPeerConnectionIceErrorEvent* Create(const String& address,
-                                                base::Optional<uint16_t> port,
+                                                absl::optional<uint16_t> port,
                                                 const String& host_candidate,
                                                 const String& url,
                                                 int error_code,
@@ -39,18 +39,18 @@ class MODULES_EXPORT RTCPeerConnectionIceErrorEvent final : public Event {
       const RTCPeerConnectionIceErrorEventInit*);
 
   String address() const;
-  base::Optional<uint16_t> port() const;
+  absl::optional<uint16_t> port() const;
   String hostCandidate() const;
   String url() const;
   uint16_t errorCode() const;
   String errorText() const;
   const AtomicString& InterfaceName() const override;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   String address_;
-  base::Optional<uint16_t> port_;
+  absl::optional<uint16_t> port_;
   String host_candidate_;
   String url_;
   uint16_t error_code_;

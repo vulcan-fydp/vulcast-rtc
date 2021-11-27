@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_NG_NG_BLOCK_NODE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_NG_NG_BLOCK_NODE_H_
 
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/geometry/physical_offset.h"
 #include "third_party/blink/renderer/core/layout/ng/ng_layout_input_node.h"
@@ -18,16 +19,17 @@ class NGBlockBreakToken;
 class NGBoxFragmentBuilder;
 class NGConstraintSpace;
 class NGEarlyBreak;
+class NGFragmentItems;
 class NGLayoutResult;
 class NGPhysicalBoxFragment;
-class NGPhysicalContainerFragment;
+class NGPhysicalFragment;
 struct NGBoxStrut;
 struct NGLayoutAlgorithmParams;
 
 enum class MathScriptType;
 
 // Represents a node to be laid out.
-class CORE_EXPORT NGBlockNode final : public NGLayoutInputNode {
+class CORE_EXPORT NGBlockNode : public NGLayoutInputNode {
   friend NGLayoutInputNode;
  public:
   explicit NGBlockNode(LayoutBox* box) : NGLayoutInputNode(box, kBlock) {}
@@ -37,7 +39,7 @@ class CORE_EXPORT NGBlockNode final : public NGLayoutInputNode {
   scoped_refptr<const NGLayoutResult> Layout(
       const NGConstraintSpace& constraint_space,
       const NGBlockBreakToken* break_token = nullptr,
-      const NGEarlyBreak* = nullptr);
+      const NGEarlyBreak* = nullptr) const;
 
   // This method is just for use within the |NGSimplifiedLayoutAlgorithm|.
   //
@@ -45,7 +47,7 @@ class CORE_EXPORT NGBlockNode final : public NGLayoutInputNode {
   // space used to generate the |NGLayoutResult|.
   // Otherwise it will simply return the previous layout result generated.
   scoped_refptr<const NGLayoutResult> SimplifiedLayout(
-      const NGPhysicalFragment& previous_fragment);
+      const NGPhysicalFragment& previous_fragment) const;
 
   // This method is just for use within the |NGOutOfFlowLayoutPart|.
   //
@@ -82,16 +84,27 @@ class CORE_EXPORT NGBlockNode final : public NGLayoutInputNode {
   // The constraint space is also used to perform layout when this block's
   // writing mode is orthogonal to its parent's, in which case the constraint
   // space is not optional.
-  MinMaxSizesResult ComputeMinMaxSizes(WritingMode container_writing_mode,
-                                       const MinMaxSizesInput&,
-                                       const NGConstraintSpace* = nullptr);
+  MinMaxSizesResult ComputeMinMaxSizes(
+      WritingMode container_writing_mode,
+      const MinMaxSizesType,
+      const NGConstraintSpace&,
+      const MinMaxSizesFloatInput float_input = MinMaxSizesFloatInput()) const;
 
-  MinMaxSizes ComputeMinMaxSizesFromLegacy(const MinMaxSizesInput&) const;
+  MinMaxSizes ComputeMinMaxSizesFromLegacy(const MinMaxSizesType,
+                                           const NGConstraintSpace&) const;
 
   NGLayoutInputNode FirstChild() const;
 
   NGBlockNode GetRenderedLegend() const;
   NGBlockNode GetFieldsetContent() const;
+
+  bool IsNGTableCell() const {
+    return box_->IsTableCell() && !box_->IsTableCellLegacy();
+  }
+
+  bool IsContainingBlockNGGrid() const {
+    return box_->ContainingBlock()->IsLayoutNGGrid();
+  }
 
   // Return true if this block node establishes an inline formatting context.
   // This will only be the case if there is actual inline content. Empty nodes
@@ -106,6 +119,24 @@ class CORE_EXPORT NGBlockNode final : public NGLayoutInputNode {
 
   // Returns the aspect ratio of a replaced element.
   LogicalSize GetAspectRatio() const;
+
+  // Returns the transform to apply to a child (e.g. for layout-overflow).
+  absl::optional<TransformationMatrix> GetTransformForChildFragment(
+      const NGPhysicalBoxFragment& child_fragment,
+      PhysicalSize size) const;
+
+  bool HasLeftOverflow() const { return box_->HasLeftOverflow(); }
+  bool HasTopOverflow() const { return box_->HasTopOverflow(); }
+  bool HasNonVisibleOverflow() const { return box_->HasNonVisibleOverflow(); }
+
+  // Return true if overflow in the block direction is clipped. With
+  // overflow-[xy]:clip, it is possible with visible overflow along one axis at
+  // the same time as we clip it along the other axis.
+  bool HasNonVisibleBlockOverflow() const;
+
+  OverflowClipAxes GetOverflowClipAxes() const {
+    return box_->GetOverflowClipAxes();
+  }
 
   // Returns true if this node should fill the viewport.
   // This occurs when we are in quirks-mode and we are *not* OOF-positioned,
@@ -124,10 +155,6 @@ class CORE_EXPORT NGBlockNode final : public NGLayoutInputNode {
     return (IsDocumentElement() || IsBody());
   }
 
-  // CSS defines certain cases to synthesize inline block baselines from box.
-  // See comments in UseLogicalBottomMarginEdgeForInlineBlockBaseline().
-  bool UseLogicalBottomMarginEdgeForInlineBlockBaseline() const;
-
   // Returns true if the custom layout node is in its loaded state (all script
   // for the web-developer defined layout is ready).
   bool IsCustomLayoutLoaded() const;
@@ -135,6 +162,9 @@ class CORE_EXPORT NGBlockNode final : public NGLayoutInputNode {
   // Get script type for scripts (msub, msup, msubsup, munder, mover and
   // munderover).
   MathScriptType ScriptType() const;
+
+  // Find out if the radical has an index.
+  bool HasIndex() const;
 
   // Layout an atomic inline; e.g., inline block.
   scoped_refptr<const NGLayoutResult> LayoutAtomicInline(
@@ -144,9 +174,7 @@ class CORE_EXPORT NGBlockNode final : public NGLayoutInputNode {
       NGBaselineAlgorithmType baseline_algorithm_type =
           NGBaselineAlgorithmType::kInlineBlock);
 
-  // Called if this is an out-of-flow block which needs to be
-  // positioned with legacy layout.
-  void UseLegacyOutOfFlowPositioning() const;
+  void InsertIntoLegacyPositionedObjects() const;
 
   // Write back resolved margins to legacy.
   void StoreMargins(const NGConstraintSpace&, const NGBoxStrut& margins);
@@ -156,19 +184,51 @@ class CORE_EXPORT NGBlockNode final : public NGLayoutInputNode {
   // LayoutObject-less, but we still need to keep the fragments generated
   // somewhere.
   void AddColumnResult(scoped_refptr<const NGLayoutResult>,
-                       const NGBlockBreakToken* incoming_break_token);
+                       const NGBlockBreakToken* incoming_break_token) const;
+  // Add a column layout result to this node.
+  void AddColumnResult(scoped_refptr<const NGLayoutResult>) const;
+  // Replace an existing column layout result with a new one.
+  void ReplaceColumnResult(scoped_refptr<const NGLayoutResult>,
+                           const NGPhysicalBoxFragment& old_fragment) const;
 
   static bool CanUseNewLayout(const LayoutBox&);
   bool CanUseNewLayout() const;
 
+  bool ShouldApplyLayoutContainment() const {
+    return box_->ShouldApplyLayoutContainment();
+  }
+
+  bool HasLineIfEmpty() const {
+    if (const auto* block = DynamicTo<LayoutBlock>(box_))
+      return block->HasLineIfEmpty();
+    return false;
+  }
+  LayoutUnit EmptyLineBlockSize() const {
+    return box_->LogicalHeightForEmptyLine();
+  }
+
+  // After we run the layout algorithm, this function copies back the fragment
+  // position to the layout box.
+  void CopyChildFragmentPosition(
+      const NGPhysicalBoxFragment& child_fragment,
+      PhysicalOffset,
+      const NGPhysicalBoxFragment& container_fragment,
+      const NGBlockBreakToken* previous_container_break_token = nullptr) const;
+
+  // If extra columns are added after a multicol has been written back to
+  // legacy, for example for an OOF positioned element, we need to update the
+  // legacy flow thread to encompass those extra columns.
+  void MakeRoomForExtraColumns(LayoutUnit block_size) const;
+
   String ToString() const;
 
  private:
-  void PrepareForLayout();
+  void PrepareForLayout() const;
 
   // Runs layout on the underlying LayoutObject and creates a fragment for the
   // resulting geometry.
-  scoped_refptr<const NGLayoutResult> RunLegacyLayout(const NGConstraintSpace&);
+  scoped_refptr<const NGLayoutResult> RunLegacyLayout(
+      const NGConstraintSpace&) const;
 
   scoped_refptr<const NGLayoutResult> RunSimplifiedLayout(
       const NGLayoutAlgorithmParams&,
@@ -179,37 +239,37 @@ class CORE_EXPORT NGBlockNode final : public NGLayoutInputNode {
   void FinishLayout(LayoutBlockFlow*,
                     const NGConstraintSpace&,
                     const NGBlockBreakToken*,
-                    scoped_refptr<const NGLayoutResult>);
+                    scoped_refptr<const NGLayoutResult>) const;
 
   // After we run the layout algorithm, this function copies back the geometry
   // data to the layout box.
   void CopyFragmentDataToLayoutBox(
       const NGConstraintSpace&,
       const NGLayoutResult&,
-      const NGBlockBreakToken* previous_break_token);
-  void CopyFragmentItemsToLayoutBox(const NGPhysicalBoxFragment& container,
-                                    const NGFragmentItems& items);
-  void CopyFragmentDataToLayoutBoxForInlineChildren(
-      const NGPhysicalContainerFragment& container,
-      LayoutUnit initial_container_width,
-      bool initial_container_is_flipped,
-      PhysicalOffset offset = {});
-  void PlaceChildrenInLayoutBox(const NGPhysicalBoxFragment&,
-                                const NGBlockBreakToken* previous_break_token);
-  void PlaceChildrenInFlowThread(const NGPhysicalBoxFragment&);
-  void CopyChildFragmentPosition(
-      const NGPhysicalBoxFragment& child_fragment,
-      PhysicalOffset,
-      const NGPhysicalBoxFragment& container_fragment,
-      const NGBlockBreakToken* previous_container_break_token = nullptr);
+      const NGBlockBreakToken* previous_break_token) const;
+  void CopyFragmentItemsToLayoutBox(
+      const NGPhysicalBoxFragment& container,
+      const NGFragmentItems& items,
+      const NGBlockBreakToken* previous_break_token) const;
+  void PlaceChildrenInLayoutBox(
+      const NGPhysicalBoxFragment&,
+      const NGBlockBreakToken* previous_break_token) const;
+  void PlaceChildrenInFlowThread(
+      LayoutMultiColumnFlowThread*,
+      const NGConstraintSpace&,
+      const NGPhysicalBoxFragment&,
+      const NGBlockBreakToken* previous_container_break_token) const;
 
   void CopyBaselinesFromLegacyLayout(const NGConstraintSpace&,
-                                     NGBoxFragmentBuilder*);
-  LayoutUnit AtomicInlineBaselineFromLegacyLayout(const NGConstraintSpace&);
+                                     NGBoxFragmentBuilder*) const;
+  LayoutUnit AtomicInlineBaselineFromLegacyLayout(
+      const NGConstraintSpace&) const;
+
+  void UpdateMarginPaddingInfoIfNeeded(const NGConstraintSpace&) const;
 
   void UpdateShapeOutsideInfoIfNeeded(
       const NGLayoutResult&,
-      LayoutUnit percentage_resolution_inline_size);
+      LayoutUnit percentage_resolution_inline_size) const;
 };
 
 template <>
@@ -217,6 +277,19 @@ struct DowncastTraits<NGBlockNode> {
   static bool AllowFrom(const NGLayoutInputNode& node) {
     return node.IsBlock();
   }
+};
+
+// Devtools can trigger layout to collect devtools-specific data. We don't want
+// or need such devtools layouts to write to the fragment or layout trees. This
+// class sets a flag that is checked before storing the layout results. If the
+// flag is true, we bail before writing anything.
+class DevtoolsReadonlyLayoutScope {
+  STACK_ALLOCATED();
+
+ public:
+  DevtoolsReadonlyLayoutScope();
+  static bool InDevtoolsLayout();
+  ~DevtoolsReadonlyLayoutScope();
 };
 
 }  // namespace blink

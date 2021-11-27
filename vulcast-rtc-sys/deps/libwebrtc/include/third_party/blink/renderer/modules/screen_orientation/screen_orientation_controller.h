@@ -9,13 +9,15 @@
 
 #include "base/macros.h"
 #include "services/device/public/mojom/screen_orientation.mojom-blink.h"
-#include "third_party/blink/public/common/screen_orientation/web_screen_orientation_lock_type.h"
-#include "third_party/blink/public/common/screen_orientation/web_screen_orientation_type.h"
+#include "services/device/public/mojom/screen_orientation_lock_types.mojom-shared.h"
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/core/page/page_visibility_observer.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/modules/screen_orientation/web_lock_orientation_callback.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_associated_remote.h"
+#include "ui/display/mojom/screen_orientation.mojom-blink.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace blink {
 
@@ -28,16 +30,14 @@ class MODULES_EXPORT ScreenOrientationController final
       public ExecutionContextLifecycleObserver,
       public PageVisibilityObserver,
       public Supplement<LocalDOMWindow> {
-  USING_GARBAGE_COLLECTED_MIXIN(ScreenOrientationController);
-
  public:
   explicit ScreenOrientationController(LocalDOMWindow&);
-  ~ScreenOrientationController();
+  ~ScreenOrientationController() override;
 
   void SetOrientation(ScreenOrientation*);
   void NotifyOrientationChanged();
 
-  void lock(WebScreenOrientationLockType,
+  void lock(device::mojom::blink::ScreenOrientationLockType,
             std::unique_ptr<WebLockOrientationCallback>);
   void unlock();
   bool MaybeHasActiveLock() const;
@@ -49,13 +49,16 @@ class MODULES_EXPORT ScreenOrientationController final
   void SetScreenOrientationAssociatedRemoteForTests(
       HeapMojoAssociatedRemote<device::mojom::blink::ScreenOrientation>);
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   friend class MediaControlsOrientationLockAndRotateToFullscreenDelegateTest;
   friend class ScreenOrientationControllerTest;
 
-  static WebScreenOrientationType ComputeOrientation(const IntRect&, uint16_t);
+  static display::mojom::blink::ScreenOrientation ComputeOrientation(
+      const gfx::Rect&,
+      uint16_t);
+  void NotifyOrientationChangedInternal();
 
   // Inherited from ExecutionContextLifecycleObserver and
   // PageVisibilityObserver.
@@ -64,13 +67,16 @@ class MODULES_EXPORT ScreenOrientationController final
 
   void UpdateOrientation();
 
-  bool IsActive() const;
-  bool IsVisible() const;
   bool IsActiveAndVisible() const;
 
   void OnLockOrientationResult(int, ScreenOrientationLockResult);
   void CancelPendingLocks();
   int GetRequestIdForTests();
+
+  void LockOrientationInternal(
+      device::mojom::blink::ScreenOrientationLockType orientation,
+      std::unique_ptr<WebLockOrientationCallback> callback);
+  void UnlockOrientationInternal();
 
   Member<ScreenOrientation> orientation_;
   bool active_lock_ = false;

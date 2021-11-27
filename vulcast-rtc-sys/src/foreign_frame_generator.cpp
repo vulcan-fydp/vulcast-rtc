@@ -14,7 +14,7 @@ ForeignFrameGenerator::ForeignFrameGenerator(int width, int height,
 }
 
 void ForeignFrameGenerator::ChangeResolution(size_t width, size_t height) {
-  rtc::CritScope lock(&crit_);
+  webrtc::MutexLock lock(&lock_);
   width_ = static_cast<int>(width);
   height_ = static_cast<int>(height);
   CHECK(width_ > 0);
@@ -23,7 +23,7 @@ void ForeignFrameGenerator::ChangeResolution(size_t width, size_t height) {
 }
 
 FrameGeneratorInterface::VideoFrameData ForeignFrameGenerator::NextFrame() {
-  rtc::CritScope lock(&crit_);
+  webrtc::MutexLock lock(&lock_);
   auto buffer = CreateI420Buffer(width_, height_);
   callback_(ctx_, width_, height_, clock_->TimeInMicroseconds(),
             rgba_buffer_.data());
@@ -37,7 +37,8 @@ FrameGeneratorInterface::VideoFrameData ForeignFrameGenerator::NextFrame() {
 
 rtc::scoped_refptr<webrtc::I420Buffer>
 ForeignFrameGenerator::CreateI420Buffer(int width, int height) {
-  auto buffer = buffer_pool_.CreateBuffer(width, height);
+  rtc::scoped_refptr<webrtc::I420Buffer> buffer(
+      webrtc::I420Buffer::Create(width, height));
   memset(buffer->MutableDataY(), 127, height * buffer->StrideY());
   memset(buffer->MutableDataU(), 127,
          buffer->ChromaHeight() * buffer->StrideU());

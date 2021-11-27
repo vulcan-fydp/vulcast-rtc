@@ -32,6 +32,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_QUOTA_DEPRECATED_STORAGE_QUOTA_H_
 
 #include "third_party/blink/public/mojom/quota/quota_manager_host.mojom-blink.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/platform/bindings/exception_code.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
@@ -59,7 +60,7 @@ class DeprecatedStorageQuota final : public ScriptWrappable {
                                           V8StorageErrorCallback*,
                                           DOMExceptionCode);
 
-  explicit DeprecatedStorageQuota(Type);
+  DeprecatedStorageQuota(Type, ExecutionContext*);
 
   void queryUsageAndQuota(ScriptState*,
                           V8StorageUsageCallback*,
@@ -70,7 +71,7 @@ class DeprecatedStorageQuota final : public ScriptWrappable {
                     V8StorageQuotaCallback* = nullptr,
                     V8StorageErrorCallback* = nullptr);
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   // Binds the interface (if not already bound) with the given interface
@@ -78,9 +79,7 @@ class DeprecatedStorageQuota final : public ScriptWrappable {
   mojom::blink::QuotaManagerHost* GetQuotaHost(ExecutionContext*);
 
   Type type_;
-  HeapMojoRemote<mojom::blink::QuotaManagerHost,
-                 HeapMojoWrapperMode::kWithoutContextObserver>
-      quota_host_;
+  HeapMojoRemote<mojom::blink::QuotaManagerHost> quota_host_;
 };
 
 }  // namespace blink

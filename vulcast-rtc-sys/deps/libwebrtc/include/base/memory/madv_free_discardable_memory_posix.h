@@ -6,13 +6,14 @@
 #define BASE_MEMORY_MADV_FREE_DISCARDABLE_MEMORY_POSIX_H_
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include <atomic>
-#include <cstdint>
+#include <vector>
 
 #include "base/base_export.h"
 #include "base/callback.h"
-#include "base/logging.h"
+#include "base/check_op.h"
 #include "base/macros.h"
 #include "base/memory/discardable_memory.h"
 #include "base/sequence_checker.h"

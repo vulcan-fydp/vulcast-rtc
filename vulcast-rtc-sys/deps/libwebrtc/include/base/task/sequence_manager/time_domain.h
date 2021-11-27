@@ -5,15 +5,14 @@
 #ifndef BASE_TASK_SEQUENCE_MANAGER_TIME_DOMAIN_H_
 #define BASE_TASK_SEQUENCE_MANAGER_TIME_DOMAIN_H_
 
-#include <map>
-
 #include "base/callback.h"
-#include "base/logging.h"
-#include "base/macros.h"
+#include "base/check.h"
 #include "base/task/common/intrusive_heap.h"
 #include "base/task/sequence_manager/lazy_now.h"
 #include "base/task/sequence_manager/task_queue_impl.h"
 #include "base/time/time.h"
+#include "base/values.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 namespace sequence_manager {
@@ -35,6 +34,8 @@ class TaskQueueImpl;
 // into a global wake-up, which ultimately gets passed to the ThreadController.
 class BASE_EXPORT TimeDomain {
  public:
+  TimeDomain(const TimeDomain&) = delete;
+  TimeDomain& operator=(const TimeDomain&) = delete;
   virtual ~TimeDomain();
 
   // Returns LazyNow in TimeDomain's time.
@@ -54,13 +55,16 @@ class BASE_EXPORT TimeDomain {
   // clock when this method is called.
   // Can be called from main thread only.
   // NOTE: |lazy_now| and the return value are in the SequenceManager's time.
-  virtual Optional<TimeDelta> DelayTillNextTask(LazyNow* lazy_now) = 0;
+  virtual absl::optional<TimeDelta> DelayTillNextTask(LazyNow* lazy_now) = 0;
 
-  void AsValueInto(trace_event::TracedValue* state) const;
-  bool HasPendingHighResolutionTasks() const;
+  Value AsValue() const;
+
+  bool has_pending_high_resolution_tasks() const {
+    return pending_high_res_wake_up_count_;
+  }
 
   // Returns true if there are no pending delayed tasks.
-  bool Empty() const;
+  bool empty() const { return delayed_wake_up_queue_.empty(); }
 
   // This is the signal that virtual time should step forward. If
   // RunLoop::QuitWhenIdle has been called then |quit_when_idle_requested| will
@@ -73,7 +77,7 @@ class BASE_EXPORT TimeDomain {
   SequenceManager* sequence_manager() const;
 
   // Returns the earliest scheduled wake up in the TimeDomain's time.
-  Optional<TimeTicks> NextScheduledRunTime() const;
+  absl::optional<TimeTicks> NextScheduledRunTime() const;
 
   size_t NumberOfScheduledWakeUps() const {
     return delayed_wake_up_queue_.size();
@@ -87,9 +91,6 @@ class BASE_EXPORT TimeDomain {
   // Tells SequenceManager to schedule immediate work.
   // May be overriden to control wake ups manually.
   virtual void RequestDoWork();
-
-  // For implementation-specific tracing.
-  virtual void AsValueIntoInternal(trace_event::TracedValue* state) const;
 
   virtual const char* GetName() const = 0;
 
@@ -109,8 +110,7 @@ class BASE_EXPORT TimeDomain {
   // Nullopt |wake_up| cancels a previously set wake up for |queue|.
   // NOTE: |lazy_now| is provided in TimeDomain's time.
   void SetNextWakeUpForQueue(internal::TaskQueueImpl* queue,
-                             Optional<internal::DelayedWakeUp> wake_up,
-                             internal::WakeUpResolution resolution,
+                             absl::optional<DelayedWakeUp> wake_up,
                              LazyNow* lazy_now);
 
   // Remove the TaskQueue from any internal data sctructures.
@@ -121,15 +121,10 @@ class BASE_EXPORT TimeDomain {
   void MoveReadyDelayedTasksToWorkQueues(LazyNow* lazy_now);
 
   struct ScheduledDelayedWakeUp {
-    internal::DelayedWakeUp wake_up;
-    internal::WakeUpResolution resolution;
+    DelayedWakeUp wake_up;
     internal::TaskQueueImpl* queue;
 
     bool operator<=(const ScheduledDelayedWakeUp& other) const {
-      if (wake_up == other.wake_up) {
-        return static_cast<int>(resolution) <=
-               static_cast<int>(other.resolution);
-      }
       return wake_up <= other.wake_up;
     }
 
@@ -151,7 +146,6 @@ class BASE_EXPORT TimeDomain {
   int pending_high_res_wake_up_count_ = 0;
 
   scoped_refptr<internal::AssociatedThreadId> associated_thread_;
-  DISALLOW_COPY_AND_ASSIGN(TimeDomain);
 };
 
 }  // namespace sequence_manager

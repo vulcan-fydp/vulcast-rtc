@@ -10,6 +10,7 @@
 #include <string>
 
 #include "media/base/audio_capturer_source.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 
 namespace blink {
@@ -22,7 +23,7 @@ class LocalFrame;
 // using the parameters and session ID found in MediaStreamDevice, just before
 // the first track is connected. Audio data is transported directly to the
 // tracks (i.e., there is no audio processing).
-class MODULES_EXPORT LocalMediaStreamAudioSource
+class MODULES_EXPORT LocalMediaStreamAudioSource final
     : public MediaStreamAudioSource,
       public media::AudioCapturerSource::CaptureCallback {
  public:
@@ -43,7 +44,7 @@ class MODULES_EXPORT LocalMediaStreamAudioSource
   // MediaStreamAudioSource implementation.
   void ChangeSourceImpl(const MediaStreamDevice& new_device) final;
 
-  base::Optional<AudioProcessingProperties> GetAudioProcessingProperties()
+  absl::optional<AudioProcessingProperties> GetAudioProcessingProperties()
       const final;
 
  private:
@@ -57,7 +58,8 @@ class MODULES_EXPORT LocalMediaStreamAudioSource
                base::TimeTicks audio_capture_time,
                double volume,
                bool key_pressed) final;
-  void OnCaptureError(const std::string& message) final;
+  void OnCaptureError(media::AudioCapturerSource::ErrorCode code,
+                      const std::string& message) final;
   void OnCaptureMuted(bool is_muted) final;
 
   // The LocalFrame that will consume the audio data. Used when creating

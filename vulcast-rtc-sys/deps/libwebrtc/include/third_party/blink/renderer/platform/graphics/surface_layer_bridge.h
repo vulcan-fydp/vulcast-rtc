@@ -5,10 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_SURFACE_LAYER_BRIDGE_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_SURFACE_LAYER_BRIDGE_H_
 
-#include <memory>
-
 #include "base/memory/scoped_refptr.h"
-#include "base/time/time.h"
 #include "components/viz/common/surfaces/parent_local_surface_id_allocator.h"
 #include "components/viz/common/surfaces/surface_id.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -59,8 +56,6 @@ class PLATFORM_EXPORT SurfaceLayerBridge
   const viz::SurfaceId& GetSurfaceId() const override {
     return current_surface_id_;
   }
-
-  base::TimeTicks GetLocalSurfaceIdAllocationTime() const override;
 
  private:
   scoped_refptr<cc::SurfaceLayer> surface_layer_;

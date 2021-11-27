@@ -14,21 +14,20 @@
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/core/fileapi/blob.h"
 #include "third_party/blink/renderer/modules/clipboard/clipboard_item.h"
-#include "third_party/blink/renderer/modules/clipboard/clipboard_writer.h"
+#include "third_party/blink/renderer/modules/clipboard/clipboard_reader.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
 
 namespace blink {
 
+class ClipboardWriter;
 class ScriptPromiseResolver;
 class LocalFrame;
 class ExecutionContext;
 class ClipboardItemOptions;
 
 class ClipboardPromise final : public GarbageCollected<ClipboardPromise>,
-                               public ExecutionContextClient {
-  USING_GARBAGE_COLLECTED_MIXIN(ClipboardPromise);
-
+                               public ExecutionContextLifecycleObserver {
  public:
   // Creates promise to execute Clipboard API functions off the main thread.
   static ScriptPromise CreateForRead(ExecutionContext*,
@@ -43,14 +42,19 @@ class ClipboardPromise final : public GarbageCollected<ClipboardPromise>,
                                           const String&);
 
   ClipboardPromise(ExecutionContext*, ScriptState*);
-  virtual ~ClipboardPromise();
+  ~ClipboardPromise() override;
 
   // Completes current write and starts next write.
   void CompleteWriteRepresentation();
   // For rejections originating from ClipboardWriter.
   void RejectFromReadOrDecodeFailure();
 
-  void Trace(Visitor*) override;
+  // Adds the blob to the clipboard items.
+  void OnRead(Blob* blob);
+
+  LocalFrame* GetLocalFrame() const;
+
+  void Trace(Visitor*) const override;
 
  private:
   // Called to begin writing a type.
@@ -68,9 +72,8 @@ class ClipboardPromise final : public GarbageCollected<ClipboardPromise>,
   void HandleWriteWithPermission(mojom::blink::PermissionStatus);
   void HandleWriteTextWithPermission(mojom::blink::PermissionStatus);
 
-  void OnReadAvailableRawFormatNames(const Vector<String>& format_names);
-  void ReadNextRawRepresentation();
-  void OnRawRead(mojo_base::BigBuffer data);
+  void OnReadAvailableFormatNames(const Vector<String>& format_names);
+  void ReadNextRepresentation();
   void ResolveRead();
 
   // Checks for permissions (interacting with PermissionService).
@@ -80,24 +83,26 @@ class ClipboardPromise final : public GarbageCollected<ClipboardPromise>,
       bool allow_without_sanitization,
       base::OnceCallback<void(::blink::mojom::PermissionStatus)> callback);
 
-  LocalFrame* GetLocalFrame() const;
   scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner();
+
+  // ExecutionContextLifecycleObserver
+  void ContextDestroyed() override;
 
   Member<ScriptState> script_state_;
   Member<ScriptPromiseResolver> script_promise_resolver_;
 
   Member<ClipboardWriter> clipboard_writer_;
+
   // Checks for Read and Write permission.
-  HeapMojoRemote<mojom::blink::PermissionService,
-                 HeapMojoWrapperMode::kWithoutContextObserver>
-      permission_service_;
+  HeapMojoRemote<mojom::blink::PermissionService> permission_service_;
 
   // Only for use in writeText().
   String plain_text_;
   HeapVector<std::pair<String, Member<Blob>>> clipboard_item_data_;
-  bool is_raw_;  // Corresponds to allowWithoutSanitization in ClipboardItem.
   // Index of clipboard representation currently being processed.
   wtf_size_t clipboard_representation_index_;
+  // Stores all the custom formats defined in `ClipboardItemOptions`.
+  Vector<String> custom_format_items_;
 
   // Because v8 is thread-hostile, ensures that all interactions with
   // ScriptState and ScriptPromiseResolver occur on the main thread.

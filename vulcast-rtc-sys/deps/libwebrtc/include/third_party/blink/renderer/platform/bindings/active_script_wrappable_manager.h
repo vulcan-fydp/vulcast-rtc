@@ -6,12 +6,11 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_BINDINGS_ACTIVE_SCRIPT_WRAPPABLE_MANAGER_H_
 
 #include "third_party/blink/renderer/platform/bindings/active_script_wrappable_base.h"
+#include "third_party/blink/renderer/platform/bindings/name_client.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/heap/heap.h"
 
 namespace blink {
-
-class LivenessBroker;
 
 // ActiveScriptWrappableManager (ASWM) is integrated into the garbage collector
 // and keeps ActiveScriptWrappable alive as long as they have
@@ -21,7 +20,8 @@ class LivenessBroker;
 // ASWM integrates with the GC through prologue and weakness callbacks which are
 // not allowed to allocate.
 class PLATFORM_EXPORT ActiveScriptWrappableManager final
-    : public GarbageCollected<ActiveScriptWrappableManager> {
+    : public GarbageCollected<ActiveScriptWrappableManager>,
+      public NameClient {
  public:
   enum class RecomputeMode { kOpportunistic, kRequired };
 
@@ -46,12 +46,10 @@ class PLATFORM_EXPORT ActiveScriptWrappableManager final
   // Called during GC prologue. Not allowed to allocate.
   void RecomputeActiveScriptWrappables(RecomputeMode);
 
-  // Iterate the current set of active ScriptWrappable objects.
-  //
-  // Does not allocate.
-  void IterateActiveScriptWrappables(Visitor*);
+  void Trace(Visitor* visitor) const;
 
-  void Trace(Visitor* visitor);
+  // NameClient implementation.
+  const char* NameInHeapSnapshot() const final { return "Pending activities"; }
 
  private:
   // Called during weakness processing. Not allowed to allocate. The next Add()

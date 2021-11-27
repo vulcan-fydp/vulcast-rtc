@@ -18,23 +18,30 @@
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_associated_receiver.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
+#include "third_party/blink/renderer/platform/supplementable.h"
 
 namespace blink {
 
 class ExceptionState;
+class NavigatorBase;
 class ScriptPromiseResolver;
 class ScriptState;
 class USBDevice;
 class USBDeviceRequestOptions;
 
 class USB final : public EventTargetWithInlineData,
+                  public Supplement<NavigatorBase>,
                   public ExecutionContextLifecycleObserver,
                   public device::mojom::blink::UsbDeviceManagerClient {
   DEFINE_WRAPPERTYPEINFO();
-  USING_GARBAGE_COLLECTED_MIXIN(USB);
 
  public:
-  explicit USB(ExecutionContext&);
+  static const char kSupplementName[];
+
+  // Getter for navigator.usb
+  static USB* usb(NavigatorBase&);
+
+  explicit USB(NavigatorBase&);
   ~USB() override;
 
   // USB.idl
@@ -69,7 +76,7 @@ class USB final : public EventTargetWithInlineData,
 
   void OnServiceConnectionError();
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  protected:
   // EventTarget protected overrides.
@@ -85,9 +92,7 @@ class USB final : public EventTargetWithInlineData,
   HeapMojoRemote<mojom::blink::WebUsbService> service_;
   HeapHashSet<Member<ScriptPromiseResolver>> get_devices_requests_;
   HeapHashSet<Member<ScriptPromiseResolver>> get_permission_requests_;
-  HeapMojoAssociatedReceiver<device::mojom::blink::UsbDeviceManagerClient,
-                             USB,
-                             HeapMojoWrapperMode::kWithoutContextObserver>
+  HeapMojoAssociatedReceiver<device::mojom::blink::UsbDeviceManagerClient, USB>
       client_receiver_;
   HeapHashMap<String, WeakMember<USBDevice>> device_cache_;
 };

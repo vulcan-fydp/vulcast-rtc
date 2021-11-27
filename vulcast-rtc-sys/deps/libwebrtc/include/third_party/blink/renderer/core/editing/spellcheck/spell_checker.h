@@ -26,7 +26,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_EDITING_SPELLCHECK_SPELL_CHECKER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_EDITING_SPELLCHECK_SPELL_CHECKER_H_
 
-#include "base/macros.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/editing/forward.h"
 #include "third_party/blink/renderer/core/editing/markers/document_marker.h"
@@ -40,6 +39,7 @@ class IdleSpellCheckController;
 class LocalDOMWindow;
 class LocalFrame;
 class HTMLElement;
+class Node;
 class SpellCheckMarker;
 class SpellCheckRequest;
 class SpellCheckRequester;
@@ -50,8 +50,10 @@ class WebTextCheckClient;
 class CORE_EXPORT SpellChecker final : public GarbageCollected<SpellChecker> {
  public:
   explicit SpellChecker(LocalDOMWindow&);
+  SpellChecker(const SpellChecker&) = delete;
+  SpellChecker& operator=(const SpellChecker&) = delete;
 
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
   WebSpellCheckPanelHostClient& SpellCheckPanelHostClient() const;
   WebTextCheckClient* GetTextCheckerClient() const;
@@ -64,6 +66,7 @@ class CORE_EXPORT SpellChecker final : public GarbageCollected<SpellChecker> {
   void ShowSpellingGuessPanel();
   void RespondToChangedContents();
   void RespondToChangedSelection();
+  void RespondToChangedEnablement(const HTMLElement&, bool enabled);
   std::pair<Node*, SpellCheckMarker*> GetSpellCheckMarkerUnderSelection() const;
   // The first String returned in the pair is the selected text.
   // The second String is the marker's description.
@@ -101,8 +104,6 @@ class CORE_EXPORT SpellChecker final : public GarbageCollected<SpellChecker> {
 
   const Member<SpellCheckRequester> spell_check_requester_;
   const Member<IdleSpellCheckController> idle_spell_check_controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(SpellChecker);
 };
 
 }  // namespace blink

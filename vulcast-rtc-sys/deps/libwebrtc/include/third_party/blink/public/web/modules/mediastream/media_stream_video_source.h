@@ -10,20 +10,18 @@
 #include <vector>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "base/optional.h"
-#include "base/threading/thread_checker.h"
 #include "media/base/video_frame.h"
 #include "media/capture/video_capture_types.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/media/video_capture.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-shared.h"
 #include "third_party/blink/public/platform/modules/mediastream/media_stream_types.h"
 #include "third_party/blink/public/platform/modules/mediastream/secure_display_link_tracker.h"
+#include "third_party/blink/public/platform/modules/mediastream/web_media_stream_source.h"
+#include "third_party/blink/public/platform/modules/mediastream/web_media_stream_track.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_platform_media_stream_source.h"
 #include "third_party/blink/public/platform/web_common.h"
-#include "third_party/blink/public/platform/web_media_stream_source.h"
-#include "third_party/blink/public/platform/web_media_stream_track.h"
 #include "third_party/blink/public/web/modules/mediastream/encoded_video_frame.h"
 
 namespace base {
@@ -60,12 +58,22 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
   // RestartCallback is used for both the StopForRestart and Restart operations.
   using RestartCallback = base::OnceCallback<void(RestartResult)>;
 
-  MediaStreamVideoSource();
+  explicit MediaStreamVideoSource(
+      scoped_refptr<base::SingleThreadTaskRunner> main_task_runner);
+  MediaStreamVideoSource(const MediaStreamVideoSource&) = delete;
+  MediaStreamVideoSource& operator=(const MediaStreamVideoSource&) = delete;
   ~MediaStreamVideoSource() override;
 
   // Returns the MediaStreamVideoSource object owned by |source|.
+  //
+  // TODO(https://crbug.com/714136): Replace uses of this method in favor of
+  // the variant below.
   static MediaStreamVideoSource* GetVideoSource(
       const WebMediaStreamSource& source);
+
+#if INSIDE_BLINK
+  static MediaStreamVideoSource* GetVideoSource(MediaStreamSource* source);
+#endif
 
   // Puts |track| in the registered tracks list.
   void AddTrack(MediaStreamVideoTrack* track,
@@ -95,7 +103,8 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
   // verified by checking that the IsRunning() method returns true.
   // Any attempt to invoke StopForRestart() before the source has started
   // results in no action and |callback| invoked with INVALID_STATE.
-  void StopForRestart(RestartCallback callback);
+  // If |send_black_frame| is set, an additional black frame will be sent.
+  void StopForRestart(RestartCallback callback, bool send_black_frame = false);
 
   // Tries to restart a source that was previously temporarily stopped using the
   // supplied |new_format|. This method can be invoked only after a successful
@@ -124,6 +133,9 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
 
   void UpdateCapturingLinkSecure(MediaStreamVideoTrack* track, bool is_secure);
 
+  // Indicate that the capturer can discard its alpha channel (if it has one).
+  virtual void SetCanDiscardAlpha(bool can_discard_alpha) {}
+
   // Request underlying source to capture a new frame.
   virtual void RequestRefreshFrame() {}
 
@@ -143,13 +155,13 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
   // Implementations must return the capture format if available.
   // Implementations supporting devices of type MEDIA_DEVICE_VIDEO_CAPTURE
   // must return a value.
-  virtual base::Optional<media::VideoCaptureFormat> GetCurrentFormat() const;
+  virtual absl::optional<media::VideoCaptureFormat> GetCurrentFormat() const;
 
   // Implementations must return the capture parameters if available.
   // Implementations supporting devices of type MEDIA_DEVICE_VIDEO_CAPTURE
   // must return a value. The format in the returned VideoCaptureParams must
   // coincide with the value returned by GetCurrentFormat().
-  virtual base::Optional<media::VideoCaptureParams> GetCurrentCaptureParams()
+  virtual absl::optional<media::VideoCaptureParams> GetCurrentCaptureParams()
       const;
 
   // Returns true if encoded output can be enabled in the source.
@@ -162,14 +174,19 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
 
   bool IsRunning() const { return state_ == STARTED; }
 
+  bool IsStoppedForRestart() const { return state_ == STOPPED_FOR_RESTART; }
+
+  // Provides a callback for consumers to trigger when they have some
+  // feedback to report.
+  // The returned callback can be called on any thread.
+  virtual VideoCaptureFeedbackCB GetFeedbackCallback() const;
+
   size_t NumTracks() const {
-    DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+    DCHECK(GetTaskRunner()->BelongsToCurrentThread());
     return tracks_.size();
   }
 
-  base::WeakPtr<MediaStreamVideoSource> GetWeakPtr() {
-    return weak_factory_.GetWeakPtr();
-  }
+  virtual base::WeakPtr<MediaStreamVideoSource> GetWeakPtr() const = 0;
 
  protected:
   // MediaStreamSource implementation.
@@ -294,6 +311,7 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
   void DidStopSource(RestartResult result);
   void NotifyCapturingLinkSecured(size_t num_encoded_sinks);
   size_t CountEncodedSinks() const;
+  scoped_refptr<VideoTrackAdapter> GetTrackAdapter();
 
   State state_;
 
@@ -348,11 +366,6 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
   // died before this callback is resolved, we still need to trigger the
   // callback to notify the caller that the request is canceled.
   base::OnceClosure remove_last_track_callback_;
-
-  // NOTE: Weak pointers must be invalidated before all other member variables.
-  base::WeakPtrFactory<MediaStreamVideoSource> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MediaStreamVideoSource);
 };
 
 }  // namespace blink

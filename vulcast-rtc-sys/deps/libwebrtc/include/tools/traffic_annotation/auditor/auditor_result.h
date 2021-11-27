@@ -5,7 +5,8 @@
 #ifndef TOOLS_TRAFFIC_ANNOTATION_AUDITOR_AUDITOR_RESULT_H_
 #define TOOLS_TRAFFIC_ANNOTATION_AUDITOR_AUDITOR_RESULT_H_
 
-#include "base/files/file_path.h"
+#include <string>
+#include <vector>
 
 // Holds the auditor processing results on one unit of annotation or function.
 class AuditorResult {
@@ -37,6 +38,8 @@ class AuditorResult {
     ERROR_MISSING_SECOND_ID,      // Annotation does not have a valid second id.
     ERROR_INCOMPLETE_ANNOTATION,  // Annotation has some missing fields.
     ERROR_INCONSISTENT_ANNOTATION,  // Annotation has some inconsistent fields.
+    ERROR_MISSING_GROUPING,         // Annotation is missing from
+                                    // summary/grouping.xml file.
     ERROR_MERGE_FAILED,            // Two annotations that are supposed to merge
                                    // cannot merge.
     ERROR_INCOMPLETED_ANNOTATION,  // A partial or [branched_] completing
@@ -50,6 +53,7 @@ class AuditorResult {
     ERROR_INVALID_OS,              // Invalid 'os_list' in annotations.xml
     ERROR_DEPRECATED_WITH_OS,      // Marked deprecated, but 'os_list' is not
                                    // empty in annotations.xml.
+    ERROR_INVALID_ADDED_IN,        // "added_in_milestone" attribute is invalid.
 
     // This is the python_script equivalent of ERROR_DIRECT_ASSIGNMENT.
     //

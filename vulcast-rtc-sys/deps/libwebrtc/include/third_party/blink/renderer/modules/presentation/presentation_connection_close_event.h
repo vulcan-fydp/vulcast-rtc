@@ -47,7 +47,7 @@ class PresentationConnectionCloseEvent final : public Event {
 
   const AtomicString& InterfaceName() const override;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   String reason_;
@@ -56,4 +56,4 @@ class PresentationConnectionCloseEvent final : public Event {
 
 }  // namespace blink
 
-#endif  // PresentationConnectionAvailableEvent_h
+#endif  // THIRD_PARTY_BLINK_RENDERER_MODULES_PRESENTATION_PRESENTATION_CONNECTION_CLOSE_EVENT_H_

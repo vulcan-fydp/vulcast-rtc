@@ -31,8 +31,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_WORKERS_ABSTRACT_WORKER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_WORKERS_ABSTRACT_WORKER_H_
 
-#include "services/network/public/mojom/fetch_api.mojom.h"
-#include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/events/event_listener.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
@@ -51,8 +49,6 @@ class ExecutionContext;
 class CORE_EXPORT AbstractWorker
     : public EventTargetWithInlineData,
       public ExecutionContextLifecycleStateObserver {
-  USING_GARBAGE_COLLECTED_MIXIN(AbstractWorker);
-
  public:
   // EventTarget APIs
   ExecutionContext* GetExecutionContext() const final {
@@ -63,20 +59,15 @@ class CORE_EXPORT AbstractWorker
 
   DEFINE_STATIC_ATTRIBUTE_EVENT_LISTENER(error, kError)
 
-  AbstractWorker(ExecutionContext*);
+  explicit AbstractWorker(ExecutionContext*);
   ~AbstractWorker() override;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  protected:
   // Helper function that converts a URL to an absolute URL and checks the
   // result for validity.
-  static KURL ResolveURL(
-      ExecutionContext*,
-      const String& url,
-      ExceptionState&,
-      mojom::RequestContextType,
-      network::mojom::RequestDestination request_destination);
+  static KURL ResolveURL(ExecutionContext*, const String& url, ExceptionState&);
 };
 
 }  // namespace blink

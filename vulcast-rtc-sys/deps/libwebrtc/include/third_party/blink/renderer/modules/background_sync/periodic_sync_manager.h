@@ -37,7 +37,7 @@ class PeriodicSyncManager final : public ScriptWrappable {
   ScriptPromise getTags(ScriptState* script_state);
   ScriptPromise unregister(ScriptState* script_state, const String& tag);
 
-  void Trace(Visitor* visitor) override;
+  void Trace(Visitor* visitor) const override;
 
  private:
   // Returns an initialized
@@ -59,8 +59,7 @@ class PeriodicSyncManager final : public ScriptWrappable {
 
   Member<ServiceWorkerRegistration> registration_;
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
-  HeapMojoRemote<mojom::blink::PeriodicBackgroundSyncService,
-                 HeapMojoWrapperMode::kWithoutContextObserver>
+  HeapMojoRemote<mojom::blink::PeriodicBackgroundSyncService>
       background_sync_service_;
 };
 

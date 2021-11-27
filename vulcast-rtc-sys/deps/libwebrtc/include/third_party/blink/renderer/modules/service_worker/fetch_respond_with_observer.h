@@ -17,6 +17,8 @@ namespace blink {
 
 class CrossOriginResourcePolicyChecker;
 class ExecutionContext;
+class FetchEvent;
+class ReadableStream;
 class ScriptValue;
 class WaitUntilObserver;
 
@@ -41,12 +43,12 @@ class MODULES_EXPORT FetchRespondWithObserver : public RespondWithObserver {
   void OnResponseRejected(mojom::ServiceWorkerResponseError) override;
   void OnResponseFulfilled(ScriptState*,
                            const ScriptValue&,
-                           ExceptionState::ContextType context_type,
-                           const char* interface_name,
-                           const char* property_name) override;
+                           const ExceptionContext& exception_context) override;
   void OnNoResponse() override;
 
-  void Trace(Visitor*) override;
+  void SetEvent(FetchEvent* event);
+
+  void Trace(Visitor*) const override;
 
  private:
   const KURL request_url_;
@@ -54,6 +56,10 @@ class MODULES_EXPORT FetchRespondWithObserver : public RespondWithObserver {
   const network::mojom::RedirectMode redirect_mode_;
   const mojom::RequestContextFrameType frame_type_;
   const network::mojom::RequestDestination request_destination_;
+  Member<FetchEvent> event_;
+  Member<ReadableStream> request_body_stream_;
+  // https://fetch.spec.whatwg.org/#concept-body-source
+  const bool request_body_has_source_;
   base::WeakPtr<CrossOriginResourcePolicyChecker> corp_checker_;
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 };

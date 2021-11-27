@@ -10,11 +10,12 @@
 #include "base/callback.h"
 #include "base/time/time.h"
 #include "cc/trees/layer_tree_host_client.h"
+#include "cc/trees/paint_holding_reason.h"
 
 namespace cc {
 class LayerTreeFrameSink;
 struct BeginMainFrameMetrics;
-struct ElementId;
+struct WebVitalMetrics;
 class RenderFrameMetadataObserver;
 }  // namespace cc
 
@@ -33,26 +34,15 @@ class LayerTreeViewDelegate {
   virtual void ApplyViewportChanges(
       const cc::ApplyViewportChangesArgs& args) = 0;
 
-  // Record use counts of different methods of scrolling (e.g. wheel, touch,
-  // precision touchpad, etc.).
-  virtual void RecordManipulationTypeCounts(cc::ManipulationInfo info) = 0;
-
-  // Send overscroll DOM event when overscrolling has happened on the compositor
-  // thread.
-  virtual void SendOverscrollEventFromImplSide(
-      const gfx::Vector2dF& overscroll_delta,
-      cc::ElementId scroll_latched_element_id) = 0;
-
-  // Send scrollend DOM event when gesture scrolling on the compositor thread
-  // has finished.
-  virtual void SendScrollEndEventFromImplSide(
-      cc::ElementId scroll_latched_element_id) = 0;
+  virtual void UpdateCompositorScrollState(
+      const cc::CompositorCommitData& commit_data) = 0;
 
   // Notifies that the compositor has issued a BeginMainFrame.
   virtual void BeginMainFrame(base::TimeTicks frame_time) = 0;
 
   virtual void OnDeferMainFrameUpdatesChanged(bool) = 0;
-  virtual void OnDeferCommitsChanged(bool) = 0;
+  virtual void OnDeferCommitsChanged(bool defer_status,
+                                     cc::PaintHoldingReason reason) = 0;
 
   // Notifies that the layer tree host has completed a call to
   // RequestMainFrameUpdate in response to a BeginMainFrame.
@@ -64,6 +54,10 @@ class LayerTreeViewDelegate {
 
   // Notifies that the draw commands for a committed frame have been issued.
   virtual void DidCommitAndDrawCompositorFrame() = 0;
+
+  virtual void DidObserveFirstScrollDelay(
+      base::TimeDelta first_scroll_delay,
+      base::TimeTicks first_scroll_timestamp) = 0;
 
   // Notifies that a compositor frame commit operation is about to start.
   virtual void WillCommitCompositorFrame() = 0;
@@ -97,6 +91,8 @@ class LayerTreeViewDelegate {
   virtual std::unique_ptr<cc::BeginMainFrameMetrics>
   GetBeginMainFrameMetrics() = 0;
 
+  virtual std::unique_ptr<cc::WebVitalMetrics> GetWebVitalMetrics() = 0;
+
   // Notification of the beginning and end of LayerTreeHost::UpdateLayers, for
   // metrics collection.
   virtual void BeginUpdateLayers() = 0;
@@ -110,6 +106,13 @@ class LayerTreeViewDelegate {
   // to signal to flow control mechanisms that a frame is beginning, not to
   // perform actual painting work.
   virtual void WillBeginMainFrame() = 0;
+
+  virtual void RunPaintBenchmark(int repeat_count,
+                                 cc::PaintBenchmarkResult& result) = 0;
+
+  // Used in web tests without threaded compositing, to indicate that a new
+  // commit needs to be scheduled. Has no effect in any other mode.
+  virtual void ScheduleAnimationForWebTests() = 0;
 
  protected:
   virtual ~LayerTreeViewDelegate() {}

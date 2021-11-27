@@ -5,8 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_TYPED_ARRAYS_FLEXIBLE_ARRAY_BUFFER_VIEW_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_TYPED_ARRAYS_FLEXIBLE_ARRAY_BUFFER_VIEW_H_
 
-#include "base/macros.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_array_buffer_view.h"
+#include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer_view.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
@@ -46,7 +45,11 @@ class CORE_EXPORT FlexibleArrayBufferView {
       small_data_ = small_buffer_;
       small_length_ = size;
     } else {
-      full_ = V8ArrayBufferView::ToImpl(array_buffer_view);
+      NonThrowableExceptionState exception_state;
+      full_ = NativeValueTraits<MaybeShared<DOMArrayBufferView>>::NativeValue(
+                  array_buffer_view->GetIsolate(), array_buffer_view,
+                  exception_state)
+                  .Get();
     }
   }
 
@@ -68,20 +71,16 @@ class CORE_EXPORT FlexibleArrayBufferView {
     return IsFull() ? full_->BaseAddressMaybeShared() : small_data_;
   }
 
-  size_t ByteLengthAsSizeT() const {
+  size_t ByteLength() const {
     DCHECK(!IsNull());
-    return IsFull() ? full_->byteLengthAsSizeT() : small_length_;
+    return IsFull() ? full_->byteLength() : small_length_;
   }
 
   unsigned DeprecatedByteLengthAsUnsigned() const {
     DCHECK(!IsNull());
-    return IsFull() ? base::checked_cast<unsigned>(full_->byteLengthAsSizeT())
+    return IsFull() ? base::checked_cast<unsigned>(full_->byteLength())
                     : base::checked_cast<unsigned>(small_length_);
   }
-
-  // TODO(crbug.com/1050474): Remove this cast operator and make the callsites
-  // explicitly call IsNull().
-  operator bool() const { return !IsNull(); }
 
  private:
   DOMArrayBufferView* full_ = nullptr;

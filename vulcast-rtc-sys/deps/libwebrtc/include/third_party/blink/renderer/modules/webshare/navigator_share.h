@@ -15,7 +15,6 @@
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
-#include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 
@@ -28,13 +27,11 @@ class ShareData;
 class MODULES_EXPORT NavigatorShare final
     : public GarbageCollected<NavigatorShare>,
       public Supplement<Navigator> {
-  USING_GARBAGE_COLLECTED_MIXIN(NavigatorShare);
-
  public:
   static const char kSupplementName[];
 
-  NavigatorShare();
-  ~NavigatorShare();
+  NavigatorShare() : Supplement(nullptr) {}
+  ~NavigatorShare() = default;
 
   // Gets, or creates, NavigatorShare supplement on Navigator.
   // See platform/Supplementable.h
@@ -49,17 +46,20 @@ class MODULES_EXPORT NavigatorShare final
                              const ShareData*,
                              ExceptionState&);
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   class ShareClientImpl;
 
   void OnConnectionError();
 
-  HeapMojoRemote<blink::mojom::blink::ShareService,
-                 HeapMojoWrapperMode::kWithoutContextObserver>
-      service_remote_;
+  // |NavigatorShare| is not ExecutionContext-associated.
+  HeapMojoRemote<blink::mojom::blink::ShareService> service_remote_{nullptr};
 
+  // Represents a user's current intent to share some data.
+  // This set must have at most 1 element on non-Android platforms. This is a
+  // set, and not just and object in order to work around an Android specific
+  // bug in opposition to the web-share spec.
   HeapHashSet<Member<ShareClientImpl>> clients_;
 };
 

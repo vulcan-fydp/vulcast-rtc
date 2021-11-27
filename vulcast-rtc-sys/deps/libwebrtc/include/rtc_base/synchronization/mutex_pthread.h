@@ -7,17 +7,23 @@
  *  in the file PATENTS.  All contributing project authors may
  *  be found in the AUTHORS file in the root of the source tree.
  */
+
 #ifndef RTC_BASE_SYNCHRONIZATION_MUTEX_PTHREAD_H_
 #define RTC_BASE_SYNCHRONIZATION_MUTEX_PTHREAD_H_
+
 #if defined(WEBRTC_POSIX)
+
 #include <pthread.h>
 #if defined(WEBRTC_MAC)
 #include <pthread_spis.h>
 #endif
+
 #include "absl/base/attributes.h"
 #include "rtc_base/system/no_unique_address.h"
 #include "rtc_base/thread_annotations.h"
+
 namespace webrtc {
+
 class RTC_LOCKABLE MutexImpl final {
  public:
   MutexImpl() {
@@ -33,6 +39,7 @@ class RTC_LOCKABLE MutexImpl final {
   MutexImpl(const MutexImpl&) = delete;
   MutexImpl& operator=(const MutexImpl&) = delete;
   ~MutexImpl() { pthread_mutex_destroy(&mutex_); }
+
   void Lock() RTC_EXCLUSIVE_LOCK_FUNCTION() {
     pthread_mutex_lock(&mutex_);
     owner_.SetOwner();
@@ -49,6 +56,7 @@ class RTC_LOCKABLE MutexImpl final {
     owner_.ClearOwner();
     pthread_mutex_unlock(&mutex_);
   }
+
  private:
   class OwnerRecord {
    public:
@@ -66,6 +74,7 @@ class RTC_LOCKABLE MutexImpl final {
       RTC_CHECK(is_owned_);
       RTC_CHECK(pthread_equal(latest_owner_, pthread_self()));
     }
+
    private:
     // Use two separate primitive types, rather than absl::optional, since the
     // data race described below might invalidate absl::optional invariants.
@@ -73,6 +82,7 @@ class RTC_LOCKABLE MutexImpl final {
     pthread_t latest_owner_ = pthread_self();
 #endif
   };
+
   pthread_mutex_t mutex_;
   // This record is modified only with the mutex held, and hence, calls to
   // AssertHeld where mutex is held are race-free and will always succeed.
@@ -85,6 +95,7 @@ class RTC_LOCKABLE MutexImpl final {
   // when RTC_DCHECK_IS_ON==1).
   RTC_NO_UNIQUE_ADDRESS OwnerRecord owner_;
 };
+
 }  // namespace webrtc
 #endif  // #if defined(WEBRTC_POSIX)
 #endif  // RTC_BASE_SYNCHRONIZATION_MUTEX_PTHREAD_H_

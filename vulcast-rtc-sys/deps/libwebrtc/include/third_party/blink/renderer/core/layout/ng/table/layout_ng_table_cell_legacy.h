@@ -11,6 +11,11 @@
 
 namespace blink {
 
+extern template class CORE_EXTERN_TEMPLATE_EXPORT
+    LayoutNGBlockFlowMixin<LayoutTableCell>;
+extern template class CORE_EXTERN_TEMPLATE_EXPORT
+    LayoutNGMixin<LayoutTableCell>;
+
 // This is a LayoutNG variant of LayoutTableCell.
 // There are 3 table cell classes in Chrome
 // LayoutNGTableCell - TablesNG cell, whole table is NG.
@@ -29,6 +34,7 @@ class CORE_EXPORT LayoutNGTableCellLegacy final
 
  protected:
   bool IsOfType(LayoutObjectType type) const final {
+    NOT_DESTROYED();
     return type == kLayoutObjectTableCellLegacy ||
            LayoutNGBlockFlowMixin<LayoutTableCell>::IsOfType(type);
   }

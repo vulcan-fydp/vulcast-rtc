@@ -8,6 +8,7 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/heap_allocator.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
+#include "third_party/blink/renderer/platform/heap/visitor.h"
 
 namespace blink {
 
@@ -16,7 +17,6 @@ class Element;
 class HTMLImageElement;
 class IntersectionObserver;
 class IntersectionObserverEntry;
-class Visitor;
 
 class LazyLoadImageObserver final
     : public GarbageCollected<LazyLoadImageObserver> {
@@ -49,7 +49,7 @@ class LazyLoadImageObserver final
 
   bool IsFullyLoadableFirstKImageAndDecrementCount();
 
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
  private:
   void LoadIfNearViewport(const HeapVector<Member<IntersectionObserverEntry>>&);

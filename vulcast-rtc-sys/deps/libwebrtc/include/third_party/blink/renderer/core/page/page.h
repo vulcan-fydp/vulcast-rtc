@@ -25,22 +25,26 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/dcheck_is_on.h"
+#include "base/types/pass_key.h"
 #include "third_party/blink/public/mojom/devtools/inspector_issue.mojom-blink-forward.h"
+#include "third_party/blink/public/mojom/frame/text_autosizer_page_info.mojom-blink.h"
+#include "third_party/blink/public/mojom/page/page.mojom-blink.h"
 #include "third_party/blink/public/mojom/page/page_visibility_state.mojom-blink.h"
+#include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
 #include "third_party/blink/public/platform/scheduler/web_scoped_virtual_time_pauser.h"
-#include "third_party/blink/public/platform/web_text_autosizer_page_info.h"
 #include "third_party/blink/public/web/web_window_features.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/vision_deficiency.h"
 #include "third_party/blink/renderer/core/frame/deprecation.h"
 #include "third_party/blink/renderer/core/frame/settings_delegate.h"
+#include "third_party/blink/renderer/core/inspector/inspector_issue_storage.h"
 #include "third_party/blink/renderer/core/page/page_animator.h"
 #include "third_party/blink/renderer/core/page/page_visibility_observer.h"
 #include "third_party/blink/renderer/core/page/viewport_description.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
-#include "third_party/blink/renderer/platform/heap_observer_list.h"
+#include "third_party/blink/renderer/platform/heap_observer_set.h"
 #include "third_party/blink/renderer/platform/scheduler/public/page_lifecycle_state.h"
 #include "third_party/blink/renderer/platform/scheduler/public/page_scheduler.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
@@ -53,12 +57,10 @@ class AnimationHost;
 }
 
 namespace blink {
-class AgentMetricsCollector;
 class AutoscrollController;
 class BrowserControls;
 class ChromeClient;
 class ConsoleMessageStorage;
-class InspectorIssueStorage;
 class ContextMenuController;
 class Document;
 class DragCaret;
@@ -89,33 +91,34 @@ typedef uint64_t LinkHash;
 
 float DeviceScaleFactorDeprecated(LocalFrame*);
 
+// A Page roughly corresponds to a tab or popup window in a browser. It owns a
+// tree of frames (a blink::FrameTree). The root frame is called the main frame.
+//
+// Note that frames can be local or remote to this process.
 class CORE_EXPORT Page final : public GarbageCollected<Page>,
                                public Supplementable<Page>,
                                public SettingsDelegate,
                                public PageScheduler::Delegate {
-  USING_GARBAGE_COLLECTED_MIXIN(Page);
   friend class Settings;
 
  public:
-  // It is up to the platform to ensure that non-null clients are provided where
-  // required.
-  struct CORE_EXPORT PageClients final {
-    STACK_ALLOCATED();
-
-   public:
-    PageClients();
-
-    ChromeClient* chrome_client;
-    DISALLOW_COPY_AND_ASSIGN(PageClients);
-  };
-
   // Any pages not owned by a web view should be created using this method.
-  static Page* CreateNonOrdinary(PageClients& pages_clients);
+  static Page* CreateNonOrdinary(
+      ChromeClient& chrome_client,
+      scheduler::WebAgentGroupScheduler& agent_group_scheduler);
 
   // An "ordinary" page is a fully-featured page owned by a web view.
-  static Page* CreateOrdinary(PageClients&, Page* opener);
+  static Page* CreateOrdinary(
+      ChromeClient& chrome_client,
+      Page* opener,
+      scheduler::WebAgentGroupScheduler& agent_group_scheduler);
 
-  explicit Page(PageClients&);
+  Page(base::PassKey<Page>,
+       ChromeClient& chrome_client,
+       scheduler::WebAgentGroupScheduler& agent_group_scheduler,
+       bool is_ordinary);
+  Page(const Page&) = delete;
+  Page& operator=(const Page&) = delete;
   ~Page() override;
 
   void CloseSoon();
@@ -189,9 +192,6 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   ValidationMessageClient& GetValidationMessageClient() const {
     return *validation_message_client_;
   }
-  AgentMetricsCollector* GetAgentMetricsCollector() const {
-    return agent_metrics_collector_.Get();
-  }
   void SetValidationMessageClientForTesting(ValidationMessageClient*);
 
   ScrollingCoordinator* GetScrollingCoordinator();
@@ -246,6 +246,10 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   bool Paused() const { return paused_; }
   void SetPaused(bool);
 
+  // Frozen state corresponds to "lifecycle state for CPU suspension"
+  // https://wicg.github.io/page-lifecycle/#sec-lifecycle-states
+  bool Frozen() const { return frozen_; }
+
   void SetPageScaleFactor(float);
   float PageScaleFactor() const;
 
@@ -270,16 +274,13 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   mojom::blink::PageVisibilityState GetVisibilityState() const;
   bool IsPageVisible() const;
 
-  PageLifecycleState LifecycleState() const;
-
   bool IsCursorVisible() const;
   void SetIsCursorVisible(bool is_visible) { is_cursor_visible_ = is_visible; }
 
   // Don't allow more than a certain number of frames in a page.
-  // This seems like a reasonable upper bound, and otherwise mutually
-  // recursive frameset pages can quickly bring the program to its knees
-  // with exponential growth in the number of frames.
-  static const int kMaxNumberOfFrames = 1000;
+  static int MaxNumberOfFrames();
+  static void SetMaxNumberOfFramesToTenForTesting(bool enabled);
+
   void IncrementSubframeCount() { ++subframe_count_; }
   void DecrementSubframeCount() {
     DCHECK_GT(subframe_count_, 0);
@@ -300,7 +301,7 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
 
   void AcceptLanguagesChanged();
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
   void AnimationHostInitialized(cc::AnimationHost&, LocalFrameView*);
   void WillCloseAnimationHost(LocalFrameView*);
@@ -311,13 +312,14 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
 
   ScrollbarTheme& GetScrollbarTheme() const;
 
+  scheduler::WebAgentGroupScheduler& GetAgentGroupScheduler() const;
   PageScheduler* GetPageScheduler() const;
 
   // PageScheduler::Delegate implementation.
   bool IsOrdinary() const override;
   void ReportIntervention(const String& message) override;
   bool RequestBeginMainFrameNotExpected(bool new_state) override;
-  void SetLifecycleState(PageLifecycleState) override;
+  void OnSetPageFrozen(bool is_frozen) override;
   bool LocalMainFrameNetworkIsAlmostIdle() const override;
 
   void AddAutoplayFlags(int32_t flags);
@@ -328,10 +330,16 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   void SetInsidePortal(bool inside_portal);
   bool InsidePortal() const;
 
-  void SetTextAutosizerPageInfo(const WebTextAutosizerPageInfo& page_info) {
+  void SetIsPrerendering(bool is_prerendering) {
+    is_prerendering_ = is_prerendering;
+  }
+  bool IsPrerendering() const { return is_prerendering_; }
+
+  void SetTextAutosizerPageInfo(
+      const mojom::blink::TextAutosizerPageInfo& page_info) {
     web_text_autosizer_page_info_ = page_info;
   }
-  const WebTextAutosizerPageInfo& TextAutosizerPageInfo() const {
+  const mojom::blink::TextAutosizerPageInfo& TextAutosizerPageInfo() const {
     return web_text_autosizer_page_info_;
   }
 
@@ -349,11 +357,33 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
     return history_navigation_virtual_time_pauser_;
   }
 
-  HeapObserverList<PageVisibilityObserver>& PageVisibilityObserverList() {
-    return page_visibility_observer_list_;
+  HeapObserverSet<PageVisibilityObserver>& PageVisibilityObserverSet() {
+    return page_visibility_observer_set_;
   }
 
+  void SetPageLifecycleState(
+      mojom::blink::PageLifecycleStatePtr lifecycle_state) {
+    lifecycle_state_ = std::move(lifecycle_state);
+  }
+
+  const mojom::blink::PageLifecycleStatePtr& GetPageLifecycleState() {
+    return lifecycle_state_;
+  }
+
+  // Whether we've dispatched "pagehide" on this page previously, and haven't
+  // dispatched the "pageshow" event after the last time we've dispatched
+  // "pagehide". This means that we've navigated away from the page and it's
+  // still hidden (possibly preserved in the back-forward cache, or unloaded).
+  bool DispatchedPagehideAndStillHidden();
+
+  // Similar to above, but will only return true if we've dispatched 'pagehide'
+  // with the 'persisted' property set to 'true'.
+  bool DispatchedPagehidePersistedAndStillHidden();
+
   static void PrepareForLeakDetection();
+
+  // Fully invalidate paint of all local frames in this page.
+  void InvalidatePaint();
 
  private:
   friend class ScopedPagePauser;
@@ -366,10 +396,8 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   // Notify |plugins_changed_observers_| that plugins have changed.
   void NotifyPluginsChanged() const;
 
-  void SetPageScheduler(std::unique_ptr<PageScheduler>);
-
   void InvalidateColorScheme();
-  void InvalidatePaint();
+
   // Typically, the main frame and Page should both be owned by the embedder,
   // which must call Page::willBeDestroyed() prior to destroying Page. This
   // call detaches the main frame and clears this pointer, thus ensuring that
@@ -384,6 +412,7 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   // longer needed.
   Member<Frame> main_frame_;
 
+  scheduler::WebAgentGroupScheduler& agent_group_scheduler_;
   Member<PageAnimator> animator_;
   const Member<AutoscrollController> autoscroll_controller_;
   Member<ChromeClient> chrome_client_;
@@ -392,12 +421,11 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   const Member<FocusController> focus_controller_;
   const Member<ContextMenuController> context_menu_controller_;
   const Member<PageScaleConstraintsSet> page_scale_constraints_set_;
-  HeapObserverList<PageVisibilityObserver> page_visibility_observer_list_;
+  HeapObserverSet<PageVisibilityObserver> page_visibility_observer_set_;
   const Member<PointerLockController> pointer_lock_controller_;
   Member<ScrollingCoordinator> scrolling_coordinator_;
   const Member<BrowserControls> browser_controls_;
   const Member<ConsoleMessageStorage> console_message_storage_;
-  const Member<InspectorIssueStorage> inspector_issue_storage_;
   const Member<TopDocumentRootScrollerController>
       global_root_scroller_controller_;
   const Member<VisualViewport> visual_viewport_;
@@ -409,9 +437,7 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
 
   Member<ValidationMessageClient> validation_message_client_;
 
-  // Stored only for ordinary pages to avoid adding metrics from things like
-  // overlays, popups and SVG.
-  Member<AgentMetricsCollector> agent_metrics_collector_;
+  InspectorIssueStorage inspector_issue_storage_;
 
   Deprecation deprecation_;
   WebWindowFeatures window_features_;
@@ -425,17 +451,22 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   bool is_closing_;
 
   bool tab_key_cycles_through_elements_;
-  bool paused_;
 
   float device_scale_factor_;
 
-  mojom::blink::PageVisibilityState visibility_state_;
+  mojom::blink::PageLifecycleStatePtr lifecycle_state_;
 
   bool is_ordinary_;
 
-  PageLifecycleState page_lifecycle_state_;
-
   bool is_cursor_visible_;
+
+  // See Page::Paused and Page::Frozen for the detailed description of paused
+  // and frozen state. The main distinction is that "frozen" state is
+  // web-exposed (onfreeze / onresume) and controlled from the browser process,
+  // while "paused" state is an implementation detail of handling sync IPCs and
+  // controlled from the renderer.
+  bool paused_ = false;
+  bool frozen_ = false;
 
 #if DCHECK_IS_ON()
   bool is_painting_ = false;
@@ -467,11 +498,17 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   // Accessed by frames to determine whether to expose the PortalHost object.
   bool inside_portal_ = false;
 
-  WebTextAutosizerPageInfo web_text_autosizer_page_info_;
+  // Whether the page is being prerendered by the Prerender2
+  // feature. See content/browser/prerender/README.md.
+  //
+  // This is ordinarily initialized by WebViewImpl immediately after creating
+  // this Page. Once initialized, it can only transition from true to false on
+  // prerender activation; it does not go from false to true.
+  bool is_prerendering_ = false;
+
+  mojom::blink::TextAutosizerPageInfo web_text_autosizer_page_info_;
 
   WebScopedVirtualTimePauser history_navigation_virtual_time_pauser_;
-
-  DISALLOW_COPY_AND_ASSIGN(Page);
 };
 
 extern template class CORE_EXTERN_TEMPLATE_EXPORT Supplement<Page>;

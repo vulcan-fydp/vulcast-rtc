@@ -5,8 +5,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_SENSOR_SENSOR_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_SENSOR_SENSOR_H_
 
-#include "third_party/blink/public/common/feature_policy/feature_policy.h"
-#include "third_party/blink/public/mojom/feature_policy/feature_policy_feature.mojom-blink.h"
+#include "third_party/blink/public/common/permissions_policy/permissions_policy.h"
+#include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_sensor_options.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_spatial_sensor_options.h"
@@ -32,7 +32,6 @@ class MODULES_EXPORT Sensor : public EventTargetWithInlineData,
                               public ActiveScriptWrappable<Sensor>,
                               public ExecutionContextLifecycleObserver,
                               public SensorProxy::Observer {
-  USING_GARBAGE_COLLECTED_MIXIN(Sensor);
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -53,8 +52,8 @@ class MODULES_EXPORT Sensor : public EventTargetWithInlineData,
 
   // Getters
   bool activated() const;
-  bool hasReading() const;
-  base::Optional<DOMHighResTimeStamp> timestamp(ScriptState*) const;
+  virtual bool hasReading() const;
+  absl::optional<DOMHighResTimeStamp> timestamp(ScriptState*) const;
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(error, kError)
   DEFINE_ATTRIBUTE_EVENT_LISTENER(reading, kReading)
@@ -63,20 +62,20 @@ class MODULES_EXPORT Sensor : public EventTargetWithInlineData,
   // ActiveScriptWrappable overrides.
   bool HasPendingActivity() const override;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  protected:
   Sensor(ExecutionContext*,
          const SensorOptions*,
          ExceptionState&,
          device::mojom::blink::SensorType,
-         const Vector<mojom::blink::FeaturePolicyFeature>&);
+         const Vector<mojom::blink::PermissionsPolicyFeature>&);
 
   Sensor(ExecutionContext*,
          const SpatialSensorOptions*,
          ExceptionState&,
          device::mojom::blink::SensorType,
-         const Vector<mojom::blink::FeaturePolicyFeature>&);
+         const Vector<mojom::blink::PermissionsPolicyFeature>&);
 
   using SensorConfigurationPtr = device::mojom::blink::SensorConfigurationPtr;
   using SensorConfiguration = device::mojom::blink::SensorConfiguration;
@@ -86,7 +85,6 @@ class MODULES_EXPORT Sensor : public EventTargetWithInlineData,
   // parameters if needed.
   virtual SensorConfigurationPtr CreateSensorConfig();
 
-  bool IsActivated() const { return state_ == SensorState::kActivated; }
   bool IsIdleOrErrored() const;
   const device::SensorReading& GetReading() const;
 

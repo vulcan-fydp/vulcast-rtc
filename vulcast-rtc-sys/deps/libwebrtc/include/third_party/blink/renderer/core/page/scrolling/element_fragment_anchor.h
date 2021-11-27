@@ -14,6 +14,7 @@ namespace blink {
 
 class LocalFrame;
 class KURL;
+class Node;
 
 // An element fragment anchor is a FragmentAnchor based on a single element.
 // This is the traditional fragment anchor of the web. For example, the fragment
@@ -34,6 +35,8 @@ class CORE_EXPORT ElementFragmentAnchor final : public FragmentAnchor {
                                           bool should_scroll);
 
   ElementFragmentAnchor(Node& anchor_node, LocalFrame& frame);
+  ElementFragmentAnchor(const ElementFragmentAnchor&) = delete;
+  ElementFragmentAnchor& operator=(const ElementFragmentAnchor&) = delete;
   ~ElementFragmentAnchor() override = default;
 
   // Will attempt to scroll the anchor into view.
@@ -55,7 +58,9 @@ class CORE_EXPORT ElementFragmentAnchor final : public FragmentAnchor {
   // Does nothing as an element anchor does not have any dismissal work.
   bool Dismiss() override;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
+
+  bool IsTextFragmentAnchor() override { return false; }
 
  private:
   FRIEND_TEST_ALL_PREFIXES(ElementFragmentAnchorTest,
@@ -72,8 +77,6 @@ class CORE_EXPORT ElementFragmentAnchor final : public FragmentAnchor {
   // Invoke has no effect and the fragment can be disposed (unless focus is
   // still needed).
   bool needs_invoke_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(ElementFragmentAnchor);
 };
 
 }  // namespace blink

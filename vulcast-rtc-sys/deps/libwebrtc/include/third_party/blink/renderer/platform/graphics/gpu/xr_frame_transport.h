@@ -62,7 +62,7 @@ class PLATFORM_EXPORT XRFrameTransport final
                           gpu::gles2::GLES2Interface*,
                           int16_t vr_frame_id);
 
-  virtual void Trace(Visitor*);
+  virtual void Trace(Visitor*) const;
 
  private:
   void WaitForPreviousTransfer();
@@ -72,11 +72,9 @@ class PLATFORM_EXPORT XRFrameTransport final
   // XRPresentationClient
   void OnSubmitFrameTransferred(bool success) override;
   void OnSubmitFrameRendered() override;
-  void OnSubmitFrameGpuFence(const gfx::GpuFenceHandle&) override;
+  void OnSubmitFrameGpuFence(gfx::GpuFenceHandle) override;
 
-  HeapMojoReceiver<device::mojom::blink::XRPresentationClient,
-                   XRFrameTransport,
-                   HeapMojoWrapperMode::kWithoutContextObserver>
+  HeapMojoReceiver<device::mojom::blink::XRPresentationClient, XRFrameTransport>
       submit_frame_client_receiver_;
 
   // Used to keep the image alive until the next frame if using

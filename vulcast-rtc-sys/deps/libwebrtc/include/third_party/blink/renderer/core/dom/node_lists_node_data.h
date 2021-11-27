@@ -22,7 +22,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_DOM_NODE_LISTS_NODE_DATA_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_DOM_NODE_LISTS_NODE_DATA_H_
 
-#include "base/macros.h"
 #include "third_party/blink/renderer/core/dom/child_node_list.h"
 #include "third_party/blink/renderer/core/dom/empty_node_list.h"
 #include "third_party/blink/renderer/core/dom/qualified_name.h"
@@ -113,8 +112,9 @@ class NodeListsNodeData final : public GarbageCollected<NodeListsNodeData> {
 
   template <typename T>
   T* Cached(CollectionType collection_type) {
-    return static_cast<T*>(atomic_name_caches_.at(NamedNodeListKey(
-        collection_type, CSSSelector::UniversalSelectorAtom())));
+    return static_cast<T*>(
+        atomic_name_caches_.DeprecatedAtOrEmptyValue(NamedNodeListKey(
+            collection_type, CSSSelector::UniversalSelectorAtom())));
   }
 
   TagCollectionNS* AddCache(ContainerNode& node,
@@ -133,6 +133,8 @@ class NodeListsNodeData final : public GarbageCollected<NodeListsNodeData> {
   }
 
   NodeListsNodeData() : child_node_list_(nullptr) {}
+  NodeListsNodeData(const NodeListsNodeData&) = delete;
+  NodeListsNodeData& operator=(const NodeListsNodeData&) = delete;
 
   void InvalidateCaches(const QualifiedName* attr_name = nullptr);
 
@@ -166,14 +168,13 @@ class NodeListsNodeData final : public GarbageCollected<NodeListsNodeData> {
     }
   }
 
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
  private:
   // Can be a ChildNodeList or an EmptyNodeList.
   Member<NodeList> child_node_list_;
   NodeListAtomicNameCacheMap atomic_name_caches_;
   TagCollectionNSCache tag_collection_ns_caches_;
-  DISALLOW_COPY_AND_ASSIGN(NodeListsNodeData);
 };
 
 template <typename Collection>

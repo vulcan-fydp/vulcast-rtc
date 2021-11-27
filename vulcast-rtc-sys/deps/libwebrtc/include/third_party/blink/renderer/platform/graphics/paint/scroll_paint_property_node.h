@@ -6,10 +6,12 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_PAINT_SCROLL_PAINT_PROPERTY_NODE_H_
 
 #include <algorithm>
-#include "base/optional.h"
+
+#include "base/dcheck_is_on.h"
 #include "cc/input/main_thread_scrolling_reason.h"
 #include "cc/input/overscroll_behavior.h"
 #include "cc/input/scroll_snap_data.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/geometry/float_point.h"
 #include "third_party/blink/renderer/platform/geometry/float_size.h"
 #include "third_party/blink/renderer/platform/geometry/int_rect.h"
@@ -34,7 +36,8 @@ using MainThreadScrollingReasons = uint32_t;
 // The scroll tree differs from the other trees because it does not affect
 // geometry directly.
 class PLATFORM_EXPORT ScrollPaintPropertyNode
-    : public PaintPropertyNode<ScrollPaintPropertyNode> {
+    : public PaintPropertyNode<ScrollPaintPropertyNode,
+                               ScrollPaintPropertyNode> {
  public:
   // To make it less verbose and more readable to construct and update a node,
   // a struct with default values is used to represent the state.
@@ -58,9 +61,9 @@ class PLATFORM_EXPORT ScrollPaintPropertyNode
     // The scrolling element id is stored directly on the scroll node and not
     // on the associated TransformPaintPropertyNode used for scroll offset.
     CompositorElementId compositor_element_id;
-    cc::OverscrollBehavior overscroll_behavior = cc::OverscrollBehavior(
-        cc::OverscrollBehavior::kOverscrollBehaviorTypeAuto);
-    base::Optional<cc::SnapContainerData> snap_container_data;
+    cc::OverscrollBehavior overscroll_behavior =
+        cc::OverscrollBehavior(cc::OverscrollBehavior::Type::kAuto);
+    absl::optional<cc::SnapContainerData> snap_container_data;
 
     PaintPropertyChangeType ComputeChange(const State& other) const {
       if (container_rect != other.container_rect ||
@@ -104,7 +107,7 @@ class PLATFORM_EXPORT ScrollPaintPropertyNode
   PaintPropertyChangeType Update(const ScrollPaintPropertyNode& parent,
                                  State&& state,
                                  const AnimationState& = AnimationState()) {
-    auto parent_changed = SetParent(&parent);
+    auto parent_changed = SetParent(parent);
     auto state_changed = state_.ComputeChange(state);
     if (state_changed != PaintPropertyChangeType::kUnchanged) {
       state_ = std::move(state);
@@ -114,15 +117,17 @@ class PLATFORM_EXPORT ScrollPaintPropertyNode
     return std::max(parent_changed, state_changed);
   }
 
-  cc::OverscrollBehavior::OverscrollBehaviorType OverscrollBehaviorX() const {
+  const ScrollPaintPropertyNode& Unalias() const = delete;
+
+  cc::OverscrollBehavior::Type OverscrollBehaviorX() const {
     return state_.overscroll_behavior.x;
   }
 
-  cc::OverscrollBehavior::OverscrollBehaviorType OverscrollBehaviorY() const {
+  cc::OverscrollBehavior::Type OverscrollBehaviorY() const {
     return state_.overscroll_behavior.y;
   }
 
-  base::Optional<cc::SnapContainerData> GetSnapContainerData() const {
+  absl::optional<cc::SnapContainerData> GetSnapContainerData() const {
     return state_.snap_container_data;
   }
 
@@ -176,6 +181,8 @@ class PLATFORM_EXPORT ScrollPaintPropertyNode
       : PaintPropertyNode(parent), state_(std::move(state)) {
     Validate();
   }
+
+  using PaintPropertyNode::SetParent;
 
   void Validate() const {
 #if DCHECK_IS_ON()

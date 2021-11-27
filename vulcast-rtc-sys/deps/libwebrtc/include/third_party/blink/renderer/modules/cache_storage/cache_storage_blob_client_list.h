@@ -8,6 +8,7 @@
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "third_party/blink/public/mojom/blob/blob.mojom-blink.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+#include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/heap/heap.h"
 #include "third_party/blink/renderer/platform/loader/fetch/data_pipe_bytes_consumer.h"
 
@@ -15,7 +16,7 @@ namespace blink {
 
 // This class holds a list of BlobReaderClient implementations alive until
 // they complete or the entire list is garbage collected.
-class CacheStorageBlobClientList
+class MODULES_EXPORT CacheStorageBlobClientList
     : public GarbageCollected<CacheStorageBlobClientList> {
  public:
   CacheStorageBlobClientList() = default;
@@ -25,14 +26,14 @@ class CacheStorageBlobClientList
           client_pending_receiver,
       DataPipeBytesConsumer::CompletionNotifier* completion_notifier);
 
-  void Trace(Visitor* visitor);
+  void Trace(Visitor* visitor) const;
 
  private:
   class Client;
 
   void RevokeClient(Client* client);
 
-  HeapVector<Member<Client>> clients;
+  HeapVector<Member<Client>> clients_;
   DISALLOW_COPY_AND_ASSIGN(CacheStorageBlobClientList);
 };
 

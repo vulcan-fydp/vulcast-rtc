@@ -4,8 +4,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_SCROLL_SMOOTH_SCROLL_SEQUENCER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_SCROLL_SMOOTH_SCROLL_SEQUENCER_H_
 
-#include <utility>
-
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/scroll/scroll_types.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
@@ -33,7 +31,7 @@ struct SequencedScroll final : public GarbageCollected<SequencedScroll> {
   ScrollOffset scroll_offset;
   mojom::blink::ScrollBehavior scroll_behavior;
 
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 };
 
 // A sequencer that queues the nested scrollers from inside to outside,
@@ -63,7 +61,7 @@ class CORE_EXPORT SmoothScrollSequencer final
 
   void DidDisposeScrollableArea(const ScrollableArea&);
 
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
  private:
   HeapVector<Member<SequencedScroll>> queue_;

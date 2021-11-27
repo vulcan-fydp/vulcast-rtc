@@ -31,9 +31,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_WEBSOCKETS_DOM_WEBSOCKET_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WEBSOCKETS_DOM_WEBSOCKET_H_
 
-#include <stddef.h>
-#include <stdint.h>
-#include <memory>
+#include <cstddef>
+#include <cstdint>
+
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/core/dom/events/event_listener.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
@@ -60,7 +60,7 @@ class DOMArrayBuffer;
 class DOMArrayBufferView;
 class ExceptionState;
 class ExecutionContext;
-class StringOrStringSequence;
+class V8UnionStringOrStringSequence;
 
 class MODULES_EXPORT DOMWebSocket
     : public EventTargetWithInlineData,
@@ -68,7 +68,6 @@ class MODULES_EXPORT DOMWebSocket
       public ExecutionContextLifecycleStateObserver,
       public WebSocketChannelClient {
   DEFINE_WRAPPERTYPEINFO();
-  USING_GARBAGE_COLLECTED_MIXIN(DOMWebSocket);
 
  public:
   // These definitions are required by V8DOMWebSocket.
@@ -83,10 +82,10 @@ class MODULES_EXPORT DOMWebSocket
   static DOMWebSocket* Create(ExecutionContext*,
                               const String& url,
                               ExceptionState&);
-  static DOMWebSocket* Create(ExecutionContext*,
+  static DOMWebSocket* Create(ExecutionContext* execution_context,
                               const String& url,
-                              const StringOrStringSequence& protocols,
-                              ExceptionState&);
+                              const V8UnionStringOrStringSequence* protocols,
+                              ExceptionState& exception_state);
 
   explicit DOMWebSocket(ExecutionContext*);
   ~DOMWebSocket() override;
@@ -149,7 +148,7 @@ class MODULES_EXPORT DOMWebSocket
                 uint16_t code,
                 const String& reason) override;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   // FIXME: This should inherit blink::EventQueue.
@@ -175,7 +174,7 @@ class MODULES_EXPORT DOMWebSocket
 
     bool IsPaused();
 
-    void Trace(Visitor*);
+    void Trace(Visitor*) const;
 
    private:
     enum State {
@@ -199,13 +198,6 @@ class MODULES_EXPORT DOMWebSocket
     kString,
     kArrayBuffer,
     kArrayBufferView,
-    kBlob,
-    kMaxValue = kBlob,
-  };
-
-  enum class WebSocketReceiveType {
-    kString,
-    kArrayBuffer,
     kBlob,
     kMaxValue = kBlob,
   };
@@ -245,8 +237,6 @@ class MODULES_EXPORT DOMWebSocket
 
   void ReleaseChannel();
   void RecordSendTypeHistogram(WebSocketSendType);
-  void RecordSendMessageSizeHistogram(WebSocketSendType, size_t);
-  void RecordReceiveMessageSizeHistogram(WebSocketReceiveType, size_t);
 
   Member<WebSocketChannel> channel_;
 

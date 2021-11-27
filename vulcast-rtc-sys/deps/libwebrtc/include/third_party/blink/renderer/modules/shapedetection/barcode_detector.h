@@ -36,12 +36,11 @@ class MODULES_EXPORT BarcodeDetector final : public ShapeDetector {
   explicit BarcodeDetector(ExecutionContext*,
                            const BarcodeDetectorOptions*,
                            ExceptionState& exception_state);
-
-  void Trace(Visitor*) override;
-
- private:
   ~BarcodeDetector() override = default;
 
+  void Trace(Visitor*) const override;
+
+ private:
   ScriptPromise DoDetect(ScriptPromiseResolver*, SkBitmap) override;
   void OnDetectBarcodes(
       ScriptPromiseResolver*,
@@ -49,9 +48,7 @@ class MODULES_EXPORT BarcodeDetector final : public ShapeDetector {
 
   void OnConnectionError();
 
-  HeapMojoRemote<shape_detection::mojom::blink::BarcodeDetection,
-                 HeapMojoWrapperMode::kWithoutContextObserver>
-      service_;
+  HeapMojoRemote<shape_detection::mojom::blink::BarcodeDetection> service_;
 
   HeapHashSet<Member<ScriptPromiseResolver>> detect_requests_;
 };

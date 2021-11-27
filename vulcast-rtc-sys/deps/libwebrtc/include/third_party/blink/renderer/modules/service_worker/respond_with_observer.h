@@ -27,8 +27,6 @@ class WaitUntilObserver;
 class MODULES_EXPORT RespondWithObserver
     : public GarbageCollected<RespondWithObserver>,
       public ExecutionContextClient {
-  USING_GARBAGE_COLLECTED_MIXIN(RespondWithObserver);
-
  public:
   virtual ~RespondWithObserver() = default;
 
@@ -47,14 +45,12 @@ class MODULES_EXPORT RespondWithObserver
   // Called when the respondWith() promise was fulfilled.
   virtual void OnResponseFulfilled(ScriptState*,
                                    const ScriptValue&,
-                                   ExceptionState::ContextType,
-                                   const char* interface_name,
-                                   const char* property_name) = 0;
+                                   const ExceptionContext&) = 0;
 
   // Called when the event handler finished without calling respondWith().
   virtual void OnNoResponse() = 0;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  protected:
   RespondWithObserver(ExecutionContext*, int event_id, WaitUntilObserver*);
@@ -67,9 +63,7 @@ class MODULES_EXPORT RespondWithObserver
   void ResponseWasRejected(mojom::ServiceWorkerResponseError,
                            const ScriptValue&);
   void ResponseWasFulfilled(ScriptState* state,
-                            ExceptionState::ContextType,
-                            const char* interface_name,
-                            const char* property_name,
+                            const ExceptionContext&,
                             const ScriptValue&);
 
   enum State { kInitial, kPending, kDone };

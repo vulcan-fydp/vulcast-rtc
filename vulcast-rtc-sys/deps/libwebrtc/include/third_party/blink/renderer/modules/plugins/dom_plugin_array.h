@@ -31,17 +31,16 @@
 
 namespace blink {
 
-class LocalFrame;
+class LocalDOMWindow;
 class PluginData;
 
 class DOMPluginArray final : public ScriptWrappable,
                              public ExecutionContextLifecycleObserver,
                              public PluginsChangedObserver {
   DEFINE_WRAPPERTYPEINFO();
-  USING_GARBAGE_COLLECTED_MIXIN(DOMPluginArray);
 
  public:
-  explicit DOMPluginArray(LocalFrame*);
+  explicit DOMPluginArray(LocalDOMWindow*);
 
   void UpdatePluginData();
 
@@ -53,14 +52,22 @@ class DOMPluginArray final : public ScriptWrappable,
 
   void refresh(bool reload);
 
+  // This function returns the "fixed" list of mime types, for the PDF viewer
+  // only. This function should only be used when the
+  // ShouldReturnFixedPluginData feature is enabled.
+  HeapVector<Member<DOMMimeType>> GetFixedMimeTypeArray();
+  bool IsPdfViewerAvailable();
+
   // PluginsChangedObserver implementation.
   void PluginsChanged() override;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   PluginData* GetPluginData() const;
   void ContextDestroyed() override;
+
+  bool ShouldReturnFixedPluginData() const;
 
   HeapVector<Member<DOMPlugin>> dom_plugins_;
 };
