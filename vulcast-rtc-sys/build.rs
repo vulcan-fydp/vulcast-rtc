@@ -10,6 +10,7 @@ fn main() {
     // create bindgen bindings
     let bindings = bindgen::Builder::default()
         .header("src/wrapper.hpp")
+        .clang_arg("-std=c++14")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
         .expect("unable to generate bindings");
