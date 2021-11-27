@@ -17,6 +17,11 @@
 
 #include <glog/logging.h>
 
+#ifdef VULCAST_RTC_RPI
+#include "raspi_decoder.h"
+#include "raspi_encoder.h"
+#endif
+
 static rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> factory;
 
 /* MediaStreamTrack holds reference to the threads of the PeerConnectionFactory.
@@ -51,8 +56,14 @@ static void createFactory() {
       networkThread, workerThread, signalingThread, fakeAudioCaptureModule,
       webrtc::CreateBuiltinAudioEncoderFactory(),
       webrtc::CreateBuiltinAudioDecoderFactory(),
+#ifdef VULCAST_RTC_RPI
+      webrtc::CreateRaspiVideoEncoderFactory(),
+      webrtc::CreateRaspiVideoDecoderFactory(), 
+#else
       webrtc::CreateBuiltinVideoEncoderFactory(),
-      webrtc::CreateBuiltinVideoDecoderFactory(), nullptr /*audio_mixer*/,
+      webrtc::CreateBuiltinVideoDecoderFactory(), 
+#endif
+      nullptr /*audio_mixer*/,
       nullptr /*audio_processing*/);
 
   if (!factory) {
@@ -157,7 +168,8 @@ createForeignVideoTrack(size_t width, size_t height, size_t fps, void *ctx,
   auto task_queue_factory = webrtc::CreateDefaultTaskQueueFactory();
   auto video_capturer = std::make_unique<webrtc::test::FrameGeneratorCapturer>(
       webrtc::Clock::GetRealTimeClock(),
-      std::make_unique<ForeignFrameGenerator>(width, height, webrtc::Clock::GetRealTimeClock(), ctx, callback),
+      std::make_unique<ForeignFrameGenerator>(
+          width, height, webrtc::Clock::GetRealTimeClock(), ctx, callback),
       fps, *task_queue_factory);
   video_capturer->Init();
 

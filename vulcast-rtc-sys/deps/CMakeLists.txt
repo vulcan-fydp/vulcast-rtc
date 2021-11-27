@@ -2,6 +2,8 @@ include(FetchContent)
 
 # libwebrtc
 add_subdirectory(libwebrtc)
+target_link_libraries(${PROJECT_NAME} PUBLIC webrtc)
+target_link_libraries(${PROJECT_NAME} PUBLIC webrtcextra)
 
 # mediasoup
 FetchContent_Declare(
