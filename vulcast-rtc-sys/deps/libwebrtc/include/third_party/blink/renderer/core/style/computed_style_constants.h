@@ -64,6 +64,10 @@ enum PseudoId : uint8_t {
   kPseudoIdBackdrop,
   kPseudoIdSelection,
   kPseudoIdScrollbar,
+  kPseudoIdTargetText,
+  kPseudoIdHighlight,
+  kPseudoIdSpellingError,
+  kPseudoIdGrammarError,
   // Internal IDs follow:
   kPseudoIdFirstLineInherited,
   kPseudoIdScrollbarThumb,
@@ -78,6 +82,28 @@ enum PseudoId : uint8_t {
   kFirstPublicPseudoId = kPseudoIdFirstLine,
   kFirstInternalPseudoId = kPseudoIdFirstLineInherited,
 };
+
+inline bool IsHighlightPseudoElement(PseudoId pseudo_id) {
+  switch (pseudo_id) {
+    case kPseudoIdSelection:
+    case kPseudoIdTargetText:
+    case kPseudoIdHighlight:
+    case kPseudoIdSpellingError:
+    case kPseudoIdGrammarError:
+      return true;
+    default:
+      return false;
+  }
+}
+
+inline bool PseudoElementHasArguments(PseudoId pseudo_id) {
+  switch (pseudo_id) {
+    case kPseudoIdHighlight:
+      return true;
+    default:
+      return false;
+  }
+}
 
 enum class OutlineIsAuto : bool { kOff = false, kOn = true };
 
@@ -130,9 +156,6 @@ enum class EFillSizeType : unsigned {
 // CSS3 Background Position
 enum class BackgroundEdgeOrigin : unsigned { kTop, kRight, kBottom, kLeft };
 
-// CSS Mask Source Types
-enum class EMaskSourceType : unsigned { kAlpha, kLuminance };
-
 // CSS3 Image Values
 enum class QuoteType : unsigned { kOpen, kClose, kNoOpen, kNoClose };
 
@@ -162,20 +185,36 @@ enum GridAutoFlow {
                          int(kInternalAutoFlowDirectionColumn)
 };
 
-static const size_t kContainmentBits = 4;
+static const size_t kContainmentBits = 5;
 enum Containment {
   kContainsNone = 0x0,
   kContainsLayout = 0x1,
   kContainsStyle = 0x2,
   kContainsPaint = 0x4,
-  kContainsSize = 0x8,
-  kContainsStrict = kContainsLayout | kContainsPaint | kContainsSize,
-  kContainsContent = kContainsLayout | kContainsPaint,
+  kContainsBlockSize = 0x8,
+  kContainsInlineSize = 0x10,
+  kContainsSize = kContainsBlockSize | kContainsInlineSize,
+  kContainsStrict =
+      kContainsStyle | kContainsLayout | kContainsPaint | kContainsSize,
+  kContainsContent = kContainsStyle | kContainsLayout | kContainsPaint,
 };
 inline Containment operator|(Containment a, Containment b) {
   return Containment(int(a) | int(b));
 }
 inline Containment& operator|=(Containment& a, Containment b) {
+  return a = a | b;
+}
+
+static const size_t kContainerTypeBits = 2;
+enum EContainerType {
+  kContainerTypeNone = 0x0,
+  kContainerTypeInlineSize = 0x1,
+  kContainerTypeBlockSize = 0x2,
+};
+inline EContainerType operator|(EContainerType a, EContainerType b) {
+  return EContainerType(int(a) | int(b));
+}
+inline EContainerType& operator|=(EContainerType& a, EContainerType b) {
   return a = a | b;
 }
 
@@ -261,6 +300,38 @@ enum class TextEmphasisPosition : unsigned {
 enum class LineLogicalSide {
   kOver,
   kUnder,
+};
+
+constexpr size_t kScrollbarGutterBits = 2;
+enum ScrollbarGutter {
+  kScrollbarGutterAuto = 0x0,
+  kScrollbarGutterStable = 0x1,
+  kScrollbarGutterBothEdges = 0x2,
+};
+inline ScrollbarGutter operator|(ScrollbarGutter a, ScrollbarGutter b) {
+  return ScrollbarGutter(int(a) | int(b));
+}
+inline ScrollbarGutter& operator|=(ScrollbarGutter& a, ScrollbarGutter b) {
+  return a = a | b;
+}
+
+enum class EBaselineShiftType : unsigned { kLength, kSub, kSuper };
+
+enum EPaintOrderType {
+  PT_NONE = 0,
+  PT_FILL = 1,
+  PT_STROKE = 2,
+  PT_MARKERS = 3
+};
+
+enum EPaintOrder {
+  kPaintOrderNormal,
+  kPaintOrderFillStrokeMarkers,
+  kPaintOrderFillMarkersStroke,
+  kPaintOrderStrokeFillMarkers,
+  kPaintOrderStrokeMarkersFill,
+  kPaintOrderMarkersFillStroke,
+  kPaintOrderMarkersStrokeFill
 };
 
 }  // namespace blink

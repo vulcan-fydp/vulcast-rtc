@@ -59,6 +59,9 @@ enum class AXUIntAttribute {
 enum class AXStringAttribute {
   kAriaKeyShortcuts,
   kAriaRoleDescription,
+  // TODO(bebeaudr): kAriaVirtualContent is currently a string attribute to
+  // facilitate prototyping. Make it an enum when we're done prototyping.
+  kAriaVirtualContent,
 };
 
 enum class AXObjectAttribute {
@@ -94,27 +97,26 @@ enum AXTextFromNativeHTML {
   kAXTextFromNativeHTMLLabelFor,
   kAXTextFromNativeHTMLLabelWrapped,
   kAXTextFromNativeHTMLLegend,
+  kAXTextFromNativeHTMLRubyAnnotation,
   kAXTextFromNativeHTMLTableCaption,
   kAXTextFromNativeHTMLTitleElement,
 };
 
 enum AXIgnoredReason {
   kAXActiveModalDialog,
-  kAXAncestorIsLeafNode,
+  kAXAriaModalDialog,
   kAXAriaHiddenElement,
   kAXAriaHiddenSubtree,
   kAXEmptyAlt,
   kAXEmptyText,
   kAXInertElement,
   kAXInertSubtree,
-  kAXInheritsPresentation,
   kAXLabelContainer,
   kAXLabelFor,
   kAXNotRendered,
   kAXNotVisible,
   kAXPresentational,
   kAXProbablyPresentational,
-  kAXStaticTextUsedAsNameFor,
   kAXUninteresting
 };
 

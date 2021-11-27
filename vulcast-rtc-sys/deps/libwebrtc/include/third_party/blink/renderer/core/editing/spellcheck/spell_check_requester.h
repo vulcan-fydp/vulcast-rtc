@@ -26,7 +26,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_EDITING_SPELLCHECK_SPELL_CHECK_REQUESTER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_EDITING_SPELLCHECK_SPELL_CHECK_REQUESTER_H_
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/range.h"
@@ -68,7 +67,7 @@ class CORE_EXPORT SpellCheckRequest final
 
   int RequestNumber() const { return request_number_; }
 
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
  private:
   Member<SpellCheckRequester> requester_;
@@ -83,8 +82,10 @@ class CORE_EXPORT SpellCheckRequester final
     : public GarbageCollected<SpellCheckRequester> {
  public:
   explicit SpellCheckRequester(LocalDOMWindow&);
+  SpellCheckRequester(const SpellCheckRequester&) = delete;
+  SpellCheckRequester& operator=(const SpellCheckRequester&) = delete;
   ~SpellCheckRequester();
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
   // Returns true if a request is initiated. Returns false otherwise.
   bool RequestCheckingFor(const EphemeralRange&);
@@ -117,7 +118,6 @@ class CORE_EXPORT SpellCheckRequester final
 
   int last_request_sequence_;
   int last_processed_sequence_;
-  base::TimeTicks last_request_time_;
 
   TaskHandle timer_to_process_queued_request_;
 
@@ -125,8 +125,6 @@ class CORE_EXPORT SpellCheckRequester final
 
   typedef HeapDeque<Member<SpellCheckRequest>> RequestQueue;
   RequestQueue request_queue_;
-
-  DISALLOW_COPY_AND_ASSIGN(SpellCheckRequester);
 };
 
 }  // namespace blink

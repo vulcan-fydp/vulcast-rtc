@@ -32,8 +32,8 @@
 #define THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_HISTORY_ITEM_H_
 
 #include "services/network/public/mojom/referrer_policy.mojom-shared.h"
+#include "third_party/blink/public/mojom/page_state/page_state.mojom-shared.h"
 #include "third_party/blink/public/platform/web_common.h"
-#include "third_party/blink/public/platform/web_history_scroll_restoration_type.h"
 #include "third_party/blink/public/platform/web_private_ptr.h"
 #include "third_party/blink/public/platform/web_scroll_anchor_data.h"
 #include "third_party/blink/public/platform/web_string.h"
@@ -102,8 +102,8 @@ class WebHistoryItem {
   BLINK_EXPORT int64_t DocumentSequenceNumber() const;
   BLINK_EXPORT void SetDocumentSequenceNumber(int64_t);
 
-  BLINK_EXPORT WebHistoryScrollRestorationType ScrollRestorationType() const;
-  BLINK_EXPORT void SetScrollRestorationType(WebHistoryScrollRestorationType);
+  BLINK_EXPORT mojom::ScrollRestorationType ScrollRestorationType() const;
+  BLINK_EXPORT void SetScrollRestorationType(mojom::ScrollRestorationType);
 
   BLINK_EXPORT WebSerializedScriptValue StateObject() const;
   BLINK_EXPORT void SetStateObject(const WebSerializedScriptValue&);
@@ -121,6 +121,15 @@ class WebHistoryItem {
   BLINK_EXPORT ScrollAnchorData GetScrollAnchorData() const;
   BLINK_EXPORT void SetScrollAnchorData(const ScrollAnchorData&);
 
+  BLINK_EXPORT WebString GetAppHistoryKey() const;
+  BLINK_EXPORT void SetAppHistoryKey(const WebString&);
+
+  BLINK_EXPORT WebString GetAppHistoryId() const;
+  BLINK_EXPORT void SetAppHistoryId(const WebString&);
+
+  BLINK_EXPORT WebSerializedScriptValue GetAppHistoryState() const;
+  BLINK_EXPORT void SetAppHistoryState(const WebSerializedScriptValue&);
+
 #if INSIDE_BLINK
   BLINK_EXPORT WebHistoryItem(HistoryItem*);
   BLINK_EXPORT WebHistoryItem& operator=(HistoryItem*);
@@ -135,4 +144,4 @@ class WebHistoryItem {
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_HISTORY_ITEM_H_

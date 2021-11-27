@@ -5,8 +5,10 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_MEDIA_CONTROLS_ELEMENTS_MEDIA_CONTROL_TIMELINE_ELEMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_MEDIA_CONTROLS_ELEMENTS_MEDIA_CONTROL_TIMELINE_ELEMENT_H_
 
+#include "base/time/time.h"
+#include "base/timer/timer.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/modules/media_controls/elements/media_control_slider_element.h"
-#include "third_party/blink/renderer/modules/media_controls/elements/media_control_timeline_metrics.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 
 namespace blink {
@@ -29,20 +31,33 @@ class MediaControlTimelineElement : public MediaControlSliderElement {
 
   void OnMediaKeyboardEvent(Event* event) { DefaultEventHandler(*event); }
 
+  void OnMediaPlaying();
+  void OnMediaStoppedPlaying();
+  void OnProgress();
+
   void RenderBarSegments();
 
   // Inform the timeline that the Media Controls have been shown or hidden.
   void OnControlsShown();
   void OnControlsHidden();
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  protected:
   const char* GetNameForHistograms() const override;
 
  private:
+  // Struct used to track the current live time.
+  struct LiveAnchorTime {
+    base::TimeTicks clock_time_;
+    double media_time_ = 0;
+  };
+
   void DefaultEventHandler(Event&) override;
   bool KeepEventInNode(const Event&) const override;
+
+  void UpdateLiveTimeline();
+  void MaybeUpdateTimelineInterval();
 
   // Checks if we can begin or end a scrubbing event. If the event is a pointer
   // event then it needs to start and end with valid pointer events. If the
@@ -53,13 +68,19 @@ class MediaControlTimelineElement : public MediaControlSliderElement {
 
   void UpdateAria();
 
-  MediaControlTimelineMetrics metrics_;
-
   bool is_touching_ = false;
 
   bool controls_hidden_ = false;
+
+  bool is_scrubbing_ = false;
+
+  bool is_live_ = false;
+
+  absl::optional<LiveAnchorTime> live_anchor_time_;
+
+  base::RepeatingTimer render_timeline_timer_;
 };
 
 }  // namespace blink
 
-#endif  // MediaControlTimelineElement
+#endif  // THIRD_PARTY_BLINK_RENDERER_MODULES_MEDIA_CONTROLS_ELEMENTS_MEDIA_CONTROL_TIMELINE_ELEMENT_H_

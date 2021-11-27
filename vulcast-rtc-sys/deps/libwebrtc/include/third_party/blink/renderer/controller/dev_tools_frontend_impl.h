@@ -37,7 +37,6 @@
 #include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_associated_receiver.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_associated_remote.h"
-#include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -54,8 +53,6 @@ class DevToolsFrontendImpl final
       public Supplement<LocalFrame>,
       public mojom::blink::DevToolsFrontend,
       public InspectorFrontendClient {
-  USING_GARBAGE_COLLECTED_MIXIN(DevToolsFrontendImpl);
-
  public:
   static const char kSupplementName[];
 
@@ -69,7 +66,7 @@ class DevToolsFrontendImpl final
       mojo::PendingAssociatedReceiver<mojom::blink::DevToolsFrontend>);
   ~DevToolsFrontendImpl() override;
   void DidClearWindowObject();
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   void DestroyOnHostGone();
@@ -82,21 +79,22 @@ class DevToolsFrontendImpl final
   void SetupDevToolsExtensionAPI(const String& extension_api) override;
 
   // InspectorFrontendClient implementation.
-  void SendMessageToEmbedder(const String&) override;
+  void SendMessageToEmbedder(base::Value) override;
 
   Member<DevToolsHost> devtools_host_;
   String api_script_;
-  HeapMojoAssociatedRemote<mojom::blink::DevToolsFrontendHost,
-                           HeapMojoWrapperMode::kWithoutContextObserver>
-      host_;
+  // The host_ must outlive the ExecutionContext of LocalFrame, so it should not
+  // be associated with the ExecutionContext of LocalFrame.
+  HeapMojoAssociatedRemote<mojom::blink::DevToolsFrontendHost> host_{nullptr};
+  // The receiver_ must outlive the ExecutionContext of LocalFrame, so it should
+  // not be associated with the ExecutionContext of LocalFrame.
   HeapMojoAssociatedReceiver<mojom::blink::DevToolsFrontend,
-                             DevToolsFrontendImpl,
-                             HeapMojoWrapperMode::kWithoutContextObserver>
-      receiver_;
+                             DevToolsFrontendImpl>
+      receiver_{this, nullptr};
 
   DISALLOW_COPY_AND_ASSIGN(DevToolsFrontendImpl);
 };
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_CONTROLLER_DEV_TOOLS_FRONTEND_IMPL_H_

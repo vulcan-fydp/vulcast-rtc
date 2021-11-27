@@ -63,14 +63,14 @@ class DeviceOrientationEvent final : public Event {
 
   DeviceOrientationData* Orientation() const { return orientation_.Get(); }
 
-  base::Optional<double> alpha() const;
-  base::Optional<double> beta() const;
-  base::Optional<double> gamma() const;
+  absl::optional<double> alpha() const;
+  absl::optional<double> beta() const;
+  absl::optional<double> gamma() const;
   bool absolute() const;
 
   const AtomicString& InterfaceName() const override;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   Member<DeviceOrientationData> orientation_;

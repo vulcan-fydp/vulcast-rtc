@@ -8,15 +8,15 @@
 #include <memory>
 #include <string>
 
-#include "base/logging.h"
 #include "base/macros.h"
-#include "base/optional.h"
+#include "base/notreached.h"
 #include "testing/gmock/include/gmock/gmock.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/webrtc/api/dtls_transport_interface.h"
 #include "third_party/webrtc/api/peer_connection_interface.h"
 #include "third_party/webrtc/api/sctp_transport_interface.h"
 #include "third_party/webrtc/api/stats/rtc_stats_report.h"
-#include "third_party/webrtc/api/test/dummy_peer_connection.h"
 
 namespace blink {
 
@@ -93,10 +93,10 @@ class FakeRtpTransceiver : public webrtc::RtpTransceiverInterface {
       cricket::MediaType media_type,
       rtc::scoped_refptr<FakeRtpSender> sender,
       rtc::scoped_refptr<FakeRtpReceiver> receiver,
-      base::Optional<std::string> mid,
+      absl::optional<std::string> mid,
       bool stopped,
       webrtc::RtpTransceiverDirection direction,
-      base::Optional<webrtc::RtpTransceiverDirection> current_direction);
+      absl::optional<webrtc::RtpTransceiverDirection> current_direction);
   ~FakeRtpTransceiver() override;
 
   void ReplaceWith(const FakeRtpTransceiver& other);
@@ -138,7 +138,7 @@ class FakeDtlsTransport : public webrtc::DtlsTransportInterface {
 // this. It introduces complexity, is error prone (not testing the right thing
 // and bugs in the mocks). This class is a maintenance burden and should be
 // removed. https://crbug.com/788659
-class MockPeerConnectionImpl : public webrtc::DummyPeerConnection {
+class MockPeerConnectionImpl : public webrtc::PeerConnectionInterface {
  public:
   explicit MockPeerConnectionImpl(MockPeerConnectionDependencyFactory* factory,
                                   webrtc::PeerConnectionObserver* observer);
@@ -292,14 +292,29 @@ class MockPeerConnectionImpl : public webrtc::DummyPeerConnection {
     return nullptr;
   }
 
+  void RestartIce() override { NOTIMPLEMENTED(); }
+
   // JSEP01 APIs
   void CreateOffer(webrtc::CreateSessionDescriptionObserver* observer,
                    const RTCOfferAnswerOptions& options) override;
   void CreateAnswer(webrtc::CreateSessionDescriptionObserver* observer,
                     const RTCOfferAnswerOptions& options) override;
+  // TODO(hbos): Remove once no longer mandatory to implement.
   MOCK_METHOD2(SetLocalDescription,
                void(webrtc::SetSessionDescriptionObserver* observer,
                     webrtc::SessionDescriptionInterface* desc));
+  void SetLocalDescription(
+      std::unique_ptr<webrtc::SessionDescriptionInterface> desc,
+      rtc::scoped_refptr<webrtc::SetLocalDescriptionObserverInterface> observer)
+      override {
+    SetLocalDescriptionForMock(&desc, &observer);
+  }
+  // Work-around due to MOCK_METHOD being unable to handle move-only arguments.
+  MOCK_METHOD2(
+      SetLocalDescriptionForMock,
+      void(std::unique_ptr<webrtc::SessionDescriptionInterface>* desc,
+           rtc::scoped_refptr<webrtc::SetLocalDescriptionObserverInterface>*
+               observer));
   void SetLocalDescriptionWorker(
       webrtc::SetSessionDescriptionObserver* observer,
       webrtc::SessionDescriptionInterface* desc);
@@ -359,13 +374,19 @@ class MockPeerConnectionImpl : public webrtc::DummyPeerConnection {
   static const char kDummyOffer[];
   static const char kDummyAnswer[];
 
+  void AddAdaptationResource(
+      rtc::scoped_refptr<webrtc::Resource> resource) override {
+    adaptation_resources_.push_back(resource);
+  }
+
+  Vector<rtc::scoped_refptr<webrtc::Resource>> adaptation_resources() const {
+    return adaptation_resources_;
+  }
+
  protected:
   ~MockPeerConnectionImpl() override;
 
  private:
-  // Used for creating MockSessionDescription.
-  MockPeerConnectionDependencyFactory* dependency_factory_;
-
   std::string stream_label_;
   std::vector<std::string> local_stream_ids_;
   rtc::scoped_refptr<MockStreamCollection> remote_streams_;
@@ -385,6 +406,7 @@ class MockPeerConnectionImpl : public webrtc::DummyPeerConnection {
   webrtc::RTCErrorType setconfiguration_error_type_ =
       webrtc::RTCErrorType::NONE;
   rtc::scoped_refptr<webrtc::RTCStatsReport> stats_report_;
+  Vector<rtc::scoped_refptr<webrtc::Resource>> adaptation_resources_;
 
   DISALLOW_COPY_AND_ASSIGN(MockPeerConnectionImpl);
 };

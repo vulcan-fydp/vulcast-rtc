@@ -8,6 +8,7 @@
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/display_lock/display_lock_context.h"
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
+#include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 
 namespace blink {
@@ -20,22 +21,20 @@ class CORE_EXPORT DisplayLockUtilities {
   // This class forces updates on display locks from the given node up the
   // ancestor chain until the local frame root.
   class CORE_EXPORT ScopedForcedUpdate {
-    DISALLOW_COPY_AND_ASSIGN(ScopedForcedUpdate);
     STACK_ALLOCATED();
 
    public:
     ScopedForcedUpdate(ScopedForcedUpdate&& other) : impl_(other.impl_) {
       other.impl_ = nullptr;
     }
-    ~ScopedForcedUpdate() {
-      if (impl_)
-        impl_->Destroy();
-    }
-
     ScopedForcedUpdate& operator=(ScopedForcedUpdate&& other) {
       impl_ = other.impl_;
       other.impl_ = nullptr;
       return *this;
+    }
+    ~ScopedForcedUpdate() {
+      if (impl_)
+        impl_->Destroy();
     }
 
    private:
@@ -72,7 +71,7 @@ class CORE_EXPORT DisplayLockUtilities {
 
       void Destroy();
 
-      void Trace(Visitor* visitor) {
+      void Trace(Visitor* visitor) const {
         visitor->Trace(node_);
         visitor->Trace(forced_context_set_);
         visitor->Trace(parent_frame_impl_);
@@ -110,19 +109,28 @@ class CORE_EXPORT DisplayLockUtilities {
   static const Element* NearestLockedInclusiveAncestor(const Node& node);
   static Element* NearestLockedInclusiveAncestor(Node& node);
 
+  // Returns the nearest inclusive ancestor of |element| that has
+  // content-visibility: hidden-matchable.
+  static Element* NearestHiddenMatchableInclusiveAncestor(Element& element);
+
   // Returns the nearest non-inclusive ancestor of |node| that is display
   // locked.
   static Element* NearestLockedExclusiveAncestor(const Node& node);
 
-  // Returns the highest inclusive ancestor of |node| that is display locked.
-  static Element* HighestLockedInclusiveAncestor(const Node& node);
-
   // Returns the highest exclusive ancestor of |node| that is display locked.
+  // Note that this function crosses local frames.
   static Element* HighestLockedExclusiveAncestor(const Node& node);
+  static Element* HighestLockedInclusiveAncestor(const Node& node);
 
   // LayoutObject versions of the NearestLocked* ancestor functions.
   static Element* NearestLockedInclusiveAncestor(const LayoutObject& object);
   static Element* NearestLockedExclusiveAncestor(const LayoutObject& object);
+
+  // Returns the nearest inclusive ancestor of |node| that is display locked
+  // within the same TreeScope as |node|, meaning that no flat tree traversals
+  // are made.
+  static Element* NearestLockedInclusiveAncestorWithinTreeScope(
+      const Node& node);
 
   // Returns the nearest ancestor element which has a lock that prevents
   // prepaint. Note that this is different from a nearest locked ancestor since
@@ -158,7 +166,9 @@ class CORE_EXPORT DisplayLockUtilities {
 
   // Returns true if the element is in a locked subtree (or is self-locked with
   // no self-updates). This crosses frames while navigating the ancestor chain.
-  static bool IsInLockedSubtreeCrossingFrames(const Node& node);
+  static bool IsInLockedSubtreeCrossingFrames(
+      const Node& node,
+      IncludeSelfOrNot self = kExcludeSelf);
 
   // Called when the focused element changes. These functions update locks to
   // ensure that focused element ancestors remain unlocked for 'auto' state.
@@ -168,6 +178,10 @@ class CORE_EXPORT DisplayLockUtilities {
   static void SelectionChanged(const EphemeralRangeInFlatTree& old_selection,
                                const EphemeralRangeInFlatTree& new_selection);
   static void SelectionRemovedFromDocument(Document& document);
+
+  static bool PrePaintBlockedInParentFrame(LayoutView* layout_view);
+
+  static bool IsAutoWithoutLayout(const LayoutObject& object);
 
  private:
   static bool UpdateStyleAndLayoutForRangeIfNeeded(

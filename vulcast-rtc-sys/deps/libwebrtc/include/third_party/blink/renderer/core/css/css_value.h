@@ -24,6 +24,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/style/data_equivalency.h"
+#include "third_party/blink/renderer/platform/heap/custom_spaces.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
 
 namespace blink {
@@ -33,6 +34,7 @@ class Length;
 
 class CORE_EXPORT CSSValue : public GarbageCollected<CSSValue> {
  public:
+#if !BUILDFLAG(USE_V8_OILPAN)
   template <typename T>
   static void* AllocateObject(size_t size) {
     ThreadState* state =
@@ -42,6 +44,7 @@ class CORE_EXPORT CSSValue : public GarbageCollected<CSSValue> {
         state, size, BlinkGC::kCSSValueArenaIndex,
         GCInfoTrait<GCInfoFoldedType<CSSValue>>::Index(), type_name);
   }
+#endif  // !USE_V8_OILPAN
 
   // TODO(sashab): Remove this method and move logic to the caller.
   static CSSValue* Create(const Length& value, float zoom);
@@ -163,15 +166,29 @@ class CORE_EXPORT CSSValue : public GarbageCollected<CSSValue> {
   bool IsPendingSubstitutionValue() const {
     return class_type_ == kPendingSubstitutionValueClass;
   }
+  bool IsPendingSystemFontValue() const {
+    return class_type_ == kPendingSystemFontValueClass;
+  }
   bool IsInvalidVariableValue() const {
-    return class_type_ == kInvalidVariableValueClass;
+    return class_type_ == kInvalidVariableValueClass ||
+           class_type_ == kCyclicVariableValueClass;
+  }
+  bool IsCyclicVariableValue() const {
+    return class_type_ == kCyclicVariableValueClass;
   }
   bool IsAxisValue() const { return class_type_ == kAxisClass; }
   bool IsShorthandWrapperValue() const {
     return class_type_ == kKeyframeShorthandClass;
   }
+  bool IsInitialColorValue() const {
+    return class_type_ == kInitialColorValueClass;
+  }
   bool IsLightDarkValuePair() const {
     return class_type_ == kLightDarkValuePairClass;
+  }
+  bool IsIdSelectorValue() const { return class_type_ == kIdSelectorClass; }
+  bool IsElementOffsetValue() const {
+    return class_type_ == kElementOffsetClass;
   }
 
   bool HasFailedOrCanceledSubresources() const;
@@ -179,10 +196,11 @@ class CORE_EXPORT CSSValue : public GarbageCollected<CSSValue> {
   void ReResolveUrl(const Document&) const;
 
   bool operator==(const CSSValue&) const;
+  bool operator!=(const CSSValue& o) const { return !(*this == o); }
 
   void FinalizeGarbageCollectedObject();
   void TraceAfterDispatch(blink::Visitor* visitor) const {}
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
   // ~CSSValue should be public, because non-public ~CSSValue causes C2248
   // error: 'blink::CSSValue::~CSSValue' : cannot access protected member
@@ -203,6 +221,8 @@ class CORE_EXPORT CSSValue : public GarbageCollected<CSSValue> {
     kURIClass,
     kValuePairClass,
     kLightDarkValuePairClass,
+    kIdSelectorClass,
+    kElementOffsetClass,
 
     // Basic shape classes.
     // TODO(sashab): Represent these as a single subclass, BasicShapeClass.
@@ -248,12 +268,15 @@ class CORE_EXPORT CSSValue : public GarbageCollected<CSSValue> {
     kVariableReferenceClass,
     kCustomPropertyDeclarationClass,
     kPendingSubstitutionValueClass,
+    kPendingSystemFontValueClass,
     kInvalidVariableValueClass,
+    kCyclicVariableValueClass,
     kLayoutFunctionClass,
 
     kCSSContentDistributionClass,
 
     kKeyframeShorthandClass,
+    kInitialColorValueClass,
 
     // List class types must appear after ValueListClass.
     kValueListClass,
@@ -328,5 +351,17 @@ inline bool CompareCSSValueVector(
 }
 
 }  // namespace blink
+
+#if BUILDFLAG(USE_V8_OILPAN)
+namespace cppgc {
+// Assign CSSValue to be allocated on custom CSSValueSpace.
+template <typename T>
+struct SpaceTrait<
+    T,
+    std::enable_if_t<std::is_base_of<blink::CSSValue, T>::value>> {
+  using Space = blink::CSSValueSpace;
+};
+}  // namespace cppgc
+#endif  // !USE_V8_OILPAN
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_CORE_CSS_CSS_VALUE_H_

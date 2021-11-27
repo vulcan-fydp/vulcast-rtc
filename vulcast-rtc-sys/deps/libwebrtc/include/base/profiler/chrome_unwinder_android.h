@@ -8,7 +8,6 @@
 #include "base/profiler/unwinder.h"
 
 #include "base/base_export.h"
-#include "base/optional.h"
 #include "base/profiler/arm_cfi_table.h"
 #include "base/profiler/module_cache.h"
 #include "base/profiler/register_context.h"
@@ -19,7 +18,7 @@ namespace base {
 class BASE_EXPORT ChromeUnwinderAndroid : public Unwinder {
  public:
   ChromeUnwinderAndroid(const ArmCFITable* cfi_table,
-                        const ModuleCache::Module* chrome_module);
+                        uintptr_t chrome_module_base_address);
   ~ChromeUnwinderAndroid() override;
   ChromeUnwinderAndroid(const ChromeUnwinderAndroid&) = delete;
   ChromeUnwinderAndroid& operator=(const ChromeUnwinderAndroid&) = delete;
@@ -28,7 +27,6 @@ class BASE_EXPORT ChromeUnwinderAndroid : public Unwinder {
   bool CanUnwindFrom(const Frame& current_frame) const override;
   UnwindResult TryUnwind(RegisterContext* thread_context,
                          uintptr_t stack_top,
-                         ModuleCache* module_cache,
                          std::vector<Frame>* stack) const override;
 
   static bool StepForTesting(RegisterContext* thread_context,
@@ -41,9 +39,12 @@ class BASE_EXPORT ChromeUnwinderAndroid : public Unwinder {
   static bool Step(RegisterContext* thread_context,
                    uintptr_t stack_top,
                    const ArmCFITable::FrameEntry& entry);
+  // Fallback setp that attempts to use lr as return address.
+  static bool StepUsingLrRegister(RegisterContext* thread_context,
+                                  uintptr_t stack_top);
 
   const ArmCFITable* cfi_table_;
-  const ModuleCache::Module* const chrome_module_;
+  const uintptr_t chrome_module_base_address_;
 };
 
 }  // namespace base

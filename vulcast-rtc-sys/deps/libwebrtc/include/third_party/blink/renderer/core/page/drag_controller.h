@@ -26,7 +26,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_PAGE_DRAG_CONTROLLER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_PAGE_DRAG_CONTROLLER_H_
 
-#include "base/macros.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
@@ -35,6 +34,7 @@
 #include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
+#include "ui/base/dragdrop/mojom/drag_drop_types.mojom-blink-forward.h"
 
 namespace blink {
 
@@ -54,12 +54,13 @@ class WebMouseEvent;
 class CORE_EXPORT DragController final
     : public GarbageCollected<DragController>,
       public ExecutionContextLifecycleObserver {
-  USING_GARBAGE_COLLECTED_MIXIN(DragController);
-
  public:
   explicit DragController(Page*);
+  DragController(const DragController&) = delete;
+  DragController& operator=(const DragController&) = delete;
 
-  DragOperation DragEnteredOrUpdated(DragData*, LocalFrame& local_root);
+  ui::mojom::blink::DragOperation DragEnteredOrUpdated(DragData*,
+                                                       LocalFrame& local_root);
   void DragExited(DragData*, LocalFrame& local_root);
   void PerformDrag(DragData*, LocalFrame& local_root);
 
@@ -93,19 +94,22 @@ class CORE_EXPORT DragController final
   // ExecutionContextLifecycleObserver.
   void ContextDestroyed() final;
 
-  void Trace(Visitor*) final;
+  void Trace(Visitor*) const final;
 
  private:
   DispatchEventResult DispatchTextInputEventFor(LocalFrame*, DragData*);
   bool CanProcessDrag(DragData*, LocalFrame& local_root);
   bool ConcludeEditDrag(DragData*);
-  DragOperation OperationForLoad(DragData*, LocalFrame& local_root);
+  ui::mojom::blink::DragOperation OperationForLoad(DragData*,
+                                                   LocalFrame& local_root);
   bool TryDocumentDrag(DragData*,
                        DragDestinationAction,
-                       DragOperation&,
+                       ui::mojom::blink::DragOperation&,
                        LocalFrame& local_root);
-  bool TryDHTMLDrag(DragData*, DragOperation&, LocalFrame& local_root);
-  DragOperation GetDragOperation(DragData*);
+  bool TryDHTMLDrag(DragData*,
+                    ui::mojom::blink::DragOperation&,
+                    LocalFrame& local_root);
+  ui::mojom::blink::DragOperation GetDragOperation(DragData*);
   // Clear the selection from the document this drag is exiting.
   void ClearDragCaret();
   bool DragIsMove(FrameSelection&, DragData*);
@@ -126,8 +130,8 @@ class CORE_EXPORT DragController final
 
   // The document the mouse was last dragged over.
   Member<Document> document_under_mouse_;
-  // The Document (if any) that initiated the drag.
-  Member<Document> drag_initiator_;
+  // The window (if any) that initiated the drag.
+  Member<LocalDOMWindow> drag_initiator_;
 
   Member<DragState> drag_state_;
 
@@ -136,7 +140,6 @@ class CORE_EXPORT DragController final
 
   DragDestinationAction drag_destination_action_;
   bool did_initiate_drag_;
-  DISALLOW_COPY_AND_ASSIGN(DragController);
 };
 
 }  // namespace blink

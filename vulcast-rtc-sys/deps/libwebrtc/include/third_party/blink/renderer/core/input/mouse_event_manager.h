@@ -5,16 +5,17 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_INPUT_MOUSE_EVENT_MANAGER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_INPUT_MOUSE_EVENT_MANAGER_H_
 
-#include "base/macros.h"
+#include "third_party/blink/public/common/input/pointer_id.h"
 #include "third_party/blink/public/common/input/web_mouse_event.h"
 #include "third_party/blink/public/platform/web_input_event_result.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/synchronous_mutation_observer.h"
+#include "third_party/blink/renderer/core/events/pointer_event_factory.h"
 #include "third_party/blink/renderer/core/input/boundary_event_dispatcher.h"
-#include "third_party/blink/renderer/core/page/drag_actions.h"
 #include "third_party/blink/renderer/core/page/event_with_hit_test_results.h"
 #include "third_party/blink/renderer/platform/timer.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
+#include "ui/base/dragdrop/mojom/drag_drop_types.mojom-blink-forward.h"
 
 namespace blink {
 
@@ -34,22 +35,23 @@ enum class DragInitiator;
 class CORE_EXPORT MouseEventManager final
     : public GarbageCollected<MouseEventManager>,
       public SynchronousMutationObserver {
-  USING_GARBAGE_COLLECTED_MIXIN(MouseEventManager);
-
  public:
   MouseEventManager(LocalFrame&, ScrollManager&);
+  MouseEventManager(const MouseEventManager&) = delete;
+  MouseEventManager& operator=(const MouseEventManager&) = delete;
   virtual ~MouseEventManager();
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
-  WebInputEventResult DispatchMouseEvent(EventTarget*,
-                                         const AtomicString&,
-                                         const WebMouseEvent&,
-                                         const String& canvas_region_id,
-                                         const FloatPoint* last_position,
-                                         EventTarget* related_target,
-                                         bool check_for_listener = false,
-                                         const PointerId& pointer_id = 0,
-                                         const String& pointer_type = "");
+  WebInputEventResult DispatchMouseEvent(
+      EventTarget*,
+      const AtomicString&,
+      const WebMouseEvent&,
+      const String& canvas_region_id,
+      const FloatPoint* last_position,
+      EventTarget* related_target,
+      bool check_for_listener = false,
+      const PointerId& pointer_id = PointerEventFactory::kInvalidId,
+      const String& pointer_type = "");
 
   WebInputEventResult SetMousePositionAndDispatchMouseEvent(
       Element* target_element,
@@ -109,7 +111,7 @@ class CORE_EXPORT MouseEventManager final
   // drag heuristics.
   void ClearDragHeuristicState();
 
-  void DragSourceEndedAt(const WebMouseEvent&, DragOperation);
+  void DragSourceEndedAt(const WebMouseEvent&, ui::mojom::blink::DragOperation);
 
   void UpdateSelectionForMouseDrag();
 
@@ -141,6 +143,8 @@ class CORE_EXPORT MouseEventManager final
   Node* MousePressNode();
   void SetMousePressNode(Node*);
 
+  Element* MouseDownElement();
+
   void SetClickElement(Element*);
   void SetClickCount(int);
 
@@ -158,6 +162,10 @@ class CORE_EXPORT MouseEventManager final
                                       const WebMouseEvent*,
                                       EventTarget* exited_target,
                                       const String& canvas_region_id);
+    MouseEventBoundaryEventDispatcher(
+        const MouseEventBoundaryEventDispatcher&) = delete;
+    MouseEventBoundaryEventDispatcher& operator=(
+        const MouseEventBoundaryEventDispatcher&) = delete;
 
    protected:
     void DispatchOut(EventTarget*, EventTarget* related_target) override;
@@ -182,7 +190,6 @@ class CORE_EXPORT MouseEventManager final
     const WebMouseEvent* web_mouse_event_;
     EventTarget* exited_target_;
     String canvas_region_id_;
-    DISALLOW_COPY_AND_ASSIGN(MouseEventBoundaryEventDispatcher);
   };
 
   // If the given element is a shadow host and its root has delegatesFocus=false
@@ -229,6 +236,8 @@ class CORE_EXPORT MouseEventManager final
   unsigned captures_dragging_ : 1;
   unsigned mouse_down_may_start_drag_ : 1;
 
+  // TODO(crbug.com/1220669): Do we need both |mouse_press_node_| and
+  // |mouse_down_element_|?
   Member<Node> mouse_press_node_;
 
   int click_count_;
@@ -248,8 +257,6 @@ class CORE_EXPORT MouseEventManager final
   // ends, and at each begin frame, we will dispatch a fake mouse move event to
   // update hover when this is true.
   bool hover_state_dirty_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(MouseEventManager);
 };
 
 }  // namespace blink

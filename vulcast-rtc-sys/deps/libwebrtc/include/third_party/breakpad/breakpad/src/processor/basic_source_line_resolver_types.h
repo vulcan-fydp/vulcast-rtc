@@ -57,7 +57,7 @@ namespace google_breakpad {
 
 struct
 BasicSourceLineResolver::Function : public SourceLineResolverBase::Function {
-  Function(const string &function_name,
+  Function(const string& function_name,
            MemAddr function_address,
            MemAddr code_size,
            int set_parameter_size,
@@ -66,16 +66,30 @@ BasicSourceLineResolver::Function : public SourceLineResolverBase::Function {
                                    code_size,
                                    set_parameter_size,
                                    is_mutiple),
-                              lines() { }
-  RangeMap< MemAddr, linked_ptr<Line> > lines;
+                              inlines(),
+                              lines(),
+                              last_added_inline_nest_level(0) { }
+  // Append inline into corresponding RangeMap.
+  // This function assumes it's called in the order of reading INLINE records.
+  bool AppendInline(linked_ptr<Inline> in);
+
+  RangeMap<MemAddr, linked_ptr<Inline>> inlines;
+  RangeMap<MemAddr, linked_ptr<Line>> lines;
+
  private:
   typedef SourceLineResolverBase::Function Base;
+
+  // A map from inline_nest_level to most recently added Inline* at that level.
+  std::map<int, linked_ptr<Inline>> recent_inlines;
+
+  // The last added inline_nest_level in recent_inlines.
+  int last_added_inline_nest_level;
 };
 
 
 class BasicSourceLineResolver::Module : public SourceLineResolverBase::Module {
  public:
-  explicit Module(const string &name) : name_(name), is_corrupt_(false) { }
+  explicit Module(const string& name) : name_(name), is_corrupt_(false) { }
   virtual ~Module() { }
 
   // Loads a map from the given buffer in char* type.
@@ -83,7 +97,7 @@ class BasicSourceLineResolver::Module : public SourceLineResolverBase::Module {
   // The passed in |memory buffer| is of size |memory_buffer_size|.  If it is
   // not null terminated, LoadMapFromMemory() will null terminate it by
   // modifying the passed in buffer.
-  virtual bool LoadMapFromMemory(char *memory_buffer,
+  virtual bool LoadMapFromMemory(char* memory_buffer,
                                  size_t memory_buffer_size);
 
   // Tells whether the loaded symbol data is corrupt.  Return value is
@@ -92,20 +106,30 @@ class BasicSourceLineResolver::Module : public SourceLineResolverBase::Module {
 
   // Looks up the given relative address, and fills the StackFrame struct
   // with the result.
-  virtual void LookupAddress(StackFrame *frame) const;
+  virtual void LookupAddress(
+      StackFrame* frame,
+      std::vector<std::unique_ptr<StackFrame>>* inlined_frame) const;
+
+  // Construct inlined frame for frame and return inlined function call site
+  // source line. If failed to construct inlined frame, return -1.
+  virtual int ConstructInlineFrames(
+      StackFrame* frame,
+      MemAddr address,
+      const RangeMap<uint64_t, linked_ptr<Inline>>& inlines,
+      std::vector<std::unique_ptr<StackFrame>>* inline_frames) const;
 
   // If Windows stack walking information is available covering ADDRESS,
   // return a WindowsFrameInfo structure describing it. If the information
   // is not available, returns NULL. A NULL return value does not indicate
   // an error. The caller takes ownership of any returned WindowsFrameInfo
   // object.
-  virtual WindowsFrameInfo *FindWindowsFrameInfo(const StackFrame *frame) const;
+  virtual WindowsFrameInfo* FindWindowsFrameInfo(const StackFrame* frame) const;
 
   // If CFI stack walking information is available covering ADDRESS,
   // return a CFIFrameInfo structure describing it. If the information
   // is not available, return NULL. The caller takes ownership of any
   // returned CFIFrameInfo object.
-  virtual CFIFrameInfo *FindCFIFrameInfo(const StackFrame *frame) const;
+  virtual CFIFrameInfo* FindCFIFrameInfo(const StackFrame* frame) const;
 
  private:
   // Friend declarations.
@@ -118,32 +142,39 @@ class BasicSourceLineResolver::Module : public SourceLineResolverBase::Module {
   // Logs parse errors.  |*num_errors| is increased every time LogParseError is
   // called.
   static void LogParseError(
-      const string &message,
+      const string& message,
       int line_number,
-      int *num_errors);
+      int* num_errors);
 
   // Parses a file declaration
-  bool ParseFile(char *file_line);
+  bool ParseFile(char* file_line);
+
+  // Parses an inline origin declaration.
+  bool ParseInlineOrigin(char* inline_origin_line);
+
+  // Parses an inline declaration.
+  linked_ptr<Inline> ParseInline(char* inline_line);
 
   // Parses a function declaration, returning a new Function object.
-  Function* ParseFunction(char *function_line);
+  Function* ParseFunction(char* function_line);
 
   // Parses a line declaration, returning a new Line object.
-  Line* ParseLine(char *line_line);
+  Line* ParseLine(char* line_line);
 
   // Parses a PUBLIC symbol declaration, storing it in public_symbols_.
   // Returns false if an error occurs.
-  bool ParsePublicSymbol(char *public_line);
+  bool ParsePublicSymbol(char* public_line);
 
   // Parses a STACK WIN or STACK CFI frame info declaration, storing
   // it in the appropriate table.
-  bool ParseStackInfo(char *stack_info_line);
+  bool ParseStackInfo(char* stack_info_line);
 
   // Parses a STACK CFI record, storing it in cfi_frame_info_.
-  bool ParseCFIFrameInfo(char *stack_info_line);
+  bool ParseCFIFrameInfo(char* stack_info_line);
 
   string name_;
   FileMap files_;
+  std::map<int, linked_ptr<InlineOrigin>> inline_origins_;
   RangeMap< MemAddr, linked_ptr<Function> > functions_;
   AddressMap< MemAddr, linked_ptr<PublicSymbol> > public_symbols_;
   bool is_corrupt_;

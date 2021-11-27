@@ -14,22 +14,24 @@
 #include "base/files/file_path.h"
 #include "base/files/file_tracing.h"
 #include "base/files/platform_file.h"
-#include "base/macros.h"
 #include "base/time/time.h"
+#include "base/trace_event/base_tracing_forward.h"
 #include "build/build_config.h"
 
-#if defined(OS_POSIX) || defined(OS_FUCHSIA)
-#include <sys/stat.h>
+#if defined(OS_BSD) || defined(OS_APPLE) || defined(OS_NACL) || \
+    defined(OS_FUCHSIA) || (defined(OS_ANDROID) && __ANDROID_API__ < 21)
+struct stat;
+namespace base {
+typedef struct stat stat_wrapper_t;
+}
+#elif defined(OS_POSIX)
+struct stat64;
+namespace base {
+typedef struct stat64 stat_wrapper_t;
+}
 #endif
 
 namespace base {
-
-#if defined(OS_BSD) || defined(OS_MACOSX) || defined(OS_NACL) || \
-  defined(OS_FUCHSIA) || (defined(OS_ANDROID) && __ANDROID_API__ < 21)
-typedef struct stat stat_wrapper_t;
-#elif defined(OS_POSIX)
-typedef struct stat64 stat_wrapper_t;
-#endif
 
 // Thin wrapper around an OS-level file.
 // Note that this class does not provide any support for asynchronous IO, other
@@ -168,6 +170,9 @@ class BASE_EXPORT File {
 
   File(File&& other);
 
+  File(const File&) = delete;
+  File& operator=(const File&) = delete;
+
   ~File();
 
   File& operator=(File&& other);
@@ -176,8 +181,8 @@ class BASE_EXPORT File {
   void Initialize(const FilePath& path, uint32_t flags);
 
   // Returns |true| if the handle / fd wrapped by this object is valid.  This
-  // method doesn't interact with the file system (and is safe to be called from
-  // ThreadRestrictions::SetIOAllowed(false) threads).
+  // method doesn't interact with the file system and is thus safe to be called
+  // from threads that disallow blocking.
   bool IsValid() const;
 
   // Returns true if a new file was created (or an old one truncated to zero
@@ -299,7 +304,7 @@ class BASE_EXPORT File {
   //  * Within a process, locking the same file (by the same or new handle)
   //    will succeed. The new lock replaces the old lock.
   //  * Closing any descriptor on a given file releases the lock.
-  Error Lock(LockMode mode = LockMode::kExclusive);
+  Error Lock(LockMode mode);
 
   // Unlock a file previously locked.
   Error Unlock();
@@ -314,6 +319,9 @@ class BASE_EXPORT File {
   File Duplicate() const;
 
   bool async() const { return async_; }
+
+  // Serialise this object into a trace.
+  void WriteIntoTrace(perfetto::TracedValue context) const;
 
 #if defined(OS_WIN)
   // Sets or clears the DeleteFile disposition on the file. Returns true if
@@ -393,8 +401,6 @@ class BASE_EXPORT File {
   Error error_details_ = FILE_ERROR_FAILED;
   bool created_ = false;
   bool async_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(File);
 };
 
 }  // namespace base

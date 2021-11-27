@@ -111,7 +111,7 @@ class ShapeOutsideInfo final {
 
   static ShapeOutsideInfo& EnsureInfo(const LayoutBox& key) {
     InfoMap& info_map = ShapeOutsideInfo::GetInfoMap();
-    if (ShapeOutsideInfo* info = info_map.at(&key))
+    if (ShapeOutsideInfo* info = info_map.DeprecatedAtOrEmptyValue(&key))
       return *info;
     InfoMap::AddResult result =
         info_map.insert(&key, base::WrapUnique(new ShapeOutsideInfo(key)));
@@ -133,8 +133,8 @@ class ShapeOutsideInfo final {
   const Shape& ComputedShape() const;
 
  protected:
-  ShapeOutsideInfo(const LayoutBox& layout_box)
-      : layout_box_(layout_box), is_computing_shape_(false) {}
+  explicit ShapeOutsideInfo(const LayoutBox& layout_box)
+      : layout_box_(&layout_box), is_computing_shape_(false) {}
 
  private:
   static bool IsEnabledFor(const LayoutBox&);
@@ -153,7 +153,7 @@ class ShapeOutsideInfo final {
     return static_info_map;
   }
 
-  const LayoutBox& layout_box_;
+  const LayoutBox* const layout_box_;
   mutable std::unique_ptr<Shape> shape_;
   LayoutSize reference_box_logical_size_;
   LayoutUnit percentage_resolution_inline_size_;
@@ -162,4 +162,4 @@ class ShapeOutsideInfo final {
 };
 
 }  // namespace blink
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_SHAPES_SHAPE_OUTSIDE_INFO_H_

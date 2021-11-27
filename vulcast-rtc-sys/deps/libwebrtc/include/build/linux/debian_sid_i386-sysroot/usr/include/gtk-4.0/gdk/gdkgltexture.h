@@ -19,7 +19,7 @@
 #ifndef __GDK_GL_TEXTURE_H__
 #define __GDK_GL_TEXTURE_H__
 
-#if !defined (__GDK_H_INSIDE__) && !defined (GDK_COMPILATION)
+#if !defined (__GDK_H_INSIDE__) && !defined (GTK_COMPILATION)
 #error "Only <gdk/gdk.h> can be included directly."
 #endif
 
@@ -33,6 +33,11 @@ G_BEGIN_DECLS
 #define GDK_GL_TEXTURE(obj)             (G_TYPE_CHECK_INSTANCE_CAST ((obj), GDK_TYPE_GL_TEXTURE, GdkGLTexture))
 #define GDK_IS_GL_TEXTURE(obj)          (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GDK_TYPE_GL_TEXTURE))
 
+/**
+ * GdkGLTexture:
+ *
+ * A #GdkTexture representing a GL texture object.
+ */
 typedef struct _GdkGLTexture            GdkGLTexture;
 typedef struct _GdkGLTextureClass       GdkGLTextureClass;
 

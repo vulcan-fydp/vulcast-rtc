@@ -50,15 +50,13 @@ class MultipleFieldsTemporalInputTypeView final
       protected PickerIndicatorElement::PickerIndicatorOwner,
       protected SpinButtonElement::SpinButtonOwner,
       protected ClearButtonElement::ClearButtonOwner {
-  USING_GARBAGE_COLLECTED_MIXIN(MultipleFieldsTemporalInputTypeView);
-
  public:
   MultipleFieldsTemporalInputTypeView(HTMLInputElement&,
                                       BaseTemporalInputType&);
   ~MultipleFieldsTemporalInputTypeView() override;
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
-  String RawValue() const override;
+  wtf_size_t FocusedFieldIndex() const override;
 
  private:
   // DateTimeEditElement::EditControlOwner functions
@@ -87,7 +85,7 @@ class MultipleFieldsTemporalInputTypeView final
   Element& PickerOwnerElement() const final;
   bool SetupDateTimeChooserParameters(DateTimeChooserParameters&) final;
   void DidEndChooser() final;
-  String AriaRoleForPickerIndicator() const final;
+  String AriaLabelForPickerIndicator() const final;
 
   // ClearButtonElement::ClearButtonOwner functions.
   void FocusAndSelectClearButtonOwner() override;

@@ -34,7 +34,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatch_result.h"
@@ -48,11 +47,9 @@
 
 namespace blink {
 
-class AddEventListenerOptionsOrBoolean;
 class AddEventListenerOptionsResolved;
 class DOMWindow;
 class Event;
-class EventListenerOptionsOrBoolean;
 class ExceptionState;
 class ExecutionContext;
 class LocalDOMWindow;
@@ -62,6 +59,8 @@ class PortalHost;
 class ScriptState;
 class ServiceWorker;
 class V8EventListener;
+class V8UnionAddEventListenerOptionsOrBoolean;
+class V8UnionBooleanOrEventListenerOptions;
 
 struct FiringEventIterator {
   DISALLOW_NEW();
@@ -76,17 +75,17 @@ struct FiringEventIterator {
 };
 using FiringEventIteratorVector = Vector<FiringEventIterator, 1>;
 
-class CORE_EXPORT EventTargetData final
-    : public GarbageCollected<EventTargetData> {
+class CORE_EXPORT EventTargetData : public GarbageCollectedMixin {
  public:
   EventTargetData();
+  EventTargetData(const EventTargetData&) = delete;
+  EventTargetData& operator=(const EventTargetData&) = delete;
   ~EventTargetData();
 
-  void Trace(Visitor*);
+  void Trace(Visitor*) const override;
 
   EventListenerMap event_listener_map;
   std::unique_ptr<FiringEventIteratorVector> firing_event_iterators;
-  DISALLOW_COPY_AND_ASSIGN(EventTargetData);
 };
 
 // All DOM event targets extend EventTarget. The spec is defined here:
@@ -134,9 +133,10 @@ class CORE_EXPORT EventTarget : public ScriptWrappable {
   static EventTarget* Create(ScriptState*);
 
   bool addEventListener(const AtomicString& event_type, V8EventListener*);
-  bool addEventListener(const AtomicString& event_type,
-                        V8EventListener*,
-                        const AddEventListenerOptionsOrBoolean&);
+  bool addEventListener(
+      const AtomicString& event_type,
+      V8EventListener* listener,
+      const V8UnionAddEventListenerOptionsOrBoolean* bool_or_options);
   bool addEventListener(const AtomicString& event_type,
                         EventListener*,
                         bool use_capture = false);
@@ -145,9 +145,10 @@ class CORE_EXPORT EventTarget : public ScriptWrappable {
                         AddEventListenerOptionsResolved*);
 
   bool removeEventListener(const AtomicString& event_type, V8EventListener*);
-  bool removeEventListener(const AtomicString& event_type,
-                           V8EventListener*,
-                           const EventListenerOptionsOrBoolean&);
+  bool removeEventListener(
+      const AtomicString& event_type,
+      V8EventListener* listener,
+      const V8UnionBooleanOrEventListenerOptions* bool_or_options);
   bool removeEventListener(const AtomicString& event_type,
                            const EventListener*,
                            bool use_capture = false);
@@ -172,9 +173,13 @@ class CORE_EXPORT EventTarget : public ScriptWrappable {
 
   bool HasEventListeners() const override;
   bool HasEventListeners(const AtomicString& event_type) const;
+  bool HasAnyEventListeners(const Vector<AtomicString>& event_types) const;
   bool HasCapturingEventListeners(const AtomicString& event_type);
   bool HasJSBasedEventListeners(const AtomicString& event_type) const;
   EventListenerVector* GetEventListeners(const AtomicString& event_type);
+  // Number of event listeners for |event_type| registered at this event target.
+  int NumberOfEventListeners(const AtomicString& event_type) const;
+
   Vector<AtomicString> EventTypes();
 
   DispatchEventResult FireEventListeners(Event&);
@@ -234,25 +239,21 @@ class CORE_EXPORT EventTarget : public ScriptWrappable {
   friend class EventListenerIterator;
 };
 
-class CORE_EXPORT EventTargetWithInlineData : public EventTarget {
+// Provide EventTarget with inlined EventTargetData for improved performance.
+class CORE_EXPORT EventTargetWithInlineData : public EventTarget,
+                                              private EventTargetData {
  public:
   ~EventTargetWithInlineData() override = default;
 
-  void Trace(Visitor* visitor) override {
-    visitor->Trace(event_target_data_);
-    EventTarget::Trace(visitor);
-  }
+  void Trace(Visitor* visitor) const override;
 
  protected:
-  EventTargetData* GetEventTargetData() final { return &event_target_data_; }
-  EventTargetData& EnsureEventTargetData() final { return event_target_data_; }
-
- private:
-  // EventTargetData is a GCed object, so it should not be used as a part of
-  // object. However, we intentionally use it as a part of object for
-  // performance, assuming that no one extracts a pointer of
-  // EventTargetWithInlineData::event_target_data_ and store it to a Member etc.
-  GC_PLUGIN_IGNORE("513199") EventTargetData event_target_data_;
+  EventTargetData* GetEventTargetData() final {
+    return static_cast<EventTargetData*>(this);
+  }
+  EventTargetData& EnsureEventTargetData() final {
+    return *static_cast<EventTargetData*>(this);
+  }
 };
 
 // Macros to define an attribute event listener.
@@ -328,6 +329,16 @@ inline bool EventTarget::HasEventListeners(
   if (const EventTargetData* d =
           const_cast<EventTarget*>(this)->GetEventTargetData())
     return d->event_listener_map.Contains(event_type);
+  return false;
+}
+
+DISABLE_CFI_PERF
+inline bool EventTarget::HasAnyEventListeners(
+    const Vector<AtomicString>& event_types) const {
+  for (const AtomicString& event_type : event_types) {
+    if (HasEventListeners(event_type))
+      return true;
+  }
   return false;
 }
 

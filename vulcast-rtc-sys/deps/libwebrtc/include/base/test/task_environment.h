@@ -10,7 +10,7 @@
 #include "base/compiler_specific.h"
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
-#include "base/observer_list.h"
+#include "base/observer_list_types.h"
 #include "base/single_thread_task_runner.h"
 #include "base/task/lazy_thread_pool_task_runner.h"
 #include "base/task/sequence_manager/sequence_manager.h"
@@ -276,7 +276,6 @@ class TaskEnvironment {
   // Only valid for instances using TimeSource::MOCK_TIME. Returns a
   // TickClock whose time is updated by FastForward(By|UntilNoTasksRemain).
   const TickClock* GetMockTickClock() const;
-  std::unique_ptr<TickClock> DeprecatedGetMockTickClock();
 
   // Only valid for instances using TimeSource::MOCK_TIME. Returns a
   // Clock whose time is updated by FastForward(By|UntilNoTasksRemain). The
@@ -293,10 +292,9 @@ class TaskEnvironment {
   // TimeSource::MOCK_TIME.
   base::TimeTicks NowTicks() const;
 
-  // Only valid for instances using TimeSource::MOCK_TIME. Returns the
-  // number of pending tasks (delayed and non-delayed) of the main thread's
-  // TaskRunner. When debugging, you can use DescribePendingMainThreadTasks() to
-  // see what those are.
+  // Only valid for instances using TimeSource::MOCK_TIME. Returns the number of
+  // pending tasks (delayed and non-delayed) of the main thread's TaskRunner.
+  // When debugging, you can use DescribeCurrentTasks() to see what those are.
   size_t GetPendingMainThreadTaskCount() const;
 
   // Only valid for instances using TimeSource::MOCK_TIME.
@@ -310,8 +308,13 @@ class TaskEnvironment {
   bool NextTaskIsDelayed() const;
 
   // For debugging purposes: Dumps information about pending tasks on the main
-  // thread.
-  void DescribePendingMainThreadTasks() const;
+  // thread, and currently running tasks on the thread pool.
+  void DescribeCurrentTasks() const;
+
+  class TestTaskTracker;
+  // Callers outside of TaskEnvironment may not use the returned pointer. They
+  // should just use base::ThreadPoolInstance::Get().
+  static TestTaskTracker* CreateThreadPool();
 
   class DestructionObserver : public CheckedObserver {
    public:
@@ -361,7 +364,6 @@ class TaskEnvironment {
   void NotifyDestructionObserversAndReleaseSequenceManager();
 
  private:
-  class TestTaskTracker;
   class MockTimeDomain;
 
   void InitializeThreadPool();
@@ -410,7 +412,7 @@ class TaskEnvironment {
   TestTaskTracker* task_tracker_ = nullptr;
 
   // Ensures destruction of lazy TaskRunners when this is destroyed.
-  std::unique_ptr<internal::ScopedLazyTaskRunnerListForTesting>
+  std::unique_ptr<base::internal::ScopedLazyTaskRunnerListForTesting>
       scoped_lazy_task_runner_list_for_testing_;
 
   // Sets RunLoop::Run() to LOG(FATAL) if not Quit() in a timely manner.

@@ -35,6 +35,7 @@
 #include "third_party/blink/public/platform/web_private_ptr.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_vector.h"
+#include "v8/include/v8.h"
 
 namespace blink {
 
@@ -104,6 +105,9 @@ class BLINK_EXPORT WebNode {
 
   bool IsInsideFocusableElementOrARIAWidget() const;
 
+  v8::Local<v8::Value> ToV8Value(v8::Local<v8::Object> creation_context,
+                                 v8::Isolate*);
+
   template <typename T>
   T To();
   template <typename T>
@@ -167,4 +171,4 @@ inline bool operator<(const WebNode& a, const WebNode& b) {
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_NODE_H_

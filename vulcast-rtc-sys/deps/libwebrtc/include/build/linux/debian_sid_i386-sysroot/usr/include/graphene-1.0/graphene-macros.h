@@ -41,10 +41,13 @@
 
 #if defined(__GNUC__)
 # define GRAPHENE_ALIGN16  __attribute__((aligned(16)))
+# define GRAPHENE_ALIGNED_DECL(x,val)   x __attribute__((aligned(val)))
 #elif defined(_MSC_VER)
 # define GRAPHENE_ALIGN16  __declspec(align(16))
+# define GRAPHENE_ALIGNED_DECL(x,val)   __declspec(align(val)) x
 #else
 # define GRAPHENE_ALIGN16
+# define GRAPHENE_ALIGNED_DECL(x,val)   x
 #endif
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1910)
@@ -73,9 +76,11 @@
 #endif
 
 #if defined(_MSC_VER) && !defined(__bool_true_false_are_defined) && (_MSC_VER < 1800)
+# ifndef __GI_SCANNER__
 typedef int bool;
-# define false 0
-# define true 1
+#  define false 0
+#  define true 1
+# endif
 #else
 # include <stdbool.h>
 #endif

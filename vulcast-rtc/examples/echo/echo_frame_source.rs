@@ -56,7 +56,7 @@ impl EchoFrameSource {
                         let broadcaster = weak_broadcaster.upgrade()?;
                         let data_producer_id = response.data.unwrap().data_producer_available;
                         println!("{:?}: data producer available", &data_producer_id);
-                        let mut data_consumer = broadcaster.consume_data(data_producer_id).await;
+                        let mut data_consumer = broadcaster.consume_data(data_producer_id).await.unwrap();
                         tokio::spawn(enclose! { (message_tx) async move {
                             while let Some(msg) = data_consumer.next().await {
                                 let _ = message_tx.send(msg);

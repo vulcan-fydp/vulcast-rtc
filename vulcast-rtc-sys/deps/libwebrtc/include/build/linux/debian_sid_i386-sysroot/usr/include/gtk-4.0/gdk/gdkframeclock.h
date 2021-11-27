@@ -25,7 +25,7 @@
 #ifndef __GDK_FRAME_CLOCK_H__
 #define __GDK_FRAME_CLOCK_H__
 
-#if !defined (__GDK_H_INSIDE__) && !defined (GDK_COMPILATION)
+#if !defined (__GDK_H_INSIDE__) && !defined (GTK_COMPILATION)
 #error "Only <gdk/gdk.h> can be included directly."
 #endif
 
@@ -50,7 +50,7 @@ typedef struct _GdkFrameClockClass         GdkFrameClockClass;
  * @GDK_FRAME_CLOCK_PHASE_FLUSH_EVENTS: corresponds to GdkFrameClock::flush-events. Should not be handled by applications.
  * @GDK_FRAME_CLOCK_PHASE_BEFORE_PAINT: corresponds to GdkFrameClock::before-paint. Should not be handled by applications.
  * @GDK_FRAME_CLOCK_PHASE_UPDATE: corresponds to GdkFrameClock::update.
- * @GDK_FRAME_CLOCK_PHASE_LAYOUT: corresponds to GdkFrameClock::layout.
+ * @GDK_FRAME_CLOCK_PHASE_LAYOUT: corresponds to GdkFrameClock::layout. Should not be handled by applicatiosn.
  * @GDK_FRAME_CLOCK_PHASE_PAINT: corresponds to GdkFrameClock::paint.
  * @GDK_FRAME_CLOCK_PHASE_RESUME_EVENTS: corresponds to GdkFrameClock::resume-events. Should not be handled by applications.
  * @GDK_FRAME_CLOCK_PHASE_AFTER_PAINT: corresponds to GdkFrameClock::after-paint. Should not be handled by applications.
@@ -102,6 +102,9 @@ void gdk_frame_clock_get_refresh_info (GdkFrameClock *frame_clock,
                                        gint64         base_time,
                                        gint64        *refresh_interval_return,
                                        gint64        *presentation_time_return);
+
+GDK_AVAILABLE_IN_ALL
+double gdk_frame_clock_get_fps (GdkFrameClock *frame_clock);
 
 G_END_DECLS
 

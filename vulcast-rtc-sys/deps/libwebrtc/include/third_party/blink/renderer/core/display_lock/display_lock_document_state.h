@@ -27,7 +27,7 @@ class CORE_EXPORT DisplayLockDocumentState final
   explicit DisplayLockDocumentState(Document* document);
 
   // GC.
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
   // Registers a display lock context with the state. This is used to force all
   // activatable locks.
@@ -54,7 +54,7 @@ class CORE_EXPORT DisplayLockDocumentState final
   // Returns true if all activatable locks have been forced.
   bool ActivatableDisplayLocksForced() const;
 
-  class ScopedForceActivatableDisplayLocks {
+  class CORE_EXPORT ScopedForceActivatableDisplayLocks {
     STACK_ALLOCATED();
 
    public:
@@ -116,7 +116,7 @@ class CORE_EXPORT DisplayLockDocumentState final
                    DisplayLockUtilities::ScopedForcedUpdate::Impl* chain)
         : node(node), self_forced(self_forced), chain(chain) {}
 
-    void Trace(Visitor* visitor) {
+    void Trace(Visitor* visitor) const {
       visitor->Trace(node);
       visitor->Trace(chain);
     }
@@ -126,6 +126,10 @@ class CORE_EXPORT DisplayLockDocumentState final
     Member<DisplayLockUtilities::ScopedForcedUpdate::Impl> chain;
   };
 
+  void NotifyPrintingOrPreviewChanged();
+
+  base::TimeTicks GetLockUpdateTimestamp();
+
  private:
   IntersectionObserver& EnsureIntersectionObserver();
 
@@ -133,6 +137,8 @@ class CORE_EXPORT DisplayLockDocumentState final
       const HeapVector<Member<IntersectionObserverEntry>>&);
 
   void ForceLockIfNeededForInfo(Element*, ForcedNodeInfo*);
+
+  void ScheduleAnimation();
 
   Member<Document> document_;
 
@@ -148,6 +154,10 @@ class CORE_EXPORT DisplayLockDocumentState final
   // Contains all of the currently forced node infos, each of which represents
   // the node that caused the scope to be created.
   HeapVector<ForcedNodeInfo> forced_node_info_;
+
+  bool printing_ = false;
+
+  base::TimeTicks last_lock_update_timestamp_ = base::TimeTicks();
 };
 
 }  // namespace blink

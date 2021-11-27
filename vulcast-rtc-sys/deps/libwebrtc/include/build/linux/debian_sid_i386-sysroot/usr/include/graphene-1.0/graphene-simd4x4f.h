@@ -173,6 +173,8 @@ void    graphene_simd4x4f_transpose_in_place    (graphene_simd4x4f_t *s);
 
 #elif defined(GRAPHENE_USE_ARM_NEON)
 
+# ifdef __GNUC__
+
 #define graphene_simd4x4f_transpose_in_place(s) \
   (__extension__ ({ \
     const graphene_simd4f_union_t sx = { (s)->x }; \
@@ -184,6 +186,24 @@ void    graphene_simd4x4f_transpose_in_place    (graphene_simd4x4f_t *s);
     (s)->z = graphene_simd4f_init (sx.f[2], sy.f[2], sz.f[2], sw.f[2]); \
     (s)->w = graphene_simd4f_init (sx.f[3], sy.f[3], sz.f[3], sw.f[3]); \
   }))
+
+# elif defined (_MSC_VER)
+
+#define graphene_simd4x4f_transpose_in_place(s) _simd4x4f_transpose_in_place(s)
+static inline void
+_simd4x4f_transpose_in_place (graphene_simd4x4f_t *s)
+{
+  const graphene_simd4f_union_t sx = { (s)->x };
+  const graphene_simd4f_union_t sy = { (s)->y };
+  const graphene_simd4f_union_t sz = { (s)->z };
+  const graphene_simd4f_union_t sw = { (s)->w };
+  (s)->x = graphene_simd4f_init (sx.f[0], sy.f[0], sz.f[0], sw.f[0]);
+  (s)->y = graphene_simd4f_init (sx.f[1], sy.f[1], sz.f[1], sw.f[1]);
+  (s)->z = graphene_simd4f_init (sx.f[2], sy.f[2], sz.f[2], sw.f[2]);
+  (s)->w = graphene_simd4f_init (sx.f[3], sy.f[3], sz.f[3], sw.f[3]);
+}
+
+# endif
 
 #elif defined(GRAPHENE_USE_SCALAR)
 
@@ -443,7 +463,23 @@ graphene_simd4x4f_inv_ortho_point3_mul (const graphene_simd4x4f_t *a,
  * @b: a #graphene_simd4x4f_t
  * @res: (out): return location for the result
  *
- * Multiplies the two matrices.
+ * Multiplies the two matrices, following the convention:
+ *
+ * |[<!-- language="plain" -->
+ *   res = A × B
+ *
+ *       = ⎡ A.x × B ⎤
+ *         ⎜ A.y × B ⎟
+ *         ⎜ A.z × B ⎟
+ *         ⎣ A.w × B ⎦
+ *
+ *       = ⎡ res.x ⎤
+ *         ⎜ res.y ⎟
+ *         ⎜ res.z ⎟
+ *         ⎣ res.w ⎦
+ * ]|
+ *
+ * See also: graphene_simd4x4f_vec4_mul()
  *
  * Since: 1.0
  */
@@ -601,10 +637,37 @@ graphene_simd4x4f_init_look_at (graphene_simd4x4f_t *m,
                                 graphene_simd4f_t    center,
                                 graphene_simd4f_t    up)
 {
-  const graphene_simd4f_t z_axis = graphene_simd4f_normalize3 (graphene_simd4f_sub (center, eye));
-  const graphene_simd4f_t x_axis = graphene_simd4f_normalize3 (graphene_simd4f_cross3 (z_axis, up));
-  const graphene_simd4f_t y_axis = graphene_simd4f_cross3 (x_axis, z_axis);
+  const graphene_simd4f_t direction = graphene_simd4f_sub (center, eye);
+  graphene_simd4f_t cross;
+  graphene_simd4f_t z_axis;
+  graphene_simd4f_t x_axis;
+  graphene_simd4f_t y_axis;
   float eye_v[4];
+
+  if (graphene_simd4f_get_x (graphene_simd4f_dot3 (direction, direction)) < FLT_EPSILON)
+    /* eye and center are in the same position */
+    z_axis = graphene_simd4f_init (0, 0, 1, 0);
+  else
+    z_axis = graphene_simd4f_normalize3 (direction);
+
+  cross = graphene_simd4f_cross3 (z_axis, up);
+  if (graphene_simd4f_get_x (graphene_simd4f_dot3 (cross, cross)) < FLT_EPSILON)
+    {
+      graphene_simd4f_t tweak_z;
+
+      /* up and z_axis are parallel */
+      if (fabs (graphene_simd4f_get_z (up) - 1.0) < FLT_EPSILON)
+        tweak_z = graphene_simd4f_init (0.0001f, 0, 0, 0);
+      else
+        tweak_z = graphene_simd4f_init (0, 0, 0.0001f, 0);
+
+      z_axis = graphene_simd4f_add (z_axis, tweak_z);
+      z_axis = graphene_simd4f_normalize3 (z_axis);
+      cross = graphene_simd4f_cross3 (z_axis, up);
+    }
+
+  x_axis = graphene_simd4f_normalize3 (cross);
+  y_axis = graphene_simd4f_cross3 (x_axis, z_axis);
 
   graphene_simd4f_dup_4f (eye, eye_v);
 

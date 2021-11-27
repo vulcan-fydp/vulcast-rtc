@@ -41,7 +41,7 @@ class PropertySetCSSStyleDeclaration
       : AbstractPropertySetCSSStyleDeclaration(execution_context),
         property_set_(&property_set) {}
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  protected:
   MutableCSSPropertyValueSet& PropertySet() const final {
@@ -54,4 +54,4 @@ class PropertySetCSSStyleDeclaration
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_CSS_PROPERTY_SET_CSS_STYLE_DECLARATION_H_

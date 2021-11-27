@@ -17,7 +17,7 @@
 #include "absl/types/optional.h"
 #include "api/units/time_delta.h"
 #include "api/units/timestamp.h"
-#include "rtc_base/critical_section.h"
+#include "rtc_base/synchronization/mutex.h"
 #include "rtc_base/task_queue_for_test.h"
 #include "rtc_base/task_utils/repeating_task.h"
 #include "system_wrappers/include/clock.h"
@@ -63,15 +63,15 @@ class TestActivitiesExecutor {
 
   TaskQueueForTest* task_queue_;
 
-  rtc::CriticalSection lock_;
+  Mutex lock_;
   // Time when test was started. Minus infinity means that it wasn't started
   // yet.
   Timestamp start_time_ RTC_GUARDED_BY(lock_) = Timestamp::MinusInfinity();
   // Queue of activities that were added before test was started.
-  // Activities from this queue will be posted on the |task_queue_| after test
+  // Activities from this queue will be posted on the `task_queue_` after test
   // will be set up and then this queue will be unused.
   std::queue<ScheduledActivity> scheduled_activities_ RTC_GUARDED_BY(lock_);
-  // List of task handles for activities, that are posted on |task_queue_| as
+  // List of task handles for activities, that are posted on `task_queue_` as
   // repeated during the call.
   std::vector<RepeatingTaskHandle> repeating_task_handles_
       RTC_GUARDED_BY(lock_);

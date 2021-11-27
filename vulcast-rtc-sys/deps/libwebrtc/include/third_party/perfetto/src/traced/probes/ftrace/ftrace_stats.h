@@ -17,8 +17,7 @@
 #ifndef SRC_TRACED_PROBES_FTRACE_FTRACE_STATS_H_
 #define SRC_TRACED_PROBES_FTRACE_FTRACE_STATS_H_
 
-#include <inttypes.h>
-
+#include <cinttypes>
 #include <vector>
 
 namespace perfetto {
@@ -46,6 +45,8 @@ struct FtraceCpuStats {
 
 struct FtraceStats {
   std::vector<FtraceCpuStats> cpu_stats;
+  uint32_t kernel_symbols_parsed = 0;
+  uint32_t kernel_symbols_mem_kb = 0;
 
   void Write(protos::pbzero::FtraceStats*) const;
 };

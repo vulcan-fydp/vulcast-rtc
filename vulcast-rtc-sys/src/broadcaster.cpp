@@ -94,8 +94,9 @@ Broadcaster::ConsumeData(const std::string &data_consumer_id,
                          const std::string &data_producer_id,
                          const nlohmann::json &sctp_stream_parameters) {
   LOG(INFO) << "Broadcaster::CreateDataConsumer(" << data_producer_id << ")";
-  return recv_transport_->ConsumeData(this, data_consumer_id, data_producer_id,
-                                      "", sctp_stream_parameters);
+  return recv_transport_->ConsumeData(
+      this, data_consumer_id, data_producer_id,
+      sctp_stream_parameters["streamId"].get<uint16_t>(), "");
 }
 
 mediasoupclient::Producer *Broadcaster::Produce(

@@ -1,11 +1,12 @@
 # libwebrtc
+add_library(webrtc INTERFACE)
 set(LIBWEBRTC_STATIC ${LIBWEBRTC_BINARY_PATH}/libwebrtc${CMAKE_STATIC_LIBRARY_SUFFIX})
-target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${LIBWEBRTC_INCLUDE_PATH})
-target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${LIBWEBRTC_INCLUDE_PATH}/third_party/libyuv/include)
-target_link_libraries(${PROJECT_NAME} PUBLIC ${LIBWEBRTC_STATIC} pthread dl webrtcextra)
+target_include_directories(webrtc SYSTEM INTERFACE ${LIBWEBRTC_INCLUDE_PATH})
+target_include_directories(webrtc SYSTEM INTERFACE ${LIBWEBRTC_INCLUDE_PATH}/third_party/libyuv/include)
+target_link_libraries(webrtc INTERFACE ${LIBWEBRTC_STATIC} pthread dl webrtcextra)
 
 # test
-add_library(webrtcextra STATIC ${PROJECT_SOURCES} ${PROJECT_HEADERS})
+add_library(webrtcextra STATIC)
 
 target_sources(webrtcextra PRIVATE 
 	src/api/test/create_frame_generator.cc
@@ -25,6 +26,7 @@ target_sources(webrtcextra PRIVATE
 target_include_directories(webrtcextra SYSTEM PUBLIC
 	${LIBWEBRTC_INCLUDE_PATH}
 	${LIBWEBRTC_INCLUDE_PATH}/third_party/abseil-cpp
+	${LIBWEBRTC_INCLUDE_PATH}/third_party/jsoncpp/source/include
 )
 
 target_compile_definitions(webrtcextra PUBLIC

@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_NFC_NDEF_RECORD_H_
 
 #include "services/device/public/mojom/nfc.mojom-blink-forward.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
@@ -69,14 +70,14 @@ class MODULES_EXPORT NDEFRecord final : public ScriptWrappable {
   const String& encoding() const { return encoding_; }
   const String& lang() const { return lang_; }
   DOMDataView* data() const;
-  base::Optional<HeapVector<Member<NDEFRecord>>> toRecords(
+  absl::optional<HeapVector<Member<NDEFRecord>>> toRecords(
       ExceptionState& exception_state) const;
 
   device::mojom::NDEFRecordTypeCategory category() const { return category_; }
   const WTF::Vector<uint8_t>& payloadData() const { return payload_data_; }
   const NDEFMessage* payload_message() const { return payload_message_.Get(); }
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   const device::mojom::NDEFRecordTypeCategory category_;

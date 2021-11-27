@@ -6,7 +6,6 @@
 #define BASE_TASK_THREAD_POOL_THREAD_POOL_INSTANCE_H_
 
 #include <memory>
-#include <vector>
 
 #include "base/base_export.h"
 #include "base/callback.h"
@@ -110,19 +109,19 @@ class BASE_EXPORT ThreadPoolInstance {
   class BASE_EXPORT ScopedExecutionFence {
    public:
     ScopedExecutionFence();
+    ScopedExecutionFence(const ScopedExecutionFence&) = delete;
+    ScopedExecutionFence& operator=(const ScopedExecutionFence&) = delete;
     ~ScopedExecutionFence();
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(ScopedExecutionFence);
   };
 
   class BASE_EXPORT ScopedBestEffortExecutionFence {
    public:
     ScopedBestEffortExecutionFence();
+    ScopedBestEffortExecutionFence(const ScopedBestEffortExecutionFence&) =
+        delete;
+    ScopedBestEffortExecutionFence& operator=(
+        const ScopedBestEffortExecutionFence&) = delete;
     ~ScopedBestEffortExecutionFence();
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(ScopedBestEffortExecutionFence);
   };
 
   // Destroying a ThreadPoolInstance is not allowed in production; it is always

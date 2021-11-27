@@ -26,14 +26,13 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_SPEECH_SPEECH_RECOGNITION_CONTROLLER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_SPEECH_SPEECH_RECOGNITION_CONTROLLER_H_
 
-#include <memory>
-
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "third_party/blink/public/mojom/speech/speech_recognizer.mojom-blink.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
+#include "third_party/blink/renderer/platform/scheduler/public/frame_or_worker_scheduler.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 
 namespace blink {
@@ -44,8 +43,6 @@ class SpeechGrammarList;
 class SpeechRecognitionController final
     : public GarbageCollected<SpeechRecognitionController>,
       public Supplement<LocalDOMWindow> {
-  USING_GARBAGE_COLLECTED_MIXIN(SpeechRecognitionController);
-
  public:
   static const char kSupplementName[];
 
@@ -64,14 +61,12 @@ class SpeechRecognitionController final
 
   static SpeechRecognitionController* From(LocalDOMWindow&);
 
-  void Trace(Visitor* visitor) override;
+  void Trace(Visitor* visitor) const override;
 
  private:
   mojom::blink::SpeechRecognizer* GetSpeechRecognizer();
 
-  HeapMojoRemote<mojom::blink::SpeechRecognizer,
-                 HeapMojoWrapperMode::kWithoutContextObserver>
-      speech_recognizer_;
+  HeapMojoRemote<mojom::blink::SpeechRecognizer> speech_recognizer_;
 };
 
 }  // namespace blink

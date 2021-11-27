@@ -21,7 +21,6 @@
 #include "base/task/task_traits.h"
 #include "base/task_runner.h"
 #include "base/time/time.h"
-#include "base/updateable_sequenced_task_runner.h"
 #include "build/build_config.h"
 
 namespace base {
@@ -29,8 +28,9 @@ namespace base {
 // This is the interface to post tasks.
 //
 // Note: A migration is in-progress away from this API and in favor of explicit
-// API-as-a-destination. thread_pool.h is now preferred to the
-// base::ThreadPool() to post to the thread pool
+// API-as-a-destination. thread_pool.h replaced base::ThreadPool() as a task
+// trait and browser_thread.h replaced BrowserThread::IO/IO as a task trait
+// (ios::WebThread is still lagging and must use this API for now).
 //
 // To post a simple one-off task with default traits:
 //     PostTask(FROM_HERE, BindOnce(...));
@@ -99,27 +99,6 @@ namespace base {
 // have to worry about this. You will encounter DCHECKs or nullptr dereferences
 // if this is violated. For tests, prefer base::test::TaskEnvironment.
 
-// Equivalent to calling PostTask with default TaskTraits.
-BASE_EXPORT bool PostTask(const Location& from_here, OnceClosure task);
-inline bool PostTask(OnceClosure task,
-                     const Location& from_here = Location::Current()) {
-  return PostTask(from_here, std::move(task));
-}
-
-// Equivalent to calling PostTaskAndReply with default TaskTraits.
-BASE_EXPORT bool PostTaskAndReply(const Location& from_here,
-                                  OnceClosure task,
-                                  OnceClosure reply);
-
-// Equivalent to calling PostTaskAndReplyWithResult with default TaskTraits.
-template <typename TaskReturnType, typename ReplyArgType>
-bool PostTaskAndReplyWithResult(const Location& from_here,
-                                OnceCallback<TaskReturnType()> task,
-                                OnceCallback<void(ReplyArgType)> reply) {
-  return PostTaskAndReplyWithResult(from_here, {ThreadPool()}, std::move(task),
-                                    std::move(reply));
-}
-
 // Posts |task| with specific |traits|. Returns false if the task definitely
 // won't run because of current shutdown state.
 BASE_EXPORT bool PostTask(const Location& from_here,
@@ -176,22 +155,6 @@ BASE_EXPORT scoped_refptr<TaskRunner> CreateTaskRunner(
 BASE_EXPORT scoped_refptr<SequencedTaskRunner> CreateSequencedTaskRunner(
     const TaskTraits& traits);
 
-// Returns a task runner whose PostTask invocations result in scheduling tasks
-// using |traits|. The priority in |traits| can be updated at any time via
-// UpdateableSequencedTaskRunner::UpdatePriority(). An update affects all tasks
-// posted to the task runner that aren't running yet. Tasks run one at a time in
-// posting order.
-//
-// |traits| requirements:
-// - base::ThreadPool() must be specified.
-//     Note: Prefer the explicit (thread_pool.h) version of this API while we
-//     migrate this one to it.
-// - Extension traits (e.g. BrowserThread) cannot be specified.
-// - base::ThreadPolicy must be specified if the priority of the task runner
-//   will ever be increased from BEST_EFFORT.
-BASE_EXPORT scoped_refptr<UpdateableSequencedTaskRunner>
-CreateUpdateableSequencedTaskRunner(const TaskTraits& traits);
-
 // Returns a SingleThreadTaskRunner whose PostTask invocations result in
 // scheduling tasks using |traits| on a thread determined by |thread_mode|. See
 // base/task/single_thread_task_runner_thread_mode.h for |thread_mode| details.
@@ -243,7 +206,6 @@ template <class T>
 bool DeleteSoon(const Location& from_here,
                 const TaskTraits& traits,
                 const T* object) {
-  DCHECK(!traits.use_thread_pool());
   return CreateSequencedTaskRunner(traits)->DeleteSoon(from_here, object);
 }
 template <class T>
@@ -256,7 +218,6 @@ template <class T>
 void ReleaseSoon(const Location& from_here,
                  const TaskTraits& traits,
                  scoped_refptr<T>&& object) {
-  DCHECK(!traits.use_thread_pool());
   CreateSequencedTaskRunner(traits)->ReleaseSoon(from_here, std::move(object));
 }
 

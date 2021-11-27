@@ -12,7 +12,6 @@
 
 #include "base/callback.h"
 #include "base/containers/circular_deque.h"
-#include "base/containers/flat_map.h"
 #include "base/containers/linked_list.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
@@ -197,30 +196,12 @@ class LEVELDB_EXPORT ChromiumEnv : public leveldb::Env {
  private:
   void RemoveBackupFiles(const base::FilePath& dir);
 
-  // BGThread() is the body of the background thread
-  void BGThread();
-  static void BGThreadWrapper(void* arg) {
-    reinterpret_cast<ChromiumEnv*>(arg)->BGThread();
-  }
-
-
   const std::unique_ptr<storage::FilesystemProxy> filesystem_;
 
-  base::FilePath test_directory_;
+  base::Lock mu_;
+  base::FilePath test_directory_ GUARDED_BY(mu_);
 
   std::string name_;
-
-  base::Lock mu_;
-  base::ConditionVariable bgsignal_;
-  bool started_bgthread_;
-
-  // Entry per Schedule() call
-  struct BGItem {
-    void* arg;
-    void (*function)(void*);
-  };
-  using BGQueue = base::circular_deque<BGItem>;
-  BGQueue queue_;
   std::unique_ptr<leveldb::Cache> file_cache_;
 };
 
@@ -333,7 +314,6 @@ LEVELDB_EXPORT leveldb::Status OpenDB(const leveldb_env::Options& options,
 // an identical copy. |dbptr| will be replaced with the new database on success.
 // If the rewrite fails e.g. because we can't write to the temporary location,
 // the old db is returned if possible, otherwise |*dbptr| can become NULL.
-// The rewrite will only be performed if |kLevelDBRewriteFeature| is enabled.
 LEVELDB_EXPORT leveldb::Status RewriteDB(const leveldb_env::Options& options,
                                          const std::string& name,
                                          std::unique_ptr<leveldb::DB>* dbptr);

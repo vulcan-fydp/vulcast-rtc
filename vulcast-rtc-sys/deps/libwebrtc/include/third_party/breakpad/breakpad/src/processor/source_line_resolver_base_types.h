@@ -41,12 +41,15 @@
 #include <stdio.h>
 
 #include <map>
+#include <memory>
 #include <string>
 
 #include "google_breakpad/common/breakpad_types.h"
 #include "google_breakpad/processor/source_line_resolver_base.h"
 #include "google_breakpad/processor/stack_frame.h"
 #include "processor/cfi_frame_info.h"
+#include "processor/linked_ptr.h"
+#include "processor/range_map.h"
 #include "processor/windows_frame_info.h"
 
 #ifndef PROCESSOR_SOURCE_LINE_RESOLVER_BASE_TYPES_H__
@@ -56,14 +59,45 @@ namespace google_breakpad {
 
 class SourceLineResolverBase::AutoFileCloser {
  public:
-  explicit AutoFileCloser(FILE *file) : file_(file) {}
+  explicit AutoFileCloser(FILE* file) : file_(file) {}
   ~AutoFileCloser() {
     if (file_)
       fclose(file_);
   }
 
  private:
-  FILE *file_;
+  FILE* file_;
+};
+
+struct SourceLineResolverBase::InlineOrigin {
+  InlineOrigin(int32_t origin_id, int32_t source_file_id, const string& name)
+      : origin_id(origin_id), source_file_id(source_file_id), name(name) {}
+
+  int32_t origin_id;
+  int32_t source_file_id;
+  string name;
+};
+
+struct SourceLineResolverBase::Inline {
+  // A vector of (address, size) pair for a INLINE record.
+  using InlineRanges = std::vector<std::pair<MemAddr, MemAddr>>;
+  Inline(int32_t inline_nest_level,
+         int32_t call_site_line,
+         const string& name,
+         int32_t source_file_id,
+         InlineRanges inline_ranges)
+      : inline_nest_level(inline_nest_level),
+        call_site_line(call_site_line),
+        name(name),
+        source_file_id(source_file_id),
+        inline_ranges(inline_ranges) {}
+
+  int32_t inline_nest_level;
+  int32_t call_site_line;
+  string name;
+  int32_t source_file_id;
+  InlineRanges inline_ranges;
+  RangeMap<MemAddr, linked_ptr<Inline>> child_inlines;
 };
 
 struct SourceLineResolverBase::Line {
@@ -82,7 +116,7 @@ struct SourceLineResolverBase::Line {
 
 struct SourceLineResolverBase::Function {
   Function() { }
-  Function(const string &function_name,
+  Function(const string& function_name,
            MemAddr function_address,
            MemAddr code_size,
            int set_parameter_size,
@@ -133,7 +167,7 @@ class SourceLineResolverBase::Module {
   // The passed in |memory buffer| is of size |memory_buffer_size|.  If it is
   // not null terminated, LoadMapFromMemory will null terminate it by modifying
   // the passed in buffer.
-  virtual bool LoadMapFromMemory(char *memory_buffer,
+  virtual bool LoadMapFromMemory(char* memory_buffer,
                                  size_t memory_buffer_size) = 0;
 
   // Tells whether the loaded symbol data is corrupt.  Return value is
@@ -142,24 +176,26 @@ class SourceLineResolverBase::Module {
 
   // Looks up the given relative address, and fills the StackFrame struct
   // with the result.
-  virtual void LookupAddress(StackFrame *frame) const = 0;
+  virtual void LookupAddress(
+      StackFrame* frame,
+      std::vector<std::unique_ptr<StackFrame>>* inlined_frames) const = 0;
 
   // If Windows stack walking information is available covering ADDRESS,
   // return a WindowsFrameInfo structure describing it. If the information
   // is not available, returns NULL. A NULL return value does not indicate
   // an error. The caller takes ownership of any returned WindowsFrameInfo
   // object.
-  virtual WindowsFrameInfo *
-  FindWindowsFrameInfo(const StackFrame *frame) const = 0;
+  virtual WindowsFrameInfo*
+      FindWindowsFrameInfo(const StackFrame* frame) const = 0;
 
   // If CFI stack walking information is available covering ADDRESS,
   // return a CFIFrameInfo structure describing it. If the information
   // is not available, return NULL. The caller takes ownership of any
   // returned CFIFrameInfo object.
-  virtual CFIFrameInfo *FindCFIFrameInfo(const StackFrame *frame) const = 0;
+  virtual CFIFrameInfo* FindCFIFrameInfo(const StackFrame* frame) const = 0;
  protected:
-  virtual bool ParseCFIRuleSet(const string &rule_set,
-                               CFIFrameInfo *frame_info) const;
+  virtual bool ParseCFIRuleSet(const string& rule_set,
+                               CFIFrameInfo* frame_info) const;
 };
 
 }  // namespace google_breakpad

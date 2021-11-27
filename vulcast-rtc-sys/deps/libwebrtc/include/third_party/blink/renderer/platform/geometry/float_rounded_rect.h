@@ -31,6 +31,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GEOMETRY_FLOAT_ROUNDED_RECT_H_
 
 #include <iosfwd>
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/geometry/float_rect.h"
 #include "third_party/blink/renderer/platform/geometry/float_size.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -57,12 +58,14 @@ class PLATFORM_EXPORT FloatRoundedRect {
           top_right_(top_right),
           bottom_left_(bottom_left),
           bottom_right_(bottom_right) {}
+    explicit constexpr Radii(float radius)
+        : Radii(FloatSize(radius, radius),
+                FloatSize(radius, radius),
+                FloatSize(radius, radius),
+                FloatSize(radius, radius)) {}
 
-    constexpr Radii(const FloatRoundedRect::Radii& int_radii)
-        : top_left_(int_radii.TopLeft()),
-          top_right_(int_radii.TopRight()),
-          bottom_left_(int_radii.BottomLeft()),
-          bottom_right_(int_radii.BottomRight()) {}
+    constexpr Radii(const Radii&) = default;
+    constexpr Radii& operator=(const Radii&) = default;
 
     void SetTopLeft(const FloatSize& size) { top_left_ = size; }
     void SetTopRight(const FloatSize& size) { top_right_ = size; }
@@ -72,6 +75,9 @@ class PLATFORM_EXPORT FloatRoundedRect {
     constexpr const FloatSize& TopRight() const { return top_right_; }
     constexpr const FloatSize& BottomLeft() const { return bottom_left_; }
     constexpr const FloatSize& BottomRight() const { return bottom_right_; }
+
+    void SetMinimumRadius(float);
+    absl::optional<float> UniformRadius() const;
 
     constexpr bool IsZero() const {
       return top_left_.IsZero() && top_right_.IsZero() &&
@@ -94,11 +100,6 @@ class PLATFORM_EXPORT FloatRoundedRect {
                 float left_width,
                 float right_width);
     void Shrink(float size) { Shrink(size, size, size, size); }
-
-    void IncludeLogicalEdges(const Radii& edges,
-                             bool is_horizontal,
-                             bool include_logical_left_edge,
-                             bool include_logical_right_edge);
 
     String ToString() const;
 
@@ -163,11 +164,6 @@ class PLATFORM_EXPORT FloatRoundedRect {
   bool XInterceptsAtY(float y,
                       float& min_x_intercept,
                       float& max_x_intercept) const;
-
-  void IncludeLogicalEdges(const Radii& edges,
-                           bool is_horizontal,
-                           bool include_logical_left_edge,
-                           bool include_logical_right_edge);
 
   // Tests whether the quad intersects any part of this rounded rectangle.
   // This only works for convex quads.

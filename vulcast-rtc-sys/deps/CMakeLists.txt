@@ -2,12 +2,14 @@ include(FetchContent)
 
 # libwebrtc
 add_subdirectory(libwebrtc)
+target_link_libraries(${PROJECT_NAME} PUBLIC webrtc)
+target_link_libraries(${PROJECT_NAME} PUBLIC webrtcextra)
 
 # mediasoup
 FetchContent_Declare(
   mediasoupclient
-  GIT_REPOSITORY https://github.com/netdex/libmediasoupclient.git
-  GIT_TAG dataconsumer-stream-id-fix
+  GIT_REPOSITORY https://github.com/versatica/libmediasoupclient.git
+  GIT_TAG v3
 )
 FetchContent_MakeAvailable(mediasoupclient)
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${mediasoupclient_SOURCE_DIR}/include)
@@ -26,3 +28,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(glog)
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${glog_SOURCE_DIR}/src)
 target_link_libraries(${PROJECT_NAME} PUBLIC glog::glog)
+
+# rpi firmware
+add_subdirectory(rpi-firmware)
+
+add_subdirectory(rpi-webrtc-streamer)
+target_link_libraries(${PROJECT_NAME} PUBLIC rpi-webrtc-streamer)

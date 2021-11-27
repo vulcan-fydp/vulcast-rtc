@@ -26,7 +26,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_CSS_FONT_FACE_SET_DOCUMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_CSS_FONT_FACE_SET_DOCUMENT_H_
 
-#include "base/macros.h"
 #include "third_party/blink/renderer/bindings/core/v8/iterable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/core/css/css_font_selector.h"
@@ -45,12 +44,12 @@ class Font;
 
 class CORE_EXPORT FontFaceSetDocument final : public FontFaceSet,
                                               public Supplement<Document> {
-  USING_GARBAGE_COLLECTED_MIXIN(FontFaceSetDocument);
-
  public:
   static const char kSupplementName[];
 
   explicit FontFaceSetDocument(Document&);
+  FontFaceSetDocument(const FontFaceSetDocument&) = delete;
+  FontFaceSetDocument& operator=(const FontFaceSetDocument&) = delete;
   ~FontFaceSetDocument() override;
 
   ScriptPromise ready(ScriptState*) override;
@@ -77,13 +76,12 @@ class CORE_EXPORT FontFaceSetDocument final : public FontFaceSet,
   static void DidLayout(Document&);
   static size_t ApproximateBlankCharacterCount(Document&);
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  protected:
   bool InActiveContext() const override;
   FontSelector* GetFontSelector() const override {
-    // TODO(Fserb): tracking down crbug.com/988125, can be DCHECK later.
-    CHECK(IsMainThread());
+    DCHECK(IsMainThread());
     return GetDocument()->GetStyleEngine().GetFontSelector();
   }
 
@@ -129,11 +127,9 @@ class CORE_EXPORT FontFaceSetDocument final : public FontFaceSet,
   };
   FontDisplayAutoAlignHistogram font_display_auto_align_histogram_;
 
-  TaskRunnerTimer<FontFaceSetDocument> lcp_limit_timer_;
+  HeapTaskRunnerTimer<FontFaceSetDocument> lcp_limit_timer_;
 
   bool has_reached_lcp_limit_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(FontFaceSetDocument);
 };
 
 }  // namespace blink

@@ -10,8 +10,7 @@
 #include <api/video/video_frame.h>
 #include <api/video/video_frame_buffer.h>
 #include <api/video/video_source_interface.h>
-#include <common_video/include/i420_buffer_pool.h>
-#include <rtc_base/critical_section.h>
+#include "rtc_base/synchronization/mutex.h"
 #include <rtc_base/random.h>
 #include <system_wrappers/include/clock.h>
 
@@ -30,14 +29,13 @@ private:
                                                           int height);
   size_t rgba_stride() const { return width_ * 4; }
 
-  rtc::CriticalSection crit_;
-  int width_ RTC_GUARDED_BY(&crit_);
-  int height_ RTC_GUARDED_BY(&crit_);
+  webrtc::Mutex lock_;
+  int width_ RTC_GUARDED_BY(&lock_);
+  int height_ RTC_GUARDED_BY(&lock_);
 
   webrtc::Clock *const clock_;
   void *const ctx_;
   const frame_callback_t callback_;
 
-  std::vector<uint8_t> rgba_buffer_ RTC_GUARDED_BY(&crit_);
-  webrtc::I420BufferPool buffer_pool_ RTC_GUARDED_BY(&crit_);
+  std::vector<uint8_t> rgba_buffer_ RTC_GUARDED_BY(&lock_);
 };

@@ -9,10 +9,10 @@
 #include "base/debug/activity_tracker.h"
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
-#include "base/optional.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
 #include "base/time/time.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 
@@ -92,6 +92,12 @@ class BASE_EXPORT IOJankMonitoringWindow
   static constexpr TimeDelta kMonitoringWindow = TimeDelta::FromMinutes(1);
   static constexpr TimeDelta kTimeDiscrepancyTimeout = kIOJankInterval * 10;
   static constexpr int kNumIntervals = kMonitoringWindow / kIOJankInterval;
+
+  // kIOJankIntervals must integrally fill kMonitoringWindow
+  static_assert((kMonitoringWindow % kIOJankInterval).is_zero(), "");
+
+  // Cancelation is simple because it can only affect the current window.
+  static_assert(kTimeDiscrepancyTimeout < kMonitoringWindow, "");
 
  private:
   friend class base::RefCountedThreadSafe<IOJankMonitoringWindow>;
@@ -182,7 +188,7 @@ class BASE_EXPORT UncheckedScopedBlockingCall {
 
   // Non-nullopt for non-nested blocking calls of type MAY_BLOCK on foreground
   // threads which we monitor for I/O jank.
-  Optional<IOJankMonitoringWindow::ScopedMonitoredCall> monitored_call_;
+  absl::optional<IOJankMonitoringWindow::ScopedMonitoredCall> monitored_call_;
 
   DISALLOW_COPY_AND_ASSIGN(UncheckedScopedBlockingCall);
 };

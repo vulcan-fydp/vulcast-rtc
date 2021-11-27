@@ -30,6 +30,7 @@
 #include "base/gtest_prod_util.h"
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/dom/events/simulated_click_options.h"
 #include "third_party/blink/renderer/core/html/forms/html_form_control_element_with_state.h"
 #include "third_party/blink/renderer/core/html/forms/html_options_collection.h"
 #include "third_party/blink/renderer/core/html/forms/option_list.h"
@@ -38,16 +39,17 @@
 
 namespace blink {
 
+class AXObject;
 class AutoscrollController;
 class ExceptionState;
 class HTMLHRElement;
 class HTMLOptGroupElement;
 class HTMLOptionElement;
-class HTMLOptionElementOrHTMLOptGroupElement;
-class HTMLElementOrLong;
 class LayoutUnit;
 class PopupMenu;
 class SelectType;
+class V8UnionHTMLElementOrLong;
+class V8UnionHTMLOptGroupElementOrHTMLOptionElement;
 
 class CORE_EXPORT HTMLSelectElement final
     : public HTMLFormControlElementWithState,
@@ -83,9 +85,9 @@ class CORE_EXPORT HTMLSelectElement final
 
   bool UsesMenuList() const { return uses_menu_list_; }
 
-  void add(const HTMLOptionElementOrHTMLOptGroupElement&,
-           const HTMLElementOrLong&,
-           ExceptionState&);
+  void add(const V8UnionHTMLOptGroupElementOrHTMLOptionElement* element,
+           const V8UnionHTMLElementOrLong* before,
+           ExceptionState& exception_state);
 
   using Node::remove;
   void remove(int index);
@@ -114,7 +116,7 @@ class CORE_EXPORT HTMLSelectElement final
   // We prefer |optionList()| to |listItems()|.
   const ListItems& GetListItems() const;
 
-  void AccessKeyAction(bool send_mouse_events) override;
+  void AccessKeyAction(SimulatedClickCreationScope creation_scope) override;
   void SelectOptionByAccessKey(HTMLOptionElement*);
 
   void SetOption(unsigned index, HTMLOptionElement*, ExceptionState&);
@@ -122,14 +124,10 @@ class CORE_EXPORT HTMLSelectElement final
   Element* namedItem(const AtomicString& name);
   HTMLOptionElement* item(unsigned index);
 
-  void ScrollToSelection();
-
   bool CanSelectAll() const;
   void SelectAll();
   int ActiveSelectionEndListIndex() const;
   HTMLOptionElement* ActiveSelectionEnd() const;
-  void SetActiveSelectionAnchor(HTMLOptionElement*);
-  void SetActiveSelectionEnd(HTMLOptionElement*);
 
   // For use in the implementation of HTMLOptionElement.
   void OptionSelectionStateChanged(HTMLOptionElement*, bool option_is_selected);
@@ -164,7 +162,8 @@ class CORE_EXPORT HTMLSelectElement final
   void ProvisionalSelectionChanged(unsigned);
   void PopupDidHide();
   bool PopupIsVisible() const;
-  HTMLOptionElement* OptionToBeShownForTesting() const;
+  // Returns the active option. Only available in menulist mode.
+  HTMLOptionElement* OptionToBeShown() const;
   // Style of the selected OPTION. This is nullable, and only for
   // the menulist mode.
   const ComputedStyle* OptionStyle() const;
@@ -179,12 +178,13 @@ class CORE_EXPORT HTMLSelectElement final
 
   bool HasNonInBodyInsertionMode() const override { return true; }
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
   void CloneNonAttributePropertiesFrom(const Element&,
                                        CloneChildrenFlag) override;
 
-  // This should be called only if UsesMenuList().
+  // These should be called only if UsesMenuList().
   Element& InnerElement() const;
+  AXObject* PopupRootAXObject() const;
 
  private:
   const AtomicString& FormControlType() const override;
@@ -215,7 +215,6 @@ class CORE_EXPORT HTMLSelectElement final
   void ParseAttribute(const AttributeModificationParams&) override;
   bool IsPresentationAttribute(const QualifiedName&) const override;
 
-  bool TypeShouldForceLegacyLayout() const override;
   LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
   void DidRecalcStyle(const StyleRecalcChange) override;
   void AttachLayoutTree(AttachContext&) override;
@@ -285,8 +284,6 @@ class CORE_EXPORT HTMLSelectElement final
   TypeAhead type_ahead_;
   unsigned size_;
   Member<HTMLOptionElement> last_on_change_option_;
-  Member<HTMLOptionElement> active_selection_anchor_;
-  Member<HTMLOptionElement> active_selection_end_;
   Member<HTMLOptionElement> suggested_option_;
   bool uses_menu_list_ = true;
   bool is_multiple_;

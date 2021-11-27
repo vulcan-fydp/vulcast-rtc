@@ -8,13 +8,10 @@
 #include <memory>
 
 #include "third_party/blink/renderer/platform/image-decoders/image_decoder.h"
-#include "third_party/skia/include/core/SkBitmap.h"
-#include "third_party/skia/include/core/SkData.h"
+#include "third_party/libavif/src/include/avif/avif.h"
+#include "third_party/skia/include/core/SkImageInfo.h"
 #include "ui/gfx/color_space.h"
 #include "ui/gfx/color_transform.h"
-
-struct avifDecoder;
-struct avifImage;
 
 namespace blink {
 
@@ -25,7 +22,8 @@ class PLATFORM_EXPORT AVIFImageDecoder final : public ImageDecoder {
   AVIFImageDecoder(AlphaOption,
                    HighBitDepthDecodingOption,
                    const ColorBehavior&,
-                   size_t max_decoded_bytes);
+                   wtf_size_t max_decoded_bytes,
+                   AnimationOption);
   AVIFImageDecoder(const AVIFImageDecoder&) = delete;
   AVIFImageDecoder& operator=(const AVIFImageDecoder&) = delete;
   ~AVIFImageDecoder() override;
@@ -34,53 +32,84 @@ class PLATFORM_EXPORT AVIFImageDecoder final : public ImageDecoder {
   String FilenameExtension() const override { return "avif"; }
   bool ImageIsHighBitDepth() override;
   void OnSetData(SegmentReader* data) override;
+  cc::YUVSubsampling GetYUVSubsampling() const override;
+  IntSize DecodedYUVSize(cc::YUVIndex) const override;
+  wtf_size_t DecodedYUVWidthBytes(cc::YUVIndex) const override;
+  SkYUVColorSpace GetYUVColorSpace() const override;
+  uint8_t GetYUVBitDepth() const override;
+  void DecodeToYUV() override;
   int RepetitionCount() const override;
-  base::TimeDelta FrameDurationAtIndex(size_t) const override;
+  bool FrameIsReceivedAtIndex(wtf_size_t) const override;
+  base::TimeDelta FrameDurationAtIndex(wtf_size_t) const override;
+  bool ImageHasBothStillAndAnimatedSubImages() const override;
 
   // Returns true if the data in fast_reader begins with a valid FileTypeBox
   // (ftyp) that supports the brand 'avif' or 'avis'.
   static bool MatchesAVIFSignature(const FastSharedBufferReader& fast_reader);
 
+  gfx::ColorTransform* GetColorTransformForTesting();
+
  private:
+  struct AvifIOData {
+    blink::SegmentReader* reader = nullptr;
+    std::vector<uint8_t> buffer;
+    bool all_data_received = false;
+  };
+
+  void ParseMetadata();
+
   // ImageDecoder:
   void DecodeSize() override;
-  size_t DecodeFrameCount() override;
-  void InitializeNewFrame(size_t) override;
-  void Decode(size_t) override;
-  bool CanReusePreviousFrameBuffer(size_t) const override;
+  wtf_size_t DecodeFrameCount() override;
+  void InitializeNewFrame(wtf_size_t) override;
+  void Decode(wtf_size_t) override;
+  bool CanReusePreviousFrameBuffer(wtf_size_t) const override;
 
-  // Creates |decoder_| and decodes the size and frame count.
-  bool MaybeCreateDemuxer();
+  // Implements avifIOReadFunc, the |read| function in the avifIO struct.
+  static avifResult ReadFromSegmentReader(avifIO* io,
+                                          uint32_t read_flags,
+                                          uint64_t offset,
+                                          size_t size,
+                                          avifROData* out);
 
-  // Decodes the frame at index |index|. The decoded frame is available in
-  // decoder_->image. Returns true on success, false on failure.
-  bool DecodeImage(size_t index);
+  // Creates |decoder_| if not yet created and decodes the size and frame count.
+  bool UpdateDemuxer();
 
-  // Updates or creates |color_transform_|. Returns true on success, false on
-  // failure.
-  bool UpdateColorTransform(const gfx::ColorSpace& src_cs,
-                            const gfx::ColorSpace& dest_cs);
+  // Decodes the frame at index |index| and checks if the frame's size, bit
+  // depth, and YUV format matches those reported by the container. The decoded
+  // frame is available in decoder_->image.
+  avifResult DecodeImage(wtf_size_t index);
 
-  // Returns true if we can set the color space on the image.
-  bool CanSetColorSpace() const;
+  // Updates or creates |color_transform_| for YUV-to-RGB conversion.
+  void UpdateColorTransform(const gfx::ColorSpace& frame_cs, int bit_depth);
 
-  // Renders |image| in |buffer|. |frame_cs| is the color space of |image|.
-  // Returns true on success, false on failure.
-  bool RenderImage(const avifImage* image,
-                   const gfx::ColorSpace& frame_cs,
-                   ImageFrame* buffer);
+  // Renders |image| in |buffer|. Returns whether |image| was rendered
+  // successfully.
+  bool RenderImage(const avifImage* image, ImageFrame* buffer);
 
-  bool is_high_bit_depth_ = false;
+  // Applies color profile correction to the pixel data for |buffer|, if
+  // desired.
+  void ColorCorrectImage(ImageFrame* buffer);
+
+  bool have_parsed_current_data_ = false;
+  // The bit depth from the container.
+  uint8_t bit_depth_ = 0;
   bool decode_to_half_float_ = false;
-  size_t decoded_frame_count_ = 0;
+  uint8_t chroma_shift_x_ = 0;
+  uint8_t chroma_shift_y_ = 0;
+  bool progressive_ = false;
+  // The YUV format from the container.
+  avifPixelFormat avif_yuv_format_ = AVIF_PIXEL_FORMAT_NONE;
+  wtf_size_t decoded_frame_count_ = 0;
+  SkYUVColorSpace yuv_color_space_ = SkYUVColorSpace::kIdentity_SkYUVColorSpace;
   std::unique_ptr<avifDecoder, void (*)(avifDecoder*)> decoder_{nullptr,
                                                                 nullptr};
+  avifIO avif_io_ = {};
+  AvifIOData avif_io_data_;
 
   std::unique_ptr<gfx::ColorTransform> color_transform_;
 
-  gfx::ColorSpace last_color_space_;
-  sk_sp<SkData> image_data_;
-  SkBitmap temp_bitmap_;
+  const AnimationOption animation_option_;
 };
 
 }  // namespace blink

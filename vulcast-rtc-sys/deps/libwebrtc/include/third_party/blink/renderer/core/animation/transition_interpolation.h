@@ -75,7 +75,7 @@ class CORE_EXPORT TransitionInterpolation : public Interpolation {
 
   void Interpolate(int iteration, double fraction) final;
 
-  void Trace(Visitor* visitor) override {
+  void Trace(Visitor* visitor) const override {
     visitor->Trace(compositor_start_);
     visitor->Trace(compositor_end_);
     Interpolation::Trace(visitor);
@@ -107,4 +107,4 @@ struct DowncastTraits<TransitionInterpolation> {
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_ANIMATION_TRANSITION_INTERPOLATION_H_

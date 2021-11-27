@@ -32,7 +32,9 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_SHAPING_SHAPE_RESULT_H_
 
 #include <memory>
+
 #include "base/containers/span.h"
+#include "base/dcheck_is_on.h"
 #include "third_party/blink/renderer/platform/fonts/canvas_rotation_in_vertical.h"
 #include "third_party/blink/renderer/platform/fonts/glyph.h"
 #include "third_party/blink/renderer/platform/fonts/opentype/open_type_math_stretch_data.h"
@@ -45,7 +47,7 @@
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/ref_counted.h"
-#include "third_party/blink/renderer/platform/wtf/text/unicode.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_uchar.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 struct hb_buffer_t;
@@ -90,7 +92,7 @@ enum BreakGlyphsOption {
   BreakGlyphs,
 };
 
-// std::function is forbidden in Chromium and base::Callback is way too
+// std::function is forbidden in Chromium and base::RepeatingCallback is way too
 // expensive so we resort to a good old function pointer instead.
 typedef void (*GlyphCallback)(void* context,
                               unsigned character_index,
@@ -155,10 +157,6 @@ class PLATFORM_EXPORT ShapeResult : public RefCounted<ShapeResult> {
       const OpenTypeMathStretchData::AssemblyParameters&);
   ~ShapeResult();
 
-  // Returns a mutable unique instance. If |this| has more than 1 ref count,
-  // a clone is created.
-  scoped_refptr<ShapeResult> MutableUnique() const;
-
   // The logical width of this result.
   float Width() const { return width_; }
   LayoutUnit SnappedWidth() const { return LayoutUnit::FromFloatCeil(width_); }
@@ -177,7 +175,8 @@ class PLATFORM_EXPORT ShapeResult : public RefCounted<ShapeResult> {
   TextDirection Direction() const {
     return static_cast<TextDirection>(direction_);
   }
-  bool Rtl() const { return Direction() == TextDirection::kRtl; }
+  bool IsLtr() const { return blink::IsLtr(Direction()); }
+  bool IsRtl() const { return blink::IsRtl(Direction()); }
 
   // True if at least one glyph in this result has vertical offsets.
   //
@@ -185,8 +184,14 @@ class PLATFORM_EXPORT ShapeResult : public RefCounted<ShapeResult> {
   // have vertical offsets.
   bool HasVerticalOffsets() const { return has_vertical_offsets_; }
 
+  // Note: We should not reuse |ShapeResult| if we call |ApplySpacing()|.
+  bool IsAppliedSpacing() const { return is_applied_spacing_; }
+
   // For memory reporting.
   size_t ByteSize() const;
+
+  // True if |StartIndex()| is safe to break.
+  bool IsStartSafeToBreak() const;
 
   // Returns the next or previous offsets respectively at which it is safe to
   // break without reshaping.
@@ -490,7 +495,7 @@ class PLATFORM_EXPORT ShapeResult : public RefCounted<ShapeResult> {
 
   unsigned start_index_;
   unsigned num_characters_;
-  unsigned num_glyphs_ : 30;
+  unsigned num_glyphs_ : 29;
 
   // Overall direction for the TextRun, dictates which order each individual
   // sub run (represented by RunInfo structs in the m_runs vector) can have a
@@ -499,6 +504,12 @@ class PLATFORM_EXPORT ShapeResult : public RefCounted<ShapeResult> {
 
   // Tracks whether any runs contain glyphs with a y-offset != 0.
   unsigned has_vertical_offsets_ : 1;
+
+  // True once called |ApplySpacing()|.
+  unsigned is_applied_spacing_ : 1;
+
+  // Note: When you add more bit flags, please consider to reduce size of
+  // |num_glyphs_| or |num_characters_|.
 
  private:
   friend class HarfBuzzShaper;

@@ -6,15 +6,17 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_PUBLIC_FRAME_OR_WORKER_SCHEDULER_H_
 
 #include "base/memory/weak_ptr.h"
-#include "base/util/type_safety/strong_alias.h"
+#include "base/types/strong_alias.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/public/scheduling_lifecycle_state.h"
 #include "third_party/blink/renderer/platform/scheduler/public/scheduling_policy.h"
+#include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_priority.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 
 namespace blink {
 class FrameScheduler;
+class WebSchedulingTaskQueue;
 
 // This is the base class of FrameScheduler and WorkerScheduler.
 class PLATFORM_EXPORT FrameOrWorkerScheduler {
@@ -41,13 +43,13 @@ class PLATFORM_EXPORT FrameOrWorkerScheduler {
    public:
     LifecycleObserverHandle(FrameOrWorkerScheduler* scheduler,
                             Observer* observer);
+    LifecycleObserverHandle(const LifecycleObserverHandle&) = delete;
+    LifecycleObserverHandle& operator=(const LifecycleObserverHandle&) = delete;
     ~LifecycleObserverHandle();
 
    private:
     base::WeakPtr<FrameOrWorkerScheduler> scheduler_;
     Observer* observer_;
-
-    DISALLOW_COPY_AND_ASSIGN(LifecycleObserverHandle);
   };
 
   // RAII handle which should be kept alive as long as the feature is active
@@ -58,10 +60,12 @@ class PLATFORM_EXPORT FrameOrWorkerScheduler {
    public:
     SchedulingAffectingFeatureHandle() = default;
     SchedulingAffectingFeatureHandle(SchedulingAffectingFeatureHandle&&);
-    inline ~SchedulingAffectingFeatureHandle() { reset(); }
-
     SchedulingAffectingFeatureHandle& operator=(
         SchedulingAffectingFeatureHandle&&);
+
+    inline ~SchedulingAffectingFeatureHandle() { reset(); }
+
+    explicit operator bool() const { return scheduler_.get(); }
 
     inline void reset() {
       if (scheduler_)
@@ -79,13 +83,11 @@ class PLATFORM_EXPORT FrameOrWorkerScheduler {
     SchedulingPolicy::Feature feature_ = SchedulingPolicy::Feature::kMaxValue;
     SchedulingPolicy policy_;
     base::WeakPtr<FrameOrWorkerScheduler> scheduler_;
-
-    DISALLOW_COPY_AND_ASSIGN(SchedulingAffectingFeatureHandle);
   };
 
   virtual ~FrameOrWorkerScheduler();
 
-  using Preempted = util::StrongAlias<class PreemptedTag, bool>;
+  using Preempted = base::StrongAlias<class PreemptedTag, bool>;
   // Stops any tasks from running while we yield and run a nested loop.
   virtual void SetPreemptedForCooperativeScheduling(Preempted) = 0;
 
@@ -115,6 +117,9 @@ class PLATFORM_EXPORT FrameOrWorkerScheduler {
   std::unique_ptr<LifecycleObserverHandle> AddLifecycleObserver(ObserverType,
                                                                 Observer*)
       WARN_UNUSED_RESULT;
+
+  virtual std::unique_ptr<WebSchedulingTaskQueue> CreateWebSchedulingTaskQueue(
+      WebSchedulingPriority) = 0;
 
   virtual FrameScheduler* ToFrameScheduler() { return nullptr; }
 

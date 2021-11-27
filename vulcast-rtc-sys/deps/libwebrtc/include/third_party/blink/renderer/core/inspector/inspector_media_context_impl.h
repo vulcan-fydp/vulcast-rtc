@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_INSPECTOR_INSPECTOR_MEDIA_CONTEXT_IMPL_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_INSPECTOR_INSPECTOR_MEDIA_CONTEXT_IMPL_H_
 
+#include "build/build_config.h"
 #include "third_party/blink/public/web/web_media_inspector.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
@@ -13,10 +14,17 @@
 
 namespace blink {
 
-class LocalDOMWindow;
+#if defined(OS_ANDROID)
+// Players are cached per tab.
+constexpr int kMaxCachedPlayerEvents = 128;
+#else
+constexpr int kMaxCachedPlayerEvents = 512;
+#endif
+
+class ExecutionContext;
 
 struct MediaPlayer final : public GarbageCollected<MediaPlayer> {
-  void Trace(Visitor*) {}
+  void Trace(Visitor*) const {}
 
   WebString player_id;
   Vector<InspectorPlayerError> errors;
@@ -27,19 +35,19 @@ struct MediaPlayer final : public GarbageCollected<MediaPlayer> {
 
 class CORE_EXPORT MediaInspectorContextImpl final
     : public GarbageCollected<MediaInspectorContextImpl>,
-      public Supplement<LocalDOMWindow>,
+      public Supplement<ExecutionContext>,
       public MediaInspectorContext {
-  USING_GARBAGE_COLLECTED_MIXIN(MediaInspectorContextImpl);
-
  public:
   static const char kSupplementName[];
 
-  static MediaInspectorContextImpl* From(LocalDOMWindow&);
+  static MediaInspectorContextImpl* From(ExecutionContext&);
 
-  explicit MediaInspectorContextImpl(LocalDOMWindow&);
+  explicit MediaInspectorContextImpl(ExecutionContext&);
 
   // MediaInspectorContext methods.
   WebString CreatePlayer() override;
+  void DestroyPlayer(const WebString& playerId) override;
+
   void NotifyPlayerErrors(WebString playerId,
                           const InspectorPlayerErrors&) override;
   void NotifyPlayerEvents(WebString playerId,
@@ -50,13 +58,39 @@ class CORE_EXPORT MediaInspectorContextImpl final
                            const InspectorPlayerProperties&) override;
 
   // GarbageCollected methods.
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
-  Vector<WebString> AllPlayerIds();
+  Vector<WebString> AllPlayerIdsAndMarkSent();
   const MediaPlayer& MediaPlayerFromId(const WebString&);
 
+  HeapHashMap<String, Member<MediaPlayer>>* GetPlayersForTesting();
+  int GetTotalEventCountForTesting() { return total_event_count_; }
+
  private:
+  // When a player is added, its ID is stored in |unsent_players_| if no
+  // connections are open. When an unsent player is destroyed, its ID is moved
+  // to |dead_players_| and is first to be deleted if there is memory pressure.
+  // If it has already been sent when it is destroyed, it gets moved to
+  // |expendable_players_|, which is the second group of players to be deleted
+  // on memory pressure.
+
+  // If there are no dead or expendable players when it's time to start removing
+  // players, then a player from |unsent_players_| will be removed. As a last
+  // resort, remaining unended, already-sent players will be removed from
+  // |players_| until the total event size is within the limit.
+
+  // All events will be sent to any open clients regardless of players existing
+  // because the clients can handle dead players and may have their own cache.
+  void CullPlayers(const WebString& prefer_keep);
+  void TrimPlayer(const WebString& playerId);
+  void RemovePlayer(const WebString& playerId);
+
   HeapHashMap<String, Member<MediaPlayer>> players_;
+  Vector<String> unsent_players_;
+  Vector<String> dead_players_;
+  Vector<String> expendable_players_;
+
+  int total_event_count_ = 0;
 };
 
 }  // namespace blink

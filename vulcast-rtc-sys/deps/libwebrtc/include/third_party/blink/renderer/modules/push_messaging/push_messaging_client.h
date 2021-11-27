@@ -29,8 +29,6 @@ class ServiceWorkerRegistration;
 
 class PushMessagingClient final : public GarbageCollected<PushMessagingClient>,
                                   public Supplement<LocalDOMWindow> {
-  USING_GARBAGE_COLLECTED_MIXIN(PushMessagingClient);
-
  public:
   static const char kSupplementName[];
 
@@ -43,7 +41,7 @@ class PushMessagingClient final : public GarbageCollected<PushMessagingClient>,
                  PushSubscriptionOptions* options,
                  bool user_gesture,
                  std::unique_ptr<PushSubscriptionCallbacks> callbacks);
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   // Returns an initialized PushMessaging service. A connection will be
@@ -67,9 +65,7 @@ class PushMessagingClient final : public GarbageCollected<PushMessagingClient>,
                     mojom::blink::PushRegistrationStatus status,
                     mojom::blink::PushSubscriptionPtr subscription);
 
-  HeapMojoRemote<mojom::blink::PushMessaging,
-                 HeapMojoWrapperMode::kWithoutContextObserver>
-      push_messaging_manager_;
+  HeapMojoRemote<mojom::blink::PushMessaging> push_messaging_manager_;
 
   DISALLOW_COPY_AND_ASSIGN(PushMessagingClient);
 };

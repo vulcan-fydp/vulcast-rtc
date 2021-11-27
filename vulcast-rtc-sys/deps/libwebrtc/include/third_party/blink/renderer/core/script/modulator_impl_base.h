@@ -6,7 +6,10 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_SCRIPT_MODULATOR_IMPL_BASE_H_
 
 #include "base/single_thread_task_runner.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink-forward.h"
 #include "third_party/blink/renderer/bindings/core/v8/module_record.h"
+#include "third_party/blink/renderer/core/script/import_map_error.h"
 #include "third_party/blink/renderer/core/script/modulator.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
@@ -27,7 +30,7 @@ class ScriptState;
 class ModulatorImplBase : public Modulator {
  public:
   ~ModulatorImplBase() override;
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  protected:
   explicit ModulatorImplBase(ScriptState*);
@@ -41,7 +44,7 @@ class ModulatorImplBase : public Modulator {
 
   bool IsScriptingDisabled() const override;
 
-  bool ImportMapsEnabled() const override;
+  mojom::blink::V8CacheOptions GetV8CacheOptions() const final;
 
   ModuleRecordResolver* GetModuleRecordResolver() override {
     return module_record_resolver_.Get();
@@ -51,8 +54,9 @@ class ModulatorImplBase : public Modulator {
   }
 
   void FetchTree(const KURL&,
+                 ModuleType,
                  ResourceFetcher* fetch_client_settings_object_fetcher,
-                 mojom::RequestContextType context_type,
+                 mojom::blink::RequestContextType context_type,
                  network::mojom::RequestDestination destination,
                  const ScriptFetchOptions&,
                  ModuleScriptCustomFetchType,
@@ -60,7 +64,7 @@ class ModulatorImplBase : public Modulator {
   void FetchDescendantsForInlineScript(
       ModuleScript*,
       ResourceFetcher* fetch_client_settings_object_fetcher,
-      mojom::RequestContextType context_type,
+      mojom::blink::RequestContextType context_type,
       network::mojom::RequestDestination destination,
       ModuleTreeClient*) override;
   void FetchSingle(const ModuleScriptFetchRequest&,
@@ -68,29 +72,28 @@ class ModulatorImplBase : public Modulator {
                    ModuleGraphLevel,
                    ModuleScriptCustomFetchType,
                    SingleModuleClient*) override;
-  ModuleScript* GetFetchedModuleScript(const KURL&) override;
+  ModuleScript* GetFetchedModuleScript(const KURL&, ModuleType) override;
   bool HasValidContext() override;
   KURL ResolveModuleSpecifier(const String& module_request,
                               const KURL& base_url,
                               String* failure_reason) final;
-  void ResolveDynamically(const String& specifier,
-                          const KURL&,
+  void ResolveDynamically(const ModuleRequest& module_request,
                           const ReferrerScriptInfo&,
                           ScriptPromiseResolver*) override;
   const ImportMap* GetImportMapForTest() const final { return import_map_; }
 
-  ScriptValue CreateTypeError(const String& message) const override;
-  ScriptValue CreateSyntaxError(const String& message) const override;
-  void RegisterImportMap(const ImportMap*, ScriptValue error_to_rethrow) final;
-  bool IsAcquiringImportMaps() const final { return acquiring_import_maps_; }
-  void ClearIsAcquiringImportMaps() final { acquiring_import_maps_ = false; }
+  void RegisterImportMap(const ImportMap*,
+                         absl::optional<ImportMapError> error_to_rethrow) final;
+  AcquiringImportMapsState GetAcquiringImportMapsState() const final {
+    return acquiring_import_maps_;
+  }
+  void SetAcquiringImportMapsState(AcquiringImportMapsState value) final {
+    acquiring_import_maps_ = value;
+  }
   ModuleImportMeta HostGetImportMetaProperties(
       v8::Local<v8::Module>) const override;
-  ScriptValue InstantiateModule(v8::Local<v8::Module>, const KURL&) override;
-  Vector<ModuleRequest> ModuleRequestsFromModuleRecord(
-      v8::Local<v8::Module>) override;
-  ModuleEvaluationResult ExecuteModule(ModuleScript*,
-                                       CaptureEvalErrorFlag) override;
+  ModuleType ModuleTypeFromRequest(
+      const ModuleRequest& module_request) const override;
 
   // Populates |reason| and returns true if the dynamic import is disallowed on
   // the associated execution context. In that case, a caller of this function
@@ -99,7 +102,7 @@ class ModulatorImplBase : public Modulator {
   // modification of |reason|.
   virtual bool IsDynamicImportForbidden(String* reason) = 0;
 
-  void ProduceCacheModuleTreeTopLevel(ModuleScript*);
+  void ProduceCacheModuleTreeTopLevel(ModuleScript*) override;
   void ProduceCacheModuleTree(ModuleScript*,
                               HeapHashSet<Member<const ModuleScript>>*);
 
@@ -112,12 +115,13 @@ class ModulatorImplBase : public Modulator {
 
   Member<const ImportMap> import_map_;
 
-  // https://github.com/WICG/import-maps/blob/master/spec.md#when-import-maps-can-be-encountered
-  // Each realm (environment settings object) has a boolean, acquiring import
-  // maps. It is initially true. [spec text]
-  bool acquiring_import_maps_ = true;
+  // https://wicg.github.io/import-maps/#document-acquiring-import-maps
+  // Each Document has an acquiring import maps boolean. It is initially true.
+  // [spec text]
+  AcquiringImportMapsState acquiring_import_maps_ =
+      AcquiringImportMapsState::kAcquiring;
 };
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_SCRIPT_MODULATOR_IMPL_BASE_H_

@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_COMPOSITING_PAINT_CHUNKS_TO_CC_LAYER_H_
 
 #include "base/memory/scoped_refptr.h"
+#include "cc/input/layer_selection_bound.h"
 #include "cc/paint/display_item_list.h"
 #include "third_party/blink/renderer/platform/geometry/int_rect.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
@@ -15,17 +16,13 @@
 
 namespace cc {
 class DisplayItemList;
+class Layer;
 }  // namespace cc
-
-namespace gfx {
-class Vector2dF;
-}  // namespace gfx
 
 namespace blink {
 
-class DisplayItemList;
+class FloatPoint;
 class PaintChunkSubset;
-class FloatSize;
 class PropertyTreeState;
 class RasterInvalidationTracking;
 
@@ -60,9 +57,7 @@ class PLATFORM_EXPORT PaintChunksToCcLayer {
   // of layer_state.Transform().
   static void ConvertInto(const PaintChunkSubset&,
                           const PropertyTreeState& layer_state,
-                          const gfx::Vector2dF& layer_offset,
-                          const FloatSize& visual_rect_subpixel_offset,
-                          const DisplayItemList&,
+                          const FloatPoint& layer_offset,
                           cc::DisplayItemList&);
 
   // Similar to ConvertInto(), but returns a finalized new list instead of
@@ -70,12 +65,19 @@ class PLATFORM_EXPORT PaintChunksToCcLayer {
   static scoped_refptr<cc::DisplayItemList> Convert(
       const PaintChunkSubset&,
       const PropertyTreeState& layer_state,
-      const gfx::Vector2dF& layer_offset,
-      const DisplayItemList&,
+      const FloatPoint& layer_offset,
       cc::DisplayItemList::UsageHint,
       RasterUnderInvalidationCheckingParams* = nullptr);
+
+  static void UpdateLayerSelection(cc::Layer& layer,
+                                   const PropertyTreeState& layer_state,
+                                   const PaintChunkSubset&,
+                                   cc::LayerSelection& layer_selection);
+  static void UpdateLayerProperties(cc::Layer& layer,
+                                    const PropertyTreeState& layer_state,
+                                    const PaintChunkSubset&);
 };
 
 }  // namespace blink
 
-#endif  // PaintArtifactCompositor_h
+#endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_COMPOSITING_PAINT_CHUNKS_TO_CC_LAYER_H_

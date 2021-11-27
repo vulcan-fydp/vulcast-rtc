@@ -31,7 +31,7 @@
 
 #include <utility>
 
-#include "base/macros.h"
+#include "base/dcheck_is_on.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/synchronous_mutation_observer.h"
 #include "third_party/blink/renderer/core/editing/forward.h"
@@ -48,15 +48,16 @@
 namespace blink {
 
 class DocumentMarkerList;
+class Highlight;
 class SuggestionMarkerProperties;
 
 class CORE_EXPORT DocumentMarkerController final
     : public GarbageCollected<DocumentMarkerController>,
       public SynchronousMutationObserver {
-  USING_GARBAGE_COLLECTED_MIXIN(DocumentMarkerController);
-
  public:
   explicit DocumentMarkerController(Document&);
+  DocumentMarkerController(const DocumentMarkerController&) = delete;
+  DocumentMarkerController& operator=(const DocumentMarkerController&) = delete;
 
   void Clear();
   void AddSpellingMarker(const EphemeralRange&,
@@ -79,6 +80,9 @@ class CORE_EXPORT DocumentMarkerController final
   void AddSuggestionMarker(const EphemeralRange&,
                            const SuggestionMarkerProperties&);
   void AddTextFragmentMarker(const EphemeralRange&);
+  void AddHighlightMarker(const EphemeralRange&,
+                          const String& highlight_name,
+                          const Member<Highlight> highlight);
 
   void MoveMarkers(const Text& src_node, int length, const Text& dst_node);
 
@@ -90,6 +94,11 @@ class CORE_EXPORT DocumentMarkerController final
       DocumentMarker::MarkerTypes = DocumentMarker::MarkerTypes::All());
   void RemoveSpellingMarkersUnderWords(const Vector<String>& words);
   void RemoveSuggestionMarkerByTag(const Text&, int32_t marker_tag);
+  void RemoveSuggestionMarkerByType(
+      const EphemeralRangeInFlatTree& range,
+      const SuggestionMarker::SuggestionType& type);
+  void RemoveSuggestionMarkerByType(
+      const SuggestionMarker::SuggestionType& type);
   // Removes suggestion marker with |RemoveOnFinishComposing::kRemove|.
   void RemoveSuggestionMarkerInRangeOnFinish(const EphemeralRangeInFlatTree&);
   void RepaintMarkers(
@@ -135,6 +144,16 @@ class CORE_EXPORT DocumentMarkerController final
       unsigned start_offset,
       unsigned end_offset,
       DocumentMarker::MarkerTypes);
+  // If the given position is either at the boundary or inside a word, expands
+  // the position to the surrounding word and then looks for all markers having
+  // the specified type. If the position is neither at the boundary or inside a
+  // word, expands the position to cover the space between the end of the
+  // previous and the start of the next words. If such markers exist, this
+  // method will return all of them in their corresponding node. Otherwise,
+  // this method will return an empty list.
+  HeapVector<std::pair<Member<const Text>, Member<DocumentMarker>>>
+  MarkersAroundPosition(const PositionInFlatTree& position,
+                        DocumentMarker::MarkerTypes types);
   // Return all markers of the specified types whose interiors have non-empty
   // overlap with the specified range. Note that the range can be collapsed, in
   // in which case markers containing the position in their interiors are
@@ -153,7 +172,7 @@ class CORE_EXPORT DocumentMarkerController final
   void InvalidateRectsForAllTextMatchMarkers();
   void InvalidateRectsForTextMatchMarkersInNode(const Text&);
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
 #if DCHECK_IS_ON()
   void ShowMarkers() const;
@@ -196,8 +215,6 @@ class CORE_EXPORT DocumentMarkerController final
   // without going through the map.
   DocumentMarker::MarkerTypes possibly_existing_marker_types_;
   const Member<Document> document_;
-
-  DISALLOW_COPY_AND_ASSIGN(DocumentMarkerController);
 };
 
 }  // namespace blink

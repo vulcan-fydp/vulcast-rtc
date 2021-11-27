@@ -28,18 +28,19 @@
 
 #include "base/callback_helpers.h"
 #include "cc/input/scroll_snap_data.h"
+#include "third_party/blink/public/mojom/frame/color_scheme.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/scroll/scroll_into_view_params.mojom-blink-forward.h"
-#include "third_party/blink/public/platform/web_color_scheme.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/geometry/physical_rect.h"
 #include "third_party/blink/renderer/core/loader/history_item.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar.h"
 #include "third_party/blink/renderer/platform/geometry/float_quad.h"
-#include "third_party/blink/renderer/platform/graphics/color.h"
 #include "third_party/blink/renderer/platform/graphics/compositor_element_id.h"
-#include "third_party/blink/renderer/platform/graphics/scroll_types.h"
+#include "third_party/blink/renderer/platform/graphics/overlay_scrollbar_clip_behavior.h"
+#include "third_party/blink/renderer/platform/heap/disallow_new_wrapper.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
+#include "third_party/blink/renderer/platform/timer.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
@@ -54,11 +55,14 @@ class Layer;
 
 namespace blink {
 class ChromeClient;
+class Color;
 class CompositorAnimationTimeline;
 class Document;
 class LayoutBox;
 class LayoutObject;
 class LocalFrame;
+class MacScrollbarAnimator;
+class Node;
 class PaintLayer;
 class ProgrammaticScrollAnimator;
 class ScrollAnchor;
@@ -74,11 +78,13 @@ enum IncludeScrollbarsInRect {
 };
 
 class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
-  DISALLOW_COPY_AND_ASSIGN(ScrollableArea);
   USING_PRE_FINALIZER(ScrollableArea, Dispose);
 
  public:
   using ScrollCallback = base::OnceClosure;
+
+  ScrollableArea(const ScrollableArea&) = delete;
+  ScrollableArea& operator=(const ScrollableArea&) = delete;
 
   static int PixelsPerLineStep(LocalFrame*);
   static float MinFractionToStepWhenPaging();
@@ -95,6 +101,9 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
   }
 
   virtual ChromeClient* GetChromeClient() const { return nullptr; }
+
+  // Used to scale a length in dip units into a length in layout/paint units.
+  float ScaleFromDIP() const;
 
   virtual SmoothScrollSequencer* GetSmoothScrollSequencer() const {
     return nullptr;
@@ -147,13 +156,11 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
   void MouseExitedScrollbar(Scrollbar&);
   void MouseCapturedScrollbar();
   void MouseReleasedScrollbar();
-  void ContentAreaDidShow() const;
-  void ContentAreaDidHide() const;
 
   virtual const cc::SnapContainerData* GetSnapContainerData() const {
     return nullptr;
   }
-  virtual void SetSnapContainerData(base::Optional<cc::SnapContainerData>) {}
+  virtual void SetSnapContainerData(absl::optional<cc::SnapContainerData>) {}
   virtual bool SetTargetSnapAreaElementIds(cc::TargetSnapAreaElementIds) {
     return false;
   }
@@ -194,12 +201,10 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
   //
   // NOTE: If a target position is found, then it is expected that this position
   // will be scrolled to.
-  virtual base::Optional<FloatPoint> GetSnapPositionAndSetTarget(
+  virtual absl::optional<FloatPoint> GetSnapPositionAndSetTarget(
       const cc::SnapSelectionStrategy& strategy) {
-    return base::nullopt;
+    return absl::nullopt;
   }
-
-  void FinishCurrentScrollAnimations() const;
 
   virtual void DidAddScrollbar(Scrollbar&, ScrollbarOrientation);
   virtual void WillRemoveScrollbar(Scrollbar&, ScrollbarOrientation);
@@ -210,13 +215,21 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
 
   virtual void ContentsResized();
 
+  // This is for platform overlay scrollbars only, doesn't include
+  // overflow:overlay scrollbars. Probably this should be renamed to
+  // HasPlatformOverlayScrollbars() but we don't bother it because
+  // overflow:overlay might be deprecated soon.
   bool HasOverlayScrollbars() const;
   void SetScrollbarOverlayColorTheme(ScrollbarOverlayColorTheme);
-  void RecalculateScrollbarOverlayColorTheme(Color);
+  void RecalculateScrollbarOverlayColorTheme(const Color& background_color);
   ScrollbarOverlayColorTheme GetScrollbarOverlayColorTheme() const {
     return static_cast<ScrollbarOverlayColorTheme>(
         scrollbar_overlay_color_theme_);
   }
+
+  // This getter will create a MacScrollAnimator if it doesn't already exist,
+  // only on MacOS.
+  MacScrollbarAnimator* GetMacScrollbarAnimator() const;
 
   // This getter will create a ScrollAnimatorBase if it doesn't already exist.
   ScrollAnimatorBase& GetScrollAnimator() const;
@@ -262,8 +275,17 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
   virtual bool HasTickmarks() const { return false; }
   virtual Vector<IntRect> GetTickmarks() const { return Vector<IntRect>(); }
 
+  // Note that this function just set the scrollbar itself needs repaint by
+  // blink during paint, but doesn't set the scrollbar parts (thumb or track)
+  // of an accelerated scrollbar needing repaint by the compositor.
+  // Use Scrollbar::SetNeedsPaintInvaldiation() instead.
   virtual void SetScrollbarNeedsPaintInvalidation(ScrollbarOrientation);
+
   virtual void SetScrollCornerNeedsPaintInvalidation();
+
+  // Set all scrollbars and their parts and the scroll corner needs full paint
+  // invalidation.
+  void SetScrollControlsNeedFullPaintInvalidation();
 
   // Convert points and rects between the scrollbar and its containing
   // EmbeddedContentView. The client needs to implement these in order to be
@@ -288,6 +310,11 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
     return scrollbar_point;
   }
   virtual IntPoint ConvertFromRootFrame(
+      const IntPoint& point_in_root_frame) const {
+    NOTREACHED();
+    return point_in_root_frame;
+  }
+  virtual IntPoint ConvertFromRootFrameToVisualViewport(
       const IntPoint& point_in_root_frame) const {
     NOTREACHED();
     return point_in_root_frame;
@@ -345,7 +372,6 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
   virtual IntPoint LastKnownMousePosition() const { return IntPoint(); }
 
   virtual bool ShouldSuspendScrollAnimations() const { return true; }
-  virtual void ScrollbarStyleChanged() {}
   virtual bool ScrollbarsCanBeActive() const = 0;
 
   virtual CompositorElementId GetScrollElementId() const = 0;
@@ -369,16 +395,21 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
   virtual void RegisterForAnimation() {}
   virtual void DeregisterForAnimation() {}
 
-  bool UsesCompositedScrolling() const { return uses_composited_scrolling_; }
+  virtual bool UsesCompositedScrolling() const {
+    DCHECK(!RuntimeEnabledFeatures::CompositeAfterPaintEnabled());
+    return uses_composited_scrolling_;
+  }
   void SetUsesCompositedScrolling(bool uses_composited_scrolling) {
+    DCHECK(!RuntimeEnabledFeatures::CompositeAfterPaintEnabled());
     uses_composited_scrolling_ = uses_composited_scrolling;
   }
   virtual bool ShouldScrollOnMainThread() const { return false; }
+  void MainThreadScrollingDidChange();
 
   // Overlay scrollbars can "fade-out" when inactive. This value should only be
   // updated if BlinkControlsOverlayVisibility is true in the
   // ScrollbarTheme. On Mac, where it is false, this can only be updated from
-  // the ScrollbarAnimatorMac painting code which will do so via
+  // the MacScrollbarAnimatorImpl painting code which will do so via
   // SetScrollbarsHiddenFromExternalAnimator.
   virtual bool ScrollbarsHiddenIfOverlay() const;
   void SetScrollbarsHiddenIfOverlay(bool);
@@ -425,10 +456,6 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
     return scroll_corner_needs_paint_invalidation_;
   }
 
-  void LayerForScrollingDidChange(CompositorAnimationTimeline*);
-  bool NeedsShowScrollbarLayers() const { return needs_show_scrollbar_layers_; }
-  void DidShowScrollbarLayers() { needs_show_scrollbar_layers_ = false; }
-
   void CancelScrollAnimation();
   virtual void CancelProgrammaticScrollAnimation();
 
@@ -448,16 +475,16 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
     return mojom::blink::ScrollBehavior::kInstant;
   }
 
-  virtual WebColorScheme UsedColorScheme() const = 0;
+  virtual mojom::blink::ColorScheme UsedColorScheme() const = 0;
 
   // Subtracts space occupied by this ScrollableArea's scrollbars.
   // Does nothing if overlay scrollbars are enabled.
   IntSize ExcludeScrollbars(const IntSize&) const;
 
   virtual int VerticalScrollbarWidth(
-      OverlayScrollbarClipBehavior = kIgnorePlatformOverlayScrollbarSize) const;
+      OverlayScrollbarClipBehavior = kIgnoreOverlayScrollbarSize) const;
   virtual int HorizontalScrollbarHeight(
-      OverlayScrollbarClipBehavior = kIgnorePlatformOverlayScrollbarSize) const;
+      OverlayScrollbarClipBehavior = kIgnoreOverlayScrollbarSize) const;
 
   virtual LayoutBox* GetLayoutBox() const { return nullptr; }
 
@@ -472,13 +499,17 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
   virtual bool IsPaintLayerScrollableArea() const { return false; }
   virtual bool IsRootFrameViewport() const { return false; }
 
+  // Returns true if this is the layout viewport associated with the
+  // RootFrameViewport.
+  virtual bool IsRootFrameLayoutViewport() const { return false; }
+
   virtual bool VisualViewportSuppliesScrollbars() const { return false; }
 
   // Returns true if the scroller adjusts the scroll offset to compensate
   // for layout movements (bit.ly/scroll-anchoring).
   virtual bool ShouldPerformScrollAnchoring() const { return false; }
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
   virtual void ClearScrollableArea();
 
@@ -495,7 +526,7 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
       const = 0;
 
   // Callback for compositor-side scrolling.
-  virtual void DidScroll(const FloatPoint&);
+  virtual void DidCompositorScroll(const FloatPoint& position);
 
   virtual void ScrollbarFrameRectChanged() {}
 
@@ -517,6 +548,16 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
   // PaintLayerScrollableArea (which can be null) is returned.
   static ScrollableArea* GetForScrolling(const LayoutBox* layout_box);
 
+  // Returns a Node at which 'scroll' events should be dispatched.
+  // For <fieldset>, a ScrollableArea is associated to its internal anonymous
+  // box. GetLayoutBox()->GetNode() doesn't work in this case.
+  Node* EventTargetNode() const;
+
+  ScrollOffset PendingScrollAnchorAdjustment() const;
+  void ClearPendingScrollAnchorAdjustment();
+
+  scoped_refptr<base::SingleThreadTaskRunner> GetCompositorTaskRunner();
+
  protected:
   // Deduces the mojom::blink::ScrollBehavior based on the
   // element style and the parameter set by programmatic scroll into either
@@ -525,7 +566,8 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
       mojom::blink::ScrollBehavior behavior_from_style,
       mojom::blink::ScrollBehavior behavior_from_param);
 
-  ScrollableArea();
+  explicit ScrollableArea(
+      scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner);
 
   ScrollbarOrientation ScrollbarOrientationFromDirection(
       ScrollDirectionPhysical) const;
@@ -539,6 +581,7 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
     vertical_scrollbar_needs_paint_invalidation_ = false;
     scroll_corner_needs_paint_invalidation_ = false;
   }
+
   void ShowNonMacOverlayScrollbars();
 
   // Called when scrollbar hides/shows for overlay scrollbars. This callback
@@ -550,6 +593,10 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
   bool HasBeenDisposed() const { return has_been_disposed_; }
 
   virtual const Document* GetDocument() const;
+
+  // Resolves into un-zoomed physical pixels a scroll |delta| based on its
+  // ScrollGranularity units.
+  ScrollOffset ResolveScrollDelta(ScrollGranularity, const ScrollOffset& delta);
 
  private:
   FRIEND_TEST_ALL_PREFIXES(ScrollableAreaTest,
@@ -588,13 +635,21 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
           mojom::blink::ScrollBehavior::kSmooth,
       base::ScopedClosureRunner on_finish = base::ScopedClosureRunner());
 
+  // This animator is used to handle painting animations for MacOS scrollbars
+  // using AppKit-specific code (Cocoa APIs). It requires input from
+  // ScrollableArea about changes on scrollbars. For other platforms, painting
+  // is done by blink, and this member will be a nullptr.
+  mutable Member<MacScrollbarAnimator> mac_scrollbar_animator_;
+
   mutable Member<ScrollAnimatorBase> scroll_animator_;
   mutable Member<ProgrammaticScrollAnimator> programmatic_scroll_animator_;
 
-  std::unique_ptr<TaskRunnerTimer<ScrollableArea>>
+  Member<DisallowNewWrapper<HeapTaskRunnerTimer<ScrollableArea>>>
       fade_overlay_scrollbars_timer_;
 
   Vector<ScrollCallback> pending_scroll_complete_callbacks_;
+
+  ScrollOffset pending_scroll_anchor_adjustment_;
 
   unsigned scrollbar_overlay_color_theme_ : 2;
 
@@ -605,11 +660,9 @@ class CORE_EXPORT ScrollableArea : public GarbageCollectedMixin {
   unsigned scrollbar_captured_ : 1;
   unsigned mouse_over_scrollbar_ : 1;
   unsigned has_been_disposed_ : 1;
-
-  // Indicates that the next compositing update needs to call
-  // cc::Layer::ShowScrollbars() on our scroll layer. Ignored if not composited.
-  unsigned needs_show_scrollbar_layers_ : 1;
   unsigned uses_composited_scrolling_ : 1;
+
+  scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner_;
 };
 
 }  // namespace blink

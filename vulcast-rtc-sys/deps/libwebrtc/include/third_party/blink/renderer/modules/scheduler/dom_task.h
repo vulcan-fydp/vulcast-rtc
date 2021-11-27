@@ -12,25 +12,22 @@
 #include "third_party/blink/renderer/platform/scheduler/public/post_cancellable_task.h"
 
 namespace blink {
-class DOMScheduler;
 class DOMTaskSignal;
 class ScriptState;
-class ScriptValue;
-class V8Function;
+class V8SchedulerPostTaskCallback;
 
 // DOMTask represents a task scheduled via the web scheduling API. It will
 // keep itself alive until DOMTask::Invoke is called, which may be after the
 // callback's v8 context is invalid, in which case, the task will not be run.
 class DOMTask final : public GarbageCollected<DOMTask> {
  public:
-  DOMTask(DOMScheduler*,
-          ScriptPromiseResolver*,
-          V8Function*,
-          const HeapVector<ScriptValue>& args,
+  DOMTask(ScriptPromiseResolver*,
+          V8SchedulerPostTaskCallback*,
           DOMTaskSignal*,
+          base::SingleThreadTaskRunner*,
           base::TimeDelta delay);
 
-  virtual void Trace(Visitor*);
+  virtual void Trace(Visitor*) const;
 
  private:
   // Entry point for running this DOMTask's |callback_|.
@@ -38,18 +35,17 @@ class DOMTask final : public GarbageCollected<DOMTask> {
   // Internal step of Invoke that handles invoking the callback, including
   // catching any errors and retrieving the result.
   void InvokeInternal(ScriptState*);
-  void Abort();
+  void OnAbort();
 
   void RecordTaskStartMetrics();
 
-  Member<DOMScheduler> scheduler_;
   TaskHandle task_handle_;
-  Member<V8Function> callback_;
-  HeapVector<ScriptValue> arguments_;
+  Member<V8SchedulerPostTaskCallback> callback_;
   Member<ScriptPromiseResolver> resolver_;
   probe::AsyncTaskId async_task_id_;
   Member<DOMTaskSignal> signal_;
   const base::TimeTicks queue_time_;
+  const base::TimeDelta delay_;
 };
 
 }  // namespace blink

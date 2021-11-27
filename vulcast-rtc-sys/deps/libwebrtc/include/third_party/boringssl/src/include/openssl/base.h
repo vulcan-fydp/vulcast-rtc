@@ -90,21 +90,25 @@ extern "C" {
 #elif defined(__x86) || defined(__i386) || defined(__i386__) || defined(_M_IX86)
 #define OPENSSL_32_BIT
 #define OPENSSL_X86
-#elif defined(__aarch64__)
+#elif defined(__AARCH64EL__) || defined(_M_ARM64)
 #define OPENSSL_64_BIT
 #define OPENSSL_AARCH64
-#elif defined(__arm) || defined(__arm__) || defined(_M_ARM)
+#elif defined(__ARMEL__) || defined(_M_ARM)
 #define OPENSSL_32_BIT
 #define OPENSSL_ARM
 #elif (defined(__PPC64__) || defined(__powerpc64__)) && defined(_LITTLE_ENDIAN)
 #define OPENSSL_64_BIT
 #define OPENSSL_PPC64LE
-#elif defined(__mips__) && !defined(__LP64__)
+#elif defined(__MIPSEL__) && !defined(__LP64__)
 #define OPENSSL_32_BIT
 #define OPENSSL_MIPS
-#elif defined(__mips__) && defined(__LP64__)
+#elif defined(__MIPSEL__) && defined(__LP64__)
 #define OPENSSL_64_BIT
 #define OPENSSL_MIPS64
+#elif defined(__riscv) && __SIZEOF_POINTER__ == 8
+#define OPENSSL_64_BIT
+#elif defined(__riscv) && __SIZEOF_POINTER__ == 4
+#define OPENSSL_32_BIT
 #elif defined(__pnacl__)
 #define OPENSSL_32_BIT
 #define OPENSSL_PNACL
@@ -138,7 +142,10 @@ extern "C" {
 #define OPENSSL_WINDOWS
 #endif
 
-#if defined(__linux__)
+// Trusty isn't Linux but currently defines __linux__. As a workaround, we
+// exclude it here.
+// TODO(b/169780122): Remove this workaround once Trusty no longer defines it.
+#if defined(__linux__) && !defined(TRUSTY)
 #define OPENSSL_LINUX
 #endif
 
@@ -153,6 +160,10 @@ extern "C" {
 
 #if defined(__ANDROID_API__)
 #define OPENSSL_ANDROID
+#endif
+
+#if defined(__FreeBSD__)
+#define OPENSSL_FREEBSD
 #endif
 
 // BoringSSL requires platform's locking APIs to make internal global state
@@ -173,7 +184,7 @@ extern "C" {
 #endif
 
 #define OPENSSL_IS_BORINGSSL
-#define OPENSSL_VERSION_NUMBER 0x1010007f
+#define OPENSSL_VERSION_NUMBER 0x1010107f
 #define SSLEAY_VERSION_NUMBER OPENSSL_VERSION_NUMBER
 
 // BORINGSSL_API_VERSION is a positive integer that increments as BoringSSL
@@ -184,7 +195,7 @@ extern "C" {
 // A consumer may use this symbol in the preprocessor to temporarily build
 // against multiple revisions of BoringSSL at the same time. It is not
 // recommended to do so for longer than is necessary.
-#define BORINGSSL_API_VERSION 10
+#define BORINGSSL_API_VERSION 16
 
 #if defined(BORINGSSL_SHARED_LIBRARY)
 
@@ -354,14 +365,12 @@ typedef struct X509_POLICY_NODE_st X509_POLICY_NODE;
 typedef struct X509_POLICY_TREE_st X509_POLICY_TREE;
 typedef struct X509_VERIFY_PARAM_st X509_VERIFY_PARAM;
 typedef struct X509_algor_st X509_ALGOR;
-typedef struct X509_crl_info_st X509_CRL_INFO;
 typedef struct X509_crl_st X509_CRL;
 typedef struct X509_extension_st X509_EXTENSION;
 typedef struct X509_info_st X509_INFO;
 typedef struct X509_name_entry_st X509_NAME_ENTRY;
 typedef struct X509_name_st X509_NAME;
 typedef struct X509_pubkey_st X509_PUBKEY;
-typedef struct X509_req_info_st X509_REQ_INFO;
 typedef struct X509_req_st X509_REQ;
 typedef struct X509_sig_st X509_SIG;
 typedef struct X509_val_st X509_VAL;
@@ -369,6 +378,7 @@ typedef struct bignum_ctx BN_CTX;
 typedef struct bignum_st BIGNUM;
 typedef struct bio_method_st BIO_METHOD;
 typedef struct bio_st BIO;
+typedef struct blake2b_state_st BLAKE2B_CTX;
 typedef struct bn_gencb_st BN_GENCB;
 typedef struct bn_mont_ctx_st BN_MONT_CTX;
 typedef struct buf_mem_st BUF_MEM;
@@ -393,6 +403,11 @@ typedef struct evp_aead_st EVP_AEAD;
 typedef struct evp_cipher_ctx_st EVP_CIPHER_CTX;
 typedef struct evp_cipher_st EVP_CIPHER;
 typedef struct evp_encode_ctx_st EVP_ENCODE_CTX;
+typedef struct evp_hpke_aead_st EVP_HPKE_AEAD;
+typedef struct evp_hpke_ctx_st EVP_HPKE_CTX;
+typedef struct evp_hpke_kdf_st EVP_HPKE_KDF;
+typedef struct evp_hpke_kem_st EVP_HPKE_KEM;
+typedef struct evp_hpke_key_st EVP_HPKE_KEY;
 typedef struct evp_pkey_asn1_method_st EVP_PKEY_ASN1_METHOD;
 typedef struct evp_pkey_ctx_st EVP_PKEY_CTX;
 typedef struct evp_pkey_method_st EVP_PKEY_METHOD;
@@ -415,6 +430,7 @@ typedef struct spake2_ctx_st SPAKE2_CTX;
 typedef struct srtp_protection_profile_st SRTP_PROTECTION_PROFILE;
 typedef struct ssl_cipher_st SSL_CIPHER;
 typedef struct ssl_ctx_st SSL_CTX;
+typedef struct ssl_ech_keys_st SSL_ECH_KEYS;
 typedef struct ssl_method_st SSL_METHOD;
 typedef struct ssl_private_key_method_st SSL_PRIVATE_KEY_METHOD;
 typedef struct ssl_quic_method_st SSL_QUIC_METHOD;
@@ -520,8 +536,39 @@ class StackAllocated {
   StackAllocated() { init(&ctx_); }
   ~StackAllocated() { cleanup(&ctx_); }
 
-  StackAllocated(const StackAllocated<T, CleanupRet, init, cleanup> &) = delete;
-  T& operator=(const StackAllocated<T, CleanupRet, init, cleanup> &) = delete;
+  StackAllocated(const StackAllocated &) = delete;
+  StackAllocated& operator=(const StackAllocated &) = delete;
+
+  T *get() { return &ctx_; }
+  const T *get() const { return &ctx_; }
+
+  T *operator->() { return &ctx_; }
+  const T *operator->() const { return &ctx_; }
+
+  void Reset() {
+    cleanup(&ctx_);
+    init(&ctx_);
+  }
+
+ private:
+  T ctx_;
+};
+
+template <typename T, typename CleanupRet, void (*init)(T *),
+          CleanupRet (*cleanup)(T *), void (*move)(T *, T *)>
+class StackAllocatedMovable {
+ public:
+  StackAllocatedMovable() { init(&ctx_); }
+  ~StackAllocatedMovable() { cleanup(&ctx_); }
+
+  StackAllocatedMovable(StackAllocatedMovable &&other) {
+    init(&ctx_);
+    move(&ctx_, &other.ctx_);
+  }
+  StackAllocatedMovable &operator=(StackAllocatedMovable &&other) {
+    move(&ctx_, &other.ctx_);
+    return *this;
+  }
 
   T *get() { return &ctx_; }
   const T *get() const { return &ctx_; }

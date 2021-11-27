@@ -75,7 +75,7 @@ typename std::enable_if_t<
     bool>
 operator==(const EnumTypeClass& lhs, const EnumTypeClass& rhs) {
   DCHECK(!lhs.IsEmpty() && !rhs.IsEmpty());
-  return lhs.AsCStr() == rhs.AsCStr();
+  return lhs.AsEnum() == rhs.AsEnum();
 }
 
 template <typename EnumTypeClass>
@@ -83,8 +83,41 @@ typename std::enable_if_t<
     std::is_base_of<bindings::EnumerationBase, EnumTypeClass>::value,
     bool>
 operator!=(const EnumTypeClass& lhs, const EnumTypeClass& rhs) {
-  DCHECK(!lhs.IsEmpty() && !rhs.IsEmpty());
-  return lhs.AsCStr() != rhs.AsCStr();
+  return !(lhs == rhs);
+}
+
+template <typename EnumTypeClass>
+typename std::enable_if_t<
+    std::is_base_of<bindings::EnumerationBase, EnumTypeClass>::value,
+    bool>
+operator==(const EnumTypeClass& lhs, typename EnumTypeClass::Enum rhs) {
+  DCHECK(!lhs.IsEmpty());
+  return lhs.AsEnum() == rhs;
+}
+
+template <typename EnumTypeClass>
+typename std::enable_if_t<
+    std::is_base_of<bindings::EnumerationBase, EnumTypeClass>::value,
+    bool>
+operator==(typename EnumTypeClass::Enum lhs, const EnumTypeClass& rhs) {
+  DCHECK(!rhs.IsEmpty());
+  return lhs == rhs.AsEnum();
+}
+
+template <typename EnumTypeClass>
+typename std::enable_if_t<
+    std::is_base_of<bindings::EnumerationBase, EnumTypeClass>::value,
+    bool>
+operator!=(const EnumTypeClass& lhs, typename EnumTypeClass::Enum rhs) {
+  return !(lhs == rhs);
+}
+
+template <typename EnumTypeClass>
+typename std::enable_if_t<
+    std::is_base_of<bindings::EnumerationBase, EnumTypeClass>::value,
+    bool>
+operator!=(typename EnumTypeClass::Enum lhs, const EnumTypeClass& rhs) {
+  return !(lhs == rhs);
 }
 
 // Migration adapters
@@ -129,6 +162,19 @@ typename std::enable_if_t<
     bool>
 operator==(const char* lhs, const EnumTypeClass& rhs) {
   return rhs == lhs;
+}
+
+// TODO(crbug.com/1092328): IDLEnumAsString is an adapter between the old and
+// new bindings generators.  The old bindings generator implements IDL
+// enumeration with String class, however, the new bindings generator implements
+// it with subclasses of EnumerationBase.  IDLEnumAsString resolves this
+// difference.
+inline const String& IDLEnumAsString(const String& value) {
+  return value;
+}
+
+inline String IDLEnumAsString(const bindings::EnumerationBase& value) {
+  return value.AsString();
 }
 
 }  // namespace blink

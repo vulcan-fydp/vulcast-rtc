@@ -47,7 +47,7 @@ class CORE_EXPORT DeleteSelectionCommand final : public CompositeEditCommand {
       const DeleteSelectionOptions&,
       InputEvent::InputType input_type = InputEvent::InputType::kNone);
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   void DoApply(EditingState*) override;
@@ -72,6 +72,8 @@ class CORE_EXPORT DeleteSelectionCommand final : public CompositeEditCommand {
                   EditingState*,
                   ShouldAssumeContentIsAlwaysEditable =
                       kDoNotAssumeContentIsAlwaysEditable) override;
+  void RemoveCompletelySelectedNodes(Node* start_node,
+                                     EditingState* editing_state);
   void DeleteTextFromNode(Text*, unsigned, unsigned) override;
   void RemoveRedundantBlocks(EditingState*);
 

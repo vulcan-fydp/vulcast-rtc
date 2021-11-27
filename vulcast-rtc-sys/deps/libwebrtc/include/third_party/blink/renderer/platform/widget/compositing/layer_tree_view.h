@@ -12,10 +12,10 @@
 #include "base/memory/weak_ptr.h"
 #include "base/single_thread_task_runner.h"
 #include "base/time/time.h"
-#include "base/values.h"
 #include "cc/input/browser_controls_state.h"
 #include "cc/trees/layer_tree_host_client.h"
 #include "cc/trees/layer_tree_host_single_thread_client.h"
+#include "cc/trees/paint_holding_reason.h"
 #include "cc/trees/swap_promise.h"
 #include "cc/trees/swap_promise_monitor.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
@@ -24,13 +24,17 @@
 
 namespace cc {
 class AnimationHost;
+class RasterDarkModeFilter;
 class LayerTreeFrameSink;
 class LayerTreeHost;
 class LayerTreeSettings;
 class RenderFrameMetadataObserver;
 class TaskGraphRunner;
-class UkmRecorderFactory;
 }  // namespace cc
+
+namespace gfx {
+class RenderingPipeline;
+}  // namespace gfx
 
 namespace blink {
 
@@ -43,21 +47,24 @@ class PLATFORM_EXPORT LayerTreeView
       public cc::LayerTreeHostSingleThreadClient,
       public cc::LayerTreeHostSchedulingClient {
  public:
+  LayerTreeView(LayerTreeViewDelegate* delegate,
+                scheduler::WebThreadScheduler* scheduler);
+  LayerTreeView(const LayerTreeView&) = delete;
+  LayerTreeView& operator=(const LayerTreeView&) = delete;
+  ~LayerTreeView() override;
+
   // The |main_thread| is the task runner that the compositor will use for the
   // main thread (where it is constructed). The |compositor_thread| is the task
   // runner for the compositor thread, but is null if the compositor will run in
   // single-threaded mode (in tests only).
-  LayerTreeView(LayerTreeViewDelegate* delegate,
-                scoped_refptr<base::SingleThreadTaskRunner> main_thread,
-                scoped_refptr<base::SingleThreadTaskRunner> compositor_thread,
-                cc::TaskGraphRunner* task_graph_runner,
-                scheduler::WebThreadScheduler* scheduler);
-  ~LayerTreeView() override;
-
   // The |ukm_recorder_factory| may be null to disable recording (in tests
   // only).
   void Initialize(const cc::LayerTreeSettings& settings,
-                  std::unique_ptr<cc::UkmRecorderFactory> ukm_recorder_factory);
+                  scoped_refptr<base::SingleThreadTaskRunner> main_thread,
+                  scoped_refptr<base::SingleThreadTaskRunner> compositor_thread,
+                  cc::TaskGraphRunner* task_graph_runner,
+                  gfx::RenderingPipeline* main_thread_pipeline,
+                  gfx::RenderingPipeline* compositor_thread_pipeline);
 
   // Drops any references back to the delegate in preparation for being
   // destroyed.
@@ -74,17 +81,14 @@ class PLATFORM_EXPORT LayerTreeView
   void DidUpdateLayers() override;
   void BeginMainFrame(const viz::BeginFrameArgs& args) override;
   void OnDeferMainFrameUpdatesChanged(bool) override;
-  void OnDeferCommitsChanged(bool) override;
+  void OnDeferCommitsChanged(bool defer_status,
+                             cc::PaintHoldingReason reason) override;
   void BeginMainFrameNotExpectedSoon() override;
   void BeginMainFrameNotExpectedUntil(base::TimeTicks time) override;
   void UpdateLayerTreeHost() override;
   void ApplyViewportChanges(const cc::ApplyViewportChangesArgs& args) override;
-  void RecordManipulationTypeCounts(cc::ManipulationInfo info) override;
-  void SendOverscrollEventFromImplSide(
-      const gfx::Vector2dF& overscroll_delta,
-      cc::ElementId scroll_latched_element_id) override;
-  void SendScrollEndEventFromImplSide(
-      cc::ElementId scroll_latched_element_id) override;
+  void UpdateCompositorScrollState(
+      const cc::CompositorCommitData& commit_data) override;
   void RequestNewLayerTreeFrameSink() override;
   void DidInitializeLayerTreeFrameSink() override;
   void DidFailToInitializeLayerTreeFrameSink() override;
@@ -102,17 +106,26 @@ class PLATFORM_EXPORT LayerTreeView
       cc::ActiveFrameSequenceTrackers trackers) override;
   std::unique_ptr<cc::BeginMainFrameMetrics> GetBeginMainFrameMetrics()
       override;
+  std::unique_ptr<cc::WebVitalMetrics> GetWebVitalMetrics() override;
   void NotifyThroughputTrackerResults(
       cc::CustomTrackerResults results) override;
+  void DidObserveFirstScrollDelay(
+      base::TimeDelta first_scroll_delay,
+      base::TimeTicks first_scroll_timestamp) override;
+  void RunPaintBenchmark(int repeat_count,
+                         cc::PaintBenchmarkResult& result) override;
 
   // cc::LayerTreeHostSingleThreadClient implementation.
   void DidSubmitCompositorFrame() override;
   void DidLoseLayerTreeFrameSink() override;
+  void ScheduleAnimationForWebTests() override;
 
   // cc::LayerTreeHostSchedulingClient implementation.
   void DidScheduleBeginMainFrame() override;
   void DidRunBeginMainFrame() override;
 
+  // Registers a callback that will be run on the first successful presentation
+  // for `frame_token` or a following frame.
   void AddPresentationCallback(
       uint32_t frame_token,
       base::OnceCallback<void(base::TimeTicks)> callback);
@@ -131,11 +144,9 @@ class PLATFORM_EXPORT LayerTreeView
       std::unique_ptr<cc::RenderFrameMetadataObserver>
           render_frame_metadata_observer);
 
-  const scoped_refptr<base::SingleThreadTaskRunner> main_thread_;
-  const scoped_refptr<base::SingleThreadTaskRunner> compositor_thread_;
-  cc::TaskGraphRunner* const task_graph_runner_;
   scheduler::WebThreadScheduler* const web_main_thread_scheduler_;
   const std::unique_ptr<cc::AnimationHost> animation_host_;
+  std::unique_ptr<cc::RasterDarkModeFilter> dark_mode_filter_;
 
   // The delegate_ becomes null when Disconnect() is called. After that, the
   // class should do nothing in calls from the LayerTreeHost, and just wait to
@@ -154,8 +165,6 @@ class PLATFORM_EXPORT LayerTreeView
       presentation_callbacks_;
 
   base::WeakPtrFactory<LayerTreeView> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(LayerTreeView);
 };
 
 }  // namespace blink

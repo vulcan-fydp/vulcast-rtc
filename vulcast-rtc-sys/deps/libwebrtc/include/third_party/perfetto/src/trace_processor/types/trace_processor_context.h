@@ -27,6 +27,7 @@ namespace perfetto {
 namespace trace_processor {
 
 class ArgsTracker;
+class AsyncTrackSetTracker;
 class AndroidProbesTracker;
 class ChunkedTraceReader;
 class ClockTracker;
@@ -34,8 +35,10 @@ class EventTracker;
 class ForwardingTraceParser;
 class FtraceModule;
 class GlobalArgsTracker;
+class GlobalStackProfileTracker;
 class HeapGraphTracker;
 class HeapProfileTracker;
+class PerfSampleTracker;
 class MetadataTracker;
 class ProtoImporterModule;
 class ProcessTracker;
@@ -46,7 +49,7 @@ class TraceSorter;
 class TraceStorage;
 class TrackTracker;
 class JsonTracker;
-class ProtoToArgsTable;
+class DescriptorPool;
 
 class TraceProcessorContext {
  public:
@@ -67,12 +70,15 @@ class TraceProcessorContext {
   std::unique_ptr<ArgsTracker> args_tracker;
 
   std::unique_ptr<TrackTracker> track_tracker;
+  std::unique_ptr<AsyncTrackSetTracker> async_track_set_tracker;
   std::unique_ptr<SliceTracker> slice_tracker;
   std::unique_ptr<FlowTracker> flow_tracker;
   std::unique_ptr<ProcessTracker> process_tracker;
   std::unique_ptr<EventTracker> event_tracker;
   std::unique_ptr<ClockTracker> clock_tracker;
   std::unique_ptr<HeapProfileTracker> heap_profile_tracker;
+  std::unique_ptr<PerfSampleTracker> perf_sample_tracker;
+  std::unique_ptr<GlobalStackProfileTracker> global_stack_profile_tracker;
   std::unique_ptr<MetadataTracker> metadata_tracker;
 
   // These fields are stored as pointers to Destructible objects rather than
@@ -103,14 +109,20 @@ class TraceProcessorContext {
   std::unique_ptr<TraceParser> json_trace_parser;
   std::unique_ptr<TraceParser> fuchsia_trace_parser;
 
-  // Reflection-based proto parser used to convert TrackEvent fields into SQL.
-  std::unique_ptr<ProtoToArgsTable> proto_to_args_table_;
+  // This field contains the list of proto descriptors that can be used by
+  // reflection-based parsers.
+  std::unique_ptr<DescriptorPool> descriptor_pool_;
 
   // The module at the index N is registered to handle field id N in
   // TracePacket.
-  std::vector<ProtoImporterModule*> modules_by_field;
+  std::vector<std::vector<ProtoImporterModule*>> modules_by_field;
   std::vector<std::unique_ptr<ProtoImporterModule>> modules;
   FtraceModule* ftrace_module = nullptr;
+
+  // Marks whether the uuid was read from the trace.
+  // If the uuid was NOT read, the uuid will be made from the hash of the first
+  // 4KB of the trace.
+  bool uuid_found_in_trace = false;
 };
 
 }  // namespace trace_processor

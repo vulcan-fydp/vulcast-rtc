@@ -20,8 +20,10 @@
 #include "perfetto/base/flat_set.h"
 #include "perfetto/protozero/scattered_heap_buffer.h"
 #include "perfetto/tracing/core/forward_decls.h"
+#include "perfetto/tracing/data_source.h"
 #include "perfetto/tracing/debug_annotation.h"
 #include "perfetto/tracing/trace_writer_base.h"
+#include "perfetto/tracing/traced_value.h"
 #include "perfetto/tracing/track.h"
 #include "protos/perfetto/common/builtin_clock.pbzero.h"
 #include "protos/perfetto/trace/interned_data/interned_data.pbzero.h"
@@ -30,7 +32,15 @@
 #include <unordered_map>
 
 namespace perfetto {
+
+// Represents a point in time for the clock specified by |clock_id|.
+struct TraceTimestamp {
+  protos::pbzero::BuiltinClock clock_id;
+  uint64_t nanoseconds;
+};
+
 class EventContext;
+class TrackEventSessionObserver;
 struct Category;
 namespace protos {
 namespace gen {
@@ -41,15 +51,34 @@ class DebugAnnotation;
 }  // namespace pbzero
 }  // namespace protos
 
+// A callback interface for observing track event tracing sessions starting and
+// stopping. See TrackEvent::{Add,Remove}SessionObserver. Note that all methods
+// will be called on an internal Perfetto thread.
+class PERFETTO_EXPORT TrackEventSessionObserver {
+ public:
+  virtual ~TrackEventSessionObserver();
+  // Called when a track event tracing session is configured. Note tracing isn't
+  // active yet, so track events emitted here won't be recorded. See
+  // DataSourceBase::OnSetup.
+  virtual void OnSetup(const DataSourceBase::SetupArgs&);
+  // Called when a track event tracing session is started. It is possible to
+  // emit track events from this callback.
+  virtual void OnStart(const DataSourceBase::StartArgs&);
+  // Called when a track event tracing session is stopped. It is still possible
+  // to emit track events from this callback.
+  virtual void OnStop(const DataSourceBase::StopArgs&);
+};
+
 namespace internal {
 class TrackEventCategoryRegistry;
 
-class BaseTrackEventInternedDataIndex {
+class PERFETTO_EXPORT BaseTrackEventInternedDataIndex {
  public:
   virtual ~BaseTrackEventInternedDataIndex();
 
 #if PERFETTO_DCHECK_IS_ON()
   const char* type_id_ = nullptr;
+  const void* add_function_ptr_ = nullptr;
 #endif  // PERFETTO_DCHECK_IS_ON()
 };
 
@@ -98,11 +127,15 @@ class PERFETTO_EXPORT TrackEventInternal {
       const TrackEventCategoryRegistry&,
       bool (*register_data_source)(const DataSourceDescriptor&));
 
+  static bool AddSessionObserver(TrackEventSessionObserver*);
+  static void RemoveSessionObserver(TrackEventSessionObserver*);
+
   static void EnableTracing(const TrackEventCategoryRegistry& registry,
                             const protos::gen::TrackEventConfig& config,
-                            uint32_t instance_index);
+                            const DataSourceBase::SetupArgs&);
+  static void OnStart(const DataSourceBase::StartArgs&);
   static void DisableTracing(const TrackEventCategoryRegistry& registry,
-                             uint32_t instance_index);
+                             const DataSourceBase::StopArgs&);
   static bool IsCategoryEnabled(const TrackEventCategoryRegistry& registry,
                                 const protos::gen::TrackEventConfig& config,
                                 const Category& category);
@@ -113,14 +146,17 @@ class PERFETTO_EXPORT TrackEventInternal {
       const Category* category,
       const char* name,
       perfetto::protos::pbzero::TrackEvent::Type,
-      uint64_t timestamp = GetTimeNs());
+      TraceTimestamp timestamp = {GetClockId(), GetTimeNs()});
+
+  static void ResetIncrementalState(TraceWriterBase*, TraceTimestamp);
 
   template <typename T>
   static void AddDebugAnnotation(perfetto::EventContext* event_ctx,
                                  const char* name,
                                  T&& value) {
     auto annotation = AddDebugAnnotation(event_ctx, name);
-    WriteDebugAnnotation(annotation, value);
+    WriteIntoTracedValue(internal::CreateTracedValueFromProto(annotation),
+                         std::forward<T>(value));
   }
 
   // If the given track hasn't been seen by the trace writer yet, write a
@@ -142,7 +178,7 @@ class PERFETTO_EXPORT TrackEventInternal {
   static void WriteTrackDescriptor(const TrackType& track,
                                    TraceWriterBase* trace_writer) {
     TrackRegistry::Get()->SerializeTrack(
-        track, NewTracePacket(trace_writer, GetTimeNs()));
+        track, NewTracePacket(trace_writer, {GetClockId(), GetTimeNs()}));
   }
 
   // Get the current time in nanoseconds in the trace clock timebase.
@@ -158,16 +194,22 @@ class PERFETTO_EXPORT TrackEventInternal {
 #endif
   }
 
+  static int GetSessionCount();
+
+  // Represents the default track for the calling thread.
+  static const Track kDefaultTrack;
+
  private:
-  static void ResetIncrementalState(TraceWriterBase*, uint64_t timestamp);
   static protozero::MessageHandle<protos::pbzero::TracePacket> NewTracePacket(
       TraceWriterBase*,
-      uint64_t timestamp,
+      TraceTimestamp,
       uint32_t seq_flags =
           protos::pbzero::TracePacket::SEQ_NEEDS_INCREMENTAL_STATE);
   static protos::pbzero::DebugAnnotation* AddDebugAnnotation(
       perfetto::EventContext*,
       const char* name);
+
+  static std::atomic<int> session_count_;
 };
 
 }  // namespace internal

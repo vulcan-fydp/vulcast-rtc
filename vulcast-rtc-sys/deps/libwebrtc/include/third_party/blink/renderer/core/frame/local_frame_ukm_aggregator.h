@@ -25,6 +25,8 @@ class UkmRecorder;
 
 namespace blink {
 
+enum class DocumentUpdateReason;
+
 // This class aggregaties and records time based UKM and UMA metrics
 // for LocalFrameView. The simplest way to use it is via the
 // SCOPED_UMA_AND_UKM_TIMER macro combined with
@@ -60,8 +62,8 @@ namespace blink {
 // such that any given frame is equally likely to be the final sample.
 //
 // Sample usage (see also SCOPED_UMA_AND_UKM_TIMER):
-//   std::unique_ptr<UkmHierarchicalTimeAggregator> aggregator(
-//      new UkmHierarchicalTimeAggregator(
+//   std::unique_ptr<LocalFrameUkmAggregator> aggregator(
+//      new LocalFrameUkmAggregator(
 //              GetSourceId(),
 //              GetUkmRecorder());
 //   ...
@@ -79,31 +81,23 @@ namespace blink {
 //   // It may generate an event. trackers is a bit encoding of the active frame
 //.  // sequence trackers, informing us of why the BeginMainFrame was requested.
 //
-// In the example above, the event name is "my_event". It will measure 7
+// In the example above, the event name is "my_event". It will measure 4
 // metrics:
 //   "primary_metric",
 //   "sub_metric1",
 //   "sub_metric2",
 //   "sub_metric3"
-//   "sub_metric1Percentage",
-//   "sub_metric2Percentage",
-//   "sub_metric3Percentage"
 //
-// It will report 13 UMA values:
+// It will report 4 UMA values:
 //   "primary_uma_counter",
-//   "sub_uma_metric1", "sub_uma_metric2", "sub_uma_metric3",
-//   "sub_uma_ratio1.LessThan1ms", "sub_uma_ratio1.1msTo5ms",
-//   "sub_uma_ratio1.MoreThan5ms", "sub_uma_ratio2.LessThan1ms",
-//   "sub_uma_ratio2.1msTo5ms", "sub_uma_ratio2.MoreThan5ms",
-//   "sub_uma_ratio3.LessThan1ms", "sub_uma_ratio3.1msTo5ms",
-//   "sub_uma_ratio3.MoreThan5ms"
+//   "sub_uma_metric1", "sub_uma_metric2", "sub_uma_metric3"
 //
 // Note that these have to be specified in the appropriate ukm.xml file
 // and histograms.xml file. Runtime errors indicate missing or mis-named
 // metrics.
 //
-// If the source_id/recorder changes then a new
-// UkmHierarchicalTimeAggregator has to be created.
+// If the source_id/recorder changes then a new  LocalFrameUkmAggregator has to
+// be created.
 
 // Defines a UKM that is part of a hierarchical ukm, recorded in
 // microseconds equal to the duration of the current lexical scope after
@@ -125,74 +119,90 @@ class CORE_EXPORT LocalFrameUkmAggregator
     : public RefCounted<LocalFrameUkmAggregator> {
  public:
   // Changing these values requires changing the names of metrics specified
-  // below. For every metric name added here, add an entry in the
-  // metric_strings_ array below.
+  // below. For every metric name added here, add an entry in the array in
+  // metrics_data() below.
   enum MetricId {
-    kCompositing,
+    kCompositingAssignments,
     kCompositingCommit,
+    kCompositingInputs,
     kImplCompositorCommit,
     kIntersectionObservation,
+    kIntersectionObservationInternalCount,
+    kIntersectionObservationJavascriptCount,
     kPaint,
     kPrePaint,
     kStyle,
     kLayout,
-    kForcedStyleAndLayout,
-    kHitTestDocumentUpdate,
-    kScrollingCoordinator,
     kHandleInputEvents,
     kAnimate,
     kUpdateLayers,
-    kProxyCommit,
     kWaitForCommit,
+    kDisplayLockIntersectionObserver,
+    kJavascriptIntersectionObserver,
+    kLazyLoadIntersectionObserver,
+    kMediaIntersectionObserver,
+    kAnchorElementMetricsIntersectionObserver,
+    kUpdateViewportIntersection,
+    kForcedStyleAndLayout,
+    kContentDocumentUpdate,
+    kHitTestDocumentUpdate,
+    kJavascriptDocumentUpdate,
+    kScrollDocumentUpdate,
+    kServiceDocumentUpdate,
+    kUserDrivenDocumentUpdate,
     kCount,
     kMainFrame
   };
 
+  // For metrics that require it, this converts the input value to use
+  // exponential bucketing.
+  static int64_t ApplyBucketIfNecessary(int64_t value, unsigned metric_id);
+
   typedef struct MetricInitializationData {
-    String name;
+    const char* const name;
     bool has_uma;
   } MetricInitializationData;
 
  private:
   friend class LocalFrameUkmAggregatorTest;
+  friend class LocalFrameUkmAggregatorSimTest;
 
   // Primary metric name
-  static const String& primary_metric_name() {
-    DEFINE_STATIC_LOCAL(String, primary_name, ("MainFrame"));
-    return primary_name;
-  }
+  static const char* primary_metric_name() { return "MainFrame"; }
 
-  // Add an entry in this arrray every time a new metric is added.
-  static const Vector<MetricInitializationData>& metrics_data() {
-    // Leaky construction to avoid exit-time destruction.
-    static const Vector<MetricInitializationData>* data =
-        new Vector<MetricInitializationData>{{"Compositing", true},
-                                             {"CompositingCommit", true},
-                                             {"ImplCompositorCommit", true},
-                                             {"IntersectionObservation", true},
-                                             {"Paint", true},
-                                             {"PrePaint", true},
-                                             {"Style", true},
-                                             {"Layout", true},
-                                             {"ForcedStyleAndLayout", true},
-                                             {"HitTestDocumentUpdate", true},
-                                             {"ScrollingCoordinator", true},
-                                             {"HandleInputEvents", true},
-                                             {"Animate", true},
-                                             {"UpdateLayers", false},
-                                             {"ProxyCommit", true},
-                                             {"WaitForCommit", true}};
-    return *data;
-  }
-
-  // Modify this array if the UMA ratio metrics should be bucketed in a
-  // different way.
-  static const Vector<base::TimeDelta>& bucket_thresholds() {
-    // Leaky construction to avoid exit-time destruction.
-    static const Vector<base::TimeDelta>* thresholds =
-        new Vector<base::TimeDelta>{base::TimeDelta::FromMilliseconds(1),
-                                    base::TimeDelta::FromMilliseconds(5)};
-    return *thresholds;
+  // Add an entry in this array every time a new metric is added.
+  static base::span<const MetricInitializationData> metrics_data() {
+    static const MetricInitializationData data[] = {
+        {"CompositingAssignments", true},
+        {"CompositingCommit", true},
+        {"CompositingInputs", true},
+        {"ImplCompositorCommit", true},
+        {"IntersectionObservation", true},
+        {"IntersectionObservationInternalCount", true},
+        {"IntersectionObservationJavascriptCount", true},
+        {"Paint", true},
+        {"PrePaint", true},
+        {"Style", true},
+        {"Layout", true},
+        {"HandleInputEvents", true},
+        {"Animate", true},
+        {"UpdateLayers", false},
+        {"WaitForCommit", true},
+        {"DisplayLockIntersectionObserver", true},
+        {"JavascriptIntersectionObserver", true},
+        {"LazyLoadIntersectionObserver", true},
+        {"MediaIntersectionObserver", true},
+        {"AnchorElementMetricsIntersectionObserver", true},
+        {"UpdateViewportIntersection", true},
+        {"ForcedStyleAndLayout", true},
+        {"ContentDocumentUpdate", true},
+        {"HitTestDocumentUpdate", true},
+        {"JavascriptDocumentUpdate", true},
+        {"ScrollDocumentUpdate", true},
+        {"ServiceDocumentUpdate", true},
+        {"UserDrivenDocumentUpdate", true}};
+    static_assert(base::size(data) == kCount, "Metrics data mismatch");
+    return data;
   }
 
  public:
@@ -205,6 +215,9 @@ class CORE_EXPORT LocalFrameUkmAggregator
 
    public:
     ScopedUkmHierarchicalTimer(ScopedUkmHierarchicalTimer&&);
+    ScopedUkmHierarchicalTimer(const ScopedUkmHierarchicalTimer&) = delete;
+    ScopedUkmHierarchicalTimer& operator=(const ScopedUkmHierarchicalTimer&) =
+        delete;
     ~ScopedUkmHierarchicalTimer();
 
    private:
@@ -218,12 +231,37 @@ class CORE_EXPORT LocalFrameUkmAggregator
     const size_t metric_index_;
     const base::TickClock* clock_;
     const base::TimeTicks start_time_;
+  };
 
-    DISALLOW_COPY_AND_ASSIGN(ScopedUkmHierarchicalTimer);
+  // This is an optimization for the case where we would otherwise instantiate a
+  // ScopedUkmHierarchicalTimer in the body of a loop. On some platforms,
+  // TickClock::NowTicks() is weirdly expensive. Compared to
+  // ScopedUkmHierarchicalTimer, this class makes fewer calls to NowTicks() by
+  // reusing a single timestamp as the end of one measurement and the beginning
+  // of the next.
+  class CORE_EXPORT IterativeTimer {
+    STACK_ALLOCATED();
+
+   public:
+    IterativeTimer(LocalFrameUkmAggregator&);
+    ~IterativeTimer();
+    // Start a time interval measurement for the given metric, completing the
+    // prior interval measurement if necessary.
+    void StartInterval(int64_t metric_index);
+
+   private:
+    void Record();
+    scoped_refptr<LocalFrameUkmAggregator> aggregator_;
+    base::TimeTicks start_time_;
+    int64_t metric_index_ = -1;
   };
 
   LocalFrameUkmAggregator(int64_t source_id, ukm::UkmRecorder*);
+  LocalFrameUkmAggregator(const LocalFrameUkmAggregator&) = delete;
+  LocalFrameUkmAggregator& operator=(const LocalFrameUkmAggregator&) = delete;
   ~LocalFrameUkmAggregator();
+
+  const base::TickClock* GetClock() const { return clock_; }
 
   // Create a scoped timer with the index of the metric. Note the index must
   // correspond to the matching index in metric_names.
@@ -241,9 +279,19 @@ class CORE_EXPORT LocalFrameUkmAggregator
   // Record a sample for a sub-metric. This should only be used when
   // a ScopedUkmHierarchicalTimer cannot be used (such as when the timed
   // interval does not fall inside a single calling function).
-  void RecordSample(size_t metric_index,
-                    base::TimeTicks start,
-                    base::TimeTicks end);
+  void RecordTimerSample(size_t metric_index,
+                         base::TimeTicks start,
+                         base::TimeTicks end);
+
+  // Record a sample for a count-based sub-metric.
+  void RecordCountSample(size_t metric_index, int64_t count);
+
+  // Record a ForcedLayout sample. The reason will determine which, if any,
+  // additional metrics are reported in order to diagnose the cause of
+  // ForcedLayout regressions.
+  void RecordForcedLayoutSample(DocumentUpdateReason reason,
+                                base::TimeTicks start,
+                                base::TimeTicks end);
 
   // Record a sample for the impl-side compositor processing.
   // - requested is the time the renderer proxy requests a commit
@@ -273,33 +321,28 @@ class CORE_EXPORT LocalFrameUkmAggregator
 
  private:
   struct AbsoluteMetricRecord {
-    std::unique_ptr<CustomCountHistogram> uma_counter;
     std::unique_ptr<CustomCountHistogram> pre_fcp_uma_counter;
     std::unique_ptr<CustomCountHistogram> post_fcp_uma_counter;
     std::unique_ptr<CustomCountHistogram> uma_aggregate_counter;
 
     // Accumulated at each sample, then reset with a call to
     // RecordEndOfFrameMetrics.
-    base::TimeDelta interval_duration;
-    base::TimeDelta pre_fcp_aggregate;
+    int64_t interval_count = 0;
 
-    void reset() { interval_duration = base::TimeDelta(); }
-  };
+    // Accumulated at each sample when within a BeginMainFrame,
+    // reset with a call to RecordEndOfFrameMetrics.
+    int64_t main_frame_count = 0;
 
-  struct MainFramePercentageRecord {
-    Vector<std::unique_ptr<CustomCountHistogram>> uma_counters_per_bucket;
+    // Accumulated at each sample up to the time of First Contentful Paint.
+    int64_t pre_fcp_aggregate = 0;
 
-    // Accumulated at each sample, then reset with a call to
-    // RecordEndOfFrameMetrics.
-    base::TimeDelta interval_duration;
-
-    void reset() { interval_duration = base::TimeDelta(); }
+    void reset();
   };
 
   struct SampleToRecord {
-    base::TimeDelta primary_metric_duration;
-    Vector<base::TimeDelta> sub_metrics_durations;
-    Vector<unsigned> sub_metric_percentages;
+    int64_t primary_metric_count;
+    std::array<int64_t, kCount> sub_metrics_counts;
+    std::array<int64_t, kCount> sub_main_frame_counts;
     cc::ActiveFrameSequenceTrackers trackers;
   };
 
@@ -316,9 +359,6 @@ class CORE_EXPORT LocalFrameUkmAggregator
   // Reports the Blink.PageLoad to the UKM system. Called on the first main
   // frame after First Contentful Paint.
   void ReportPreFCPEvent();
-
-  // Implements throttling of the ForcedStyleAndLayoutUMA metric.
-  void RecordForcedStyleLayoutUMA(base::TimeDelta& duration);
 
   // To test event sampling. Controls whether we update the current sample
   // on the next frame, or do not. Values persist until explicitly changed.
@@ -338,10 +378,9 @@ class CORE_EXPORT LocalFrameUkmAggregator
   const base::TickClock* clock_;
 
   // Event and metric data
-  const String event_name_;
+  const char* const event_name_;
   AbsoluteMetricRecord primary_metric_;
-  Vector<AbsoluteMetricRecord> absolute_metric_records_;
-  Vector<MainFramePercentageRecord> main_frame_percentage_records_;
+  std::array<AbsoluteMetricRecord, kCount> absolute_metric_records_;
 
   // The current sample to report. When RecordEvent() is called we
   // check for uniform_random[0,1) < 1 / n where n is the number of frames
@@ -355,7 +394,7 @@ class CORE_EXPORT LocalFrameUkmAggregator
   unsigned frames_since_last_report_ = 0;
 
   // Control for the ForcedStyleAndUpdate UMA metric sampling
-  unsigned mean_calls_between_forced_style_layout_uma_ = 100;
+  unsigned mean_calls_between_forced_style_layout_uma_ = 500;
   unsigned calls_to_next_forced_style_layout_uma_ = 0;
 
   // Set by BeginMainFrame() and cleared in RecordMEndOfFrameMetrics.
@@ -373,8 +412,6 @@ class CORE_EXPORT LocalFrameUkmAggregator
     kMustNotChooseNextFrame
   };
   SampleControlForTest next_frame_sample_control_for_test_ = kNoPreference;
-
-  DISALLOW_COPY_AND_ASSIGN(LocalFrameUkmAggregator);
 };
 
 }  // namespace blink

@@ -7,9 +7,13 @@
 
 #include <iosfwd>
 #include <memory>
+
+#include "base/dcheck_is_on.h"
 #include "third_party/blink/renderer/platform/geometry/int_rect.h"
+#include "third_party/blink/renderer/platform/graphics/color.h"
 #include "third_party/blink/renderer/platform/graphics/paint/display_item.h"
 #include "third_party/blink/renderer/platform/graphics/paint/hit_test_data.h"
+#include "third_party/blink/renderer/platform/graphics/paint/layer_selection_data.h"
 #include "third_party/blink/renderer/platform/graphics/paint/raster_invalidation_tracking.h"
 #include "third_party/blink/renderer/platform/graphics/paint/ref_counted_property_tree_state.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
@@ -18,6 +22,8 @@
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
+
+constexpr float kMinBackgroundColorCoverageRatio = 0.5;
 
 // A contiguous sequence of drawings with common paint properties.
 //
@@ -31,28 +37,42 @@ struct PLATFORM_EXPORT PaintChunk {
   PaintChunk(wtf_size_t begin,
              wtf_size_t end,
              const Id& id,
-             const PropertyTreeState& props)
+             const PropertyTreeStateOrAlias& props,
+             bool effectively_invisible = false)
       : begin_index(begin),
         end_index(end),
+        background_color(Color::kTransparent),
+        background_color_area(0u),
         id(id),
         properties(props),
+        text_known_to_be_on_opaque_background(true),
+        has_text(false),
         is_cacheable(id.client.IsCacheable()),
-        client_is_just_created(id.client.IsJustCreated()) {}
+        client_is_just_created(id.client.IsJustCreated()),
+        is_moved_from_cached_subsequence(false),
+        effectively_invisible(effectively_invisible) {}
 
   // Move a paint chunk from a cached subsequence.
   PaintChunk(wtf_size_t begin, PaintChunk&& other)
       : begin_index(begin),
         end_index(begin + other.size()),
+        background_color(other.background_color),
+        background_color_area(other.background_color_area),
         id(other.id),
         properties(other.properties),
         hit_test_data(std::move(other.hit_test_data)),
+        layer_selection_data(std::move(other.layer_selection_data)),
         bounds(other.bounds),
         drawable_bounds(other.drawable_bounds),
-        outset_for_raster_effects(other.outset_for_raster_effects),
-        known_to_be_opaque(other.known_to_be_opaque),
+        rect_known_to_be_opaque(other.rect_known_to_be_opaque),
+        raster_effect_outset(other.raster_effect_outset),
+        text_known_to_be_on_opaque_background(
+            other.text_known_to_be_on_opaque_background),
+        has_text(other.has_text),
         is_cacheable(other.is_cacheable),
         client_is_just_created(false),
-        is_moved_from_cached_subsequence(true) {
+        is_moved_from_cached_subsequence(true),
+        effectively_invisible(other.effectively_invisible) {
 #if DCHECK_IS_ON()
     DCHECK(other.id.client.IsAlive());
     DCHECK(!other.id.client.IsJustCreated());
@@ -91,6 +111,12 @@ struct PLATFORM_EXPORT PaintChunk {
     return *hit_test_data;
   }
 
+  LayerSelectionData& EnsureLayerSelectionData() {
+    if (!layer_selection_data)
+      layer_selection_data = std::make_unique<LayerSelectionData>();
+    return *layer_selection_data;
+  }
+
   size_t MemoryUsageInBytes() const;
 
   String ToString() const;
@@ -102,6 +128,13 @@ struct PLATFORM_EXPORT PaintChunk {
   // |endIndex - beginIndex| drawings in the chunk.
   wtf_size_t end_index;
 
+  // Color to use for checkerboarding, derived from display item's in this
+  // chunk; or Color::kTransparent if no such display item exists.
+  Color background_color;
+
+  // The area that is painted by the paint op that defines background_color.
+  float background_color_area;
+
   // Identifier of this chunk. It should be unique if |is_cacheable| is true.
   // This is used to match a new chunk to a cached old chunk to track changes
   // of chunk contents, so the id should be stable across document cycles.
@@ -111,6 +144,7 @@ struct PLATFORM_EXPORT PaintChunk {
   RefCountedPropertyTreeState properties;
 
   std::unique_ptr<HitTestData> hit_test_data;
+  std::unique_ptr<LayerSelectionData> layer_selection_data;
 
   // The following fields depend on the display items in this chunk.
   // They are updated when a display item is added into the chunk.
@@ -126,19 +160,25 @@ struct PLATFORM_EXPORT PaintChunk {
   // chunk.
   IntRect drawable_bounds;
 
+  IntRect rect_known_to_be_opaque;
+
   // Some raster effects can exceed |bounds| in the rasterization space. This
   // is the maximum DisplayItemClient::VisualRectOutsetForRasterEffects() of
   // all clients of items in this chunk.
-  float outset_for_raster_effects = 0;
+  RasterEffectOutset raster_effect_outset = RasterEffectOutset::kNone;
 
-  // True if the bounds are filled entirely with opaque contents.
-  bool known_to_be_opaque = false;
+  // True if all text is known to be on top of opaque backgrounds or there is
+  // not text. Though in theory the value doesn't matter when there is no text,
+  // being true can simplify code.
+  bool text_known_to_be_on_opaque_background : 1;
+  bool has_text : 1;
 
   // End of derived data.
   // The following fields are put here to avoid memory gap.
-  bool is_cacheable;
-  bool client_is_just_created;
-  bool is_moved_from_cached_subsequence = false;
+  bool is_cacheable : 1;
+  bool client_is_just_created : 1;
+  bool is_moved_from_cached_subsequence : 1;
+  bool effectively_invisible : 1;
 };
 
 PLATFORM_EXPORT std::ostream& operator<<(std::ostream&, const PaintChunk&);

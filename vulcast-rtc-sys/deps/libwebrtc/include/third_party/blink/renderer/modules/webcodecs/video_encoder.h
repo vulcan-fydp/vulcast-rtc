@@ -7,92 +7,113 @@
 
 #include <memory>
 
-#include "base/optional.h"
-#include "media/base/status.h"
-#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
-#include "third_party/blink/renderer/bindings/modules/v8/v8_video_encoder_output_callback.h"
-#include "third_party/blink/renderer/bindings/modules/v8/v8_web_codecs_error_callback.h"
-#include "third_party/blink/renderer/modules/modules_export.h"
+#include "media/base/video_codecs.h"
+#include "media/base/video_color_space.h"
+#include "media/base/video_encoder.h"
+#include "media/base/video_frame_pool.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_encoded_video_chunk_output_callback.h"
+#include "third_party/blink/renderer/modules/webcodecs/encoder_base.h"
+#include "third_party/blink/renderer/modules/webcodecs/hardware_preference.h"
 #include "third_party/blink/renderer/modules/webcodecs/video_frame.h"
-#include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 
 namespace media {
+class GpuVideoAcceleratorFactories;
 class VideoEncoder;
 struct VideoEncoderOutput;
 }  // namespace media
 
 namespace blink {
 
-class ExceptionState;
-enum class DOMExceptionCode;
+class VideoEncoderConfig;
 class VideoEncoderInit;
-class VideoEncoderTuneOptions;
 class VideoEncoderEncodeOptions;
-class Visitor;
+class WebGraphicsContext3DVideoFramePool;
 
-class MODULES_EXPORT VideoEncoder final : public ScriptWrappable {
+class MODULES_EXPORT VideoEncoderTraits {
+ public:
+  struct ParsedConfig final : public GarbageCollected<ParsedConfig> {
+    media::VideoCodec codec;
+    media::VideoCodecProfile profile;
+    uint8_t level;
+    media::VideoColorSpace color_space;
+
+    HardwarePreference hw_pref;
+
+    media::VideoEncoder::Options options;
+    String codec_string;
+    absl::optional<gfx::Size> display_size;
+
+    void Trace(Visitor*) const {}
+  };
+
+  using Init = VideoEncoderInit;
+  using Config = VideoEncoderConfig;
+  using InternalConfig = ParsedConfig;
+  using Input = VideoFrame;
+  using EncodeOptions = VideoEncoderEncodeOptions;
+  using OutputChunk = EncodedVideoChunk;
+  using OutputCallback = V8EncodedVideoChunkOutputCallback;
+  using MediaEncoder = media::VideoEncoder;
+
+  // Can't be a virtual method, because it's used from base ctor.
+  static const char* GetNameForDevTools();
+  static const char* GetName();
+};
+
+class MODULES_EXPORT VideoEncoder final
+    : public EncoderBase<VideoEncoderTraits> {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
-  static VideoEncoder* Create(ScriptState*, ExceptionState&);
-  VideoEncoder(ScriptState*, ExceptionState&);
+  static VideoEncoder* Create(ScriptState*,
+                              const VideoEncoderInit*,
+                              ExceptionState&);
+  VideoEncoder(ScriptState*, const VideoEncoderInit*, ExceptionState&);
   ~VideoEncoder() override;
 
-  // video_encoder.idl implementation.
-  ScriptPromise encode(const VideoFrame* frame,
-                       const VideoEncoderEncodeOptions*,
-                       ExceptionState&);
-
-  ScriptPromise configure(const VideoEncoderInit* init, ExceptionState&);
-
-  ScriptPromise tune(const VideoEncoderTuneOptions* params, ExceptionState&);
-
-  ScriptPromise close();
-
-  ScriptPromise flush();
-
-  // GarbageCollected override.
-  void Trace(Visitor*) override;
+  static ScriptPromise isConfigSupported(ScriptState*,
+                                         const VideoEncoderConfig*,
+                                         ExceptionState&);
 
  private:
-  struct Request : public GarbageCollected<Request> {
-    enum class Type {
-      kConfigure,
-      kEncode,
-      kFlush,
-      kClose,
-    };
+  using Base = EncoderBase<VideoEncoderTraits>;
+  using ParsedConfig = VideoEncoderTraits::ParsedConfig;
 
-    void Trace(Visitor*);
-    DOMException* Reject(DOMExceptionCode code, const String& message);
-    void Resolve();
+  void CallOutputCallback(
+      ParsedConfig* active_config,
+      uint32_t reset_count,
+      media::VideoEncoderOutput output,
+      absl::optional<media::VideoEncoder::CodecDescription> codec_desc);
+  void ProcessEncode(Request* request) override;
+  void ProcessConfigure(Request* request) override;
+  void ProcessReconfigure(Request* request) override;
+  void ResetInternal() override;
 
-    Type type;
-    Member<const VideoEncoderInit> config;               // used by kConfigure
-    Member<const VideoFrame> frame;                      // used by kEncode
-    Member<const VideoEncoderEncodeOptions> encodeOpts;  // used by kEncode
-    Member<ScriptPromiseResolver> resolver;
-  };
+  void UpdateEncoderLog(std::string encoder_name, bool is_hw_accelerated);
 
-  void CallOutputCallback(EncodedVideoChunk* chunk);
-  void CallErrorCallback(DOMException* ex);
-  ScriptPromise EnqueueRequest(Request* request);
-  void ProcessRequests();
-  void ProcessEncode(Request* request);
-  void ProcessConfigure(Request* request);
-  void ProcessClose(Request* request);
-  void ProcessFlush(Request* request);
 
-  void MediaEncoderOutputCallback(media::VideoEncoderOutput output);
+  ParsedConfig* ParseConfig(const VideoEncoderConfig*,
+                            ExceptionState&) override;
+  bool VerifyCodecSupport(ParsedConfig*, ExceptionState&) override;
 
-  gfx::Size frame_size_;
-  std::unique_ptr<media::VideoEncoder> media_encoder_;
+  void ContinueConfigureWithGpuFactories(
+      Request* request,
+      media::GpuVideoAcceleratorFactories* gpu_factories);
+  std::unique_ptr<media::VideoEncoder> CreateMediaVideoEncoder(
+      const ParsedConfig& config,
+      media::GpuVideoAcceleratorFactories* gpu_factories);
+  bool CanReconfigure(ParsedConfig& original_config,
+                      ParsedConfig& new_config) override;
+  scoped_refptr<media::VideoFrame> ReadbackTextureBackedFrameToMemory(
+      scoped_refptr<media::VideoFrame> txt_frame);
 
-  Member<ScriptState> script_state_;
-  Member<V8VideoEncoderOutputCallback> output_callback_;
-  Member<V8WebCodecsErrorCallback> error_callback_;
-  HeapDeque<Member<Request>> requests_;
-  SEQUENCE_CHECKER(sequence_checker_);
+  media::VideoFramePool readback_frame_pool_;
+  std::unique_ptr<WebGraphicsContext3DVideoFramePool> accelerated_frame_pool_;
+
+  // The number of encoding requests currently handled by |media_encoder_|
+  // Should not exceed |kMaxActiveEncodes|.
+  int active_encodes_ = 0;
 };
 
 }  // namespace blink

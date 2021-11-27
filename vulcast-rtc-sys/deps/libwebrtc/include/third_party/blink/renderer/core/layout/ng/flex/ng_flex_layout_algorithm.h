@@ -15,26 +15,32 @@ namespace blink {
 class NGBlockNode;
 class NGBlockBreakToken;
 class NGBoxFragment;
+struct DevtoolsFlexInfo;
 
 class CORE_EXPORT NGFlexLayoutAlgorithm
     : public NGLayoutAlgorithm<NGBlockNode,
                                NGBoxFragmentBuilder,
                                NGBlockBreakToken> {
  public:
-  NGFlexLayoutAlgorithm(const NGLayoutAlgorithmParams& params);
+  explicit NGFlexLayoutAlgorithm(const NGLayoutAlgorithmParams& params,
+                                 DevtoolsFlexInfo* devtools = nullptr);
 
+  MinMaxSizesResult ComputeMinMaxSizes(
+      const MinMaxSizesFloatInput&) const override;
   scoped_refptr<const NGLayoutResult> Layout() override;
 
-  MinMaxSizesResult ComputeMinMaxSizes(const MinMaxSizesInput&) const override;
-
  private:
+  scoped_refptr<const NGLayoutResult> RelayoutIgnoringChildScrollbarChanges();
+  scoped_refptr<const NGLayoutResult> LayoutInternal();
+
   bool DoesItemCrossSizeComputeToAuto(const NGBlockNode& child) const;
   bool IsItemFlexBasisDefinite(const NGBlockNode& child) const;
   bool IsItemMainSizeDefinite(const NGBlockNode& child) const;
   bool IsItemCrossAxisLengthDefinite(const NGBlockNode& child,
                                      const Length& length) const;
-  bool ShouldItemShrinkToFit(const NGBlockNode& child) const;
-  double GetMainOverCrossAspectRatio(const NGBlockNode& child) const;
+  bool AspectRatioProvidesMainSize(const NGBlockNode& child,
+                                   const Length& cross_axis_length) const;
+  LogicalSize GetMainOverCrossAspectRatio(const NGBlockNode& child) const;
   bool DoesItemStretch(const NGBlockNode& child) const;
   // This implements the first of the additional scenarios where a flex item
   // has definite sizes when it would not if it weren't a flex item.
@@ -44,19 +50,19 @@ class CORE_EXPORT NGFlexLayoutAlgorithm
       const NGBlockNode& child,
       LayoutUnit content_suggestion,
       LayoutUnit cross_min,
-      LayoutUnit cross_max);
+      LayoutUnit cross_max,
+      LayoutUnit main_axis_border_padding,
+      LayoutUnit cross_axis_border_padding);
 
   bool IsColumnContainerMainSizeDefinite() const;
   bool IsContainerCrossSizeDefinite() const;
 
   NGConstraintSpace BuildSpaceForFlexBasis(const NGBlockNode& flex_item) const;
   NGConstraintSpace BuildSpaceForIntrinsicBlockSize(
-      const NGBlockNode& flex_item,
-      const NGPhysicalBoxStrut& physical_margins,
-      const MinMaxSizes& cross_axis) const;
+      const NGBlockNode& flex_item) const;
   void ConstructAndAppendFlexItems();
   void ApplyStretchAlignmentToChild(FlexItem& flex_item);
-  void GiveLinesAndItemsFinalPositionAndSize();
+  bool GiveLinesAndItemsFinalPositionAndSize();
   void LayoutColumnReverse(LayoutUnit main_axis_content_size);
 
   // This is same method as FlexItem but we need that logic before FlexItem is
@@ -66,22 +72,24 @@ class CORE_EXPORT NGFlexLayoutAlgorithm
 
   void HandleOutOfFlowPositioned(NGBlockNode child);
 
+  void AdjustButtonBaseline(LayoutUnit final_content_cross_size);
+
   // Propagates the baseline from the given flex-item if needed.
   void PropagateBaselineFromChild(
       const FlexItem&,
       const NGBoxFragment&,
       LayoutUnit block_offset,
-      base::Optional<LayoutUnit>* fallback_baseline);
+      absl::optional<LayoutUnit>* fallback_baseline);
 
-  const NGBoxStrut border_padding_;
-  const NGBoxStrut border_scrollbar_padding_;
   const bool is_column_;
   const bool is_horizontal_flow_;
   const bool is_cross_size_definite_;
-  LogicalSize border_box_size_;
-  LogicalSize content_box_size_;
-  LogicalSize child_percentage_size_;
-  base::Optional<FlexLayoutAlgorithm> algorithm_;
+  const LogicalSize child_percentage_size_;
+
+  bool has_column_percent_flex_basis_ = false;
+  bool ignore_child_scrollbar_changes_ = false;
+  FlexLayoutAlgorithm algorithm_;
+  DevtoolsFlexInfo* layout_info_for_devtools_;
 };
 
 }  // namespace blink

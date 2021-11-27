@@ -50,7 +50,7 @@ class SegmentedFontData;
 // Iterating over the combined set, behaves as if all non-CSS-connected
 // FontFaces were stored after the CSS-connected ones.
 class FontFaceList : public GarbageCollected<FontFaceList> {
-  using FontFaceListPart = HeapListHashSet<Member<FontFace>>;
+  using FontFaceListPart = HeapLinkedHashSet<Member<FontFace>>;
 
  public:
   bool IsEmpty() const;
@@ -77,7 +77,7 @@ class FontFaceList : public GarbageCollected<FontFaceList> {
   void ForEachReverse(
       const base::RepeatingCallback<void(Member<FontFace>)>& callback) const;
 
-  void Trace(Visitor* visitor);
+  void Trace(Visitor* visitor) const;
 
  private:
   FontFaceListPart css_connected_face_;
@@ -112,7 +112,7 @@ class CSSSegmentedFontFace final
     return approximate_character_count_;
   }
 
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
  private:
   void PruneTable();

@@ -35,8 +35,6 @@ class MODULES_EXPORT PictureInPictureControllerImpl
       public PageVisibilityObserver,
       public ExecutionContextClient,
       public blink::mojom::blink::PictureInPictureSessionObserver {
-  USING_GARBAGE_COLLECTED_MIXIN(PictureInPictureControllerImpl);
-
  public:
   explicit PictureInPictureControllerImpl(Document&);
   ~PictureInPictureControllerImpl() override = default;
@@ -90,7 +88,7 @@ class MODULES_EXPORT PictureInPictureControllerImpl
   // Implementation of PageVisibilityObserver.
   void PageVisibilityChanged() override;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
   bool IsSessionObserverReceiverBoundForTesting() {
     return session_observer_receiver_.is_bound();
@@ -129,8 +127,7 @@ class MODULES_EXPORT PictureInPictureControllerImpl
       picture_in_picture_service_;
 
   // Instance of the Picture-in-Picture session sent back by the service.
-  HeapMojoRemote<mojom::blink::PictureInPictureSession,
-                 HeapMojoWrapperMode::kWithoutContextObserver>
+  HeapMojoRemote<mojom::blink::PictureInPictureSession>
       picture_in_picture_session_;
 
   DISALLOW_COPY_AND_ASSIGN(PictureInPictureControllerImpl);

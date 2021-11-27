@@ -23,7 +23,10 @@ namespace blink {
 
 class BrowserInterfaceBrokerProxy;
 class Document;
+class FrameSelection;
 class LocalFrame;
+class PendingAnimations;
+class StyleEngine;
 
 class PageTestBase : public testing::Test, public ScopedMockOverlayScrollbars {
   USING_FAST_MALLOC(PageTestBase);
@@ -60,7 +63,7 @@ class PageTestBase : public testing::Test, public ScopedMockOverlayScrollbars {
   using FrameSettingOverrideFunction = void (*)(Settings&);
 
   void SetUp(IntSize);
-  void SetupPageWithClients(Page::PageClients* = nullptr,
+  void SetupPageWithClients(ChromeClient* = nullptr,
                             LocalFrameClient* = nullptr,
                             FrameSettingOverrideFunction = nullptr);
   // TODO(shanmuga.m@samsung.com): These two function to be unified.
@@ -95,6 +98,8 @@ class PageTestBase : public testing::Test, public ScopedMockOverlayScrollbars {
   // platforms, but it's not guaranteed to be available.
   // See external/wpt/css/fonts/ahem/README for more about the 'Ahem' font.
   static void LoadAhem(LocalFrame&);
+
+  static std::string ToSimpleLayoutTree(const LayoutObject& layout_object);
 
  protected:
   void LoadAhem();

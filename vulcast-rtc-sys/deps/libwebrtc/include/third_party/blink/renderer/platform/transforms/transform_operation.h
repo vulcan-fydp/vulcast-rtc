@@ -25,7 +25,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_TRANSFORMS_TRANSFORM_OPERATION_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_TRANSFORMS_TRANSFORM_OPERATION_H_
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/platform/geometry/float_size.h"
 #include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
@@ -65,6 +64,8 @@ class PLATFORM_EXPORT TransformOperation
   };
 
   TransformOperation() = default;
+  TransformOperation(const TransformOperation&) = delete;
+  TransformOperation& operator=(const TransformOperation&) = delete;
   virtual ~TransformOperation() = default;
 
   virtual bool operator==(const TransformOperation&) const = 0;
@@ -92,9 +93,12 @@ class PLATFORM_EXPORT TransformOperation
   bool IsSameType(const TransformOperation& other) const {
     return other.GetType() == GetType();
   }
-  virtual bool CanBlendWith(const TransformOperation& other) const = 0;
+  bool CanBlendWith(const TransformOperation& other) const {
+    return PrimitiveType() == other.PrimitiveType();
+  }
 
   virtual bool PreservesAxisAlignment() const { return false; }
+  virtual bool IsIdentityOrTranslation() const { return false; }
 
   bool Is3DOperation() const {
     OperationType op_type = GetType();
@@ -107,10 +111,18 @@ class PLATFORM_EXPORT TransformOperation
 
   virtual bool HasNonTrivial3DComponent() const { return Is3DOperation(); }
 
-  virtual bool DependsOnBoxSize() const { return false; }
+  enum BoxSizeDependency {
+    kDependsNone = 0,
+    kDependsWidth = 0x01,
+    kDependsHeight = 0x02,
+    kDependsBoth = kDependsWidth | kDependsHeight
+  };
+  virtual BoxSizeDependency BoxSizeDependencies() const { return kDependsNone; }
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(TransformOperation);
+  static inline BoxSizeDependency CombineDependencies(BoxSizeDependency a,
+                                                      BoxSizeDependency b) {
+    return static_cast<BoxSizeDependency>(a | b);
+  }
 };
 
 }  // namespace blink

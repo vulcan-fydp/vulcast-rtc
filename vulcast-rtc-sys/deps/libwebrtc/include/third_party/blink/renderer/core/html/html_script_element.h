@@ -31,16 +31,15 @@
 #include "third_party/blink/renderer/core/script/script_element_base.h"
 #include "third_party/blink/renderer/core/script/script_loader.h"
 #include "third_party/blink/renderer/platform/bindings/parkable_string.h"
+#include "third_party/blink/renderer/platform/wtf/casting.h"
 
 namespace blink {
 
-class StringOrTrustedScript;
 class ExceptionState;
 
 class CORE_EXPORT HTMLScriptElement final : public HTMLElement,
                                             public ScriptElementBase {
   DEFINE_WRAPPERTYPEINFO();
-  USING_GARBAGE_COLLECTED_MIXIN(HTMLScriptElement);
 
  public:
   HTMLScriptElement(Document&, const CreateElementFlags);
@@ -48,11 +47,14 @@ class CORE_EXPORT HTMLScriptElement final : public HTMLElement,
   // Returns attributes that should be checked against Trusted Types
   const AttrNameToTrustedType& GetCheckedAttributeTypes() const override;
 
-  void text(StringOrTrustedScript& result);
   String text() { return TextFromChildren(); }
   void setText(const String&);
-  void setInnerText(const StringOrTrustedScript&, ExceptionState&) override;
-  void setTextContent(const StringOrTrustedScript&, ExceptionState&) override;
+  void setInnerTextForBinding(
+      const V8UnionStringTreatNullAsEmptyStringOrTrustedScript*
+          string_or_trusted_script,
+      ExceptionState& exception_state) override;
+  void setTextContentForBinding(const V8UnionStringOrTrustedScript* value,
+                                ExceptionState& exception_state) override;
   void setTextContent(const String&) override;
 
   void setAsync(bool);
@@ -64,7 +66,10 @@ class CORE_EXPORT HTMLScriptElement final : public HTMLElement,
   Document& GetDocument() const override;
   ExecutionContext* GetExecutionContext() const override;
 
-  void Trace(Visitor*) override;
+  V8HTMLOrSVGScriptElement* AsV8HTMLOrSVGScriptElement() override;
+  DOMNodeId GetDOMNodeId() override;
+
+  void Trace(Visitor*) const override;
 
   void FinishParsingChildren() override;
 
@@ -107,8 +112,6 @@ class CORE_EXPORT HTMLScriptElement final : public HTMLElement,
                                const String& script_content) override;
   void DispatchLoadEvent() override;
   void DispatchErrorEvent() override;
-  void SetScriptElementForBinding(
-      HTMLScriptElementOrSVGScriptElement&) override;
 
   Type GetScriptElementType() override;
 

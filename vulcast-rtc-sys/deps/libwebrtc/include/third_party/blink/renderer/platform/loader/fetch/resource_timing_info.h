@@ -33,7 +33,8 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink-forward.h"
+#include "third_party/blink/public/mojom/timing/resource_timing.mojom-blink.h"
 #include "third_party/blink/public/mojom/timing/worker_timing_container.mojom-blink.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_request.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
@@ -51,13 +52,17 @@ class PLATFORM_EXPORT ResourceTimingInfo
   static scoped_refptr<ResourceTimingInfo> Create(
       const AtomicString& type,
       const base::TimeTicks time,
-      mojom::RequestContextType context,
+      mojom::blink::RequestContextType context,
       network::mojom::RequestDestination destination) {
     return base::AdoptRef(
         new ResourceTimingInfo(type, time, context, destination));
   }
+  ResourceTimingInfo(const ResourceTimingInfo&) = delete;
+  ResourceTimingInfo& operator=(const ResourceTimingInfo&) = delete;
+
   base::TimeTicks InitialTime() const { return initial_time_; }
 
+  void SetInitiatorType(const AtomicString& type) { type_ = type; }
   const AtomicString& InitiatorType() const { return type_; }
 
   void SetLoadResponseEnd(base::TimeTicks time) { load_response_end_ = time; }
@@ -77,10 +82,9 @@ class PLATFORM_EXPORT ResourceTimingInfo
     return redirect_chain_;
   }
 
-  void AddFinalTransferSize(uint64_t encoded_data_length) {
-    transfer_size_ += encoded_data_length;
+  mojom::blink::CacheState CacheState() const {
+    return final_response_.CacheState();
   }
-  uint64_t TransferSize() const { return transfer_size_; }
 
   // The timestamps in PerformanceResourceTiming are measured relative from the
   // time origin. In most cases these timestamps must be positive value, so we
@@ -92,7 +96,7 @@ class PLATFORM_EXPORT ResourceTimingInfo
     negative_allowed_ = negative_allowed;
   }
   bool NegativeAllowed() const { return negative_allowed_; }
-  mojom::RequestContextType ContextType() const { return context_type_; }
+  mojom::blink::RequestContextType ContextType() const { return context_type_; }
   network::mojom::RequestDestination RequestDestination() const {
     return request_destination_;
   }
@@ -111,7 +115,7 @@ class PLATFORM_EXPORT ResourceTimingInfo
  private:
   ResourceTimingInfo(const AtomicString& type,
                      const base::TimeTicks time,
-                     mojom::RequestContextType context_type,
+                     mojom::blink::RequestContextType context_type,
                      network::mojom::RequestDestination request_destination)
       : type_(type),
         initial_time_(time),
@@ -120,13 +124,12 @@ class PLATFORM_EXPORT ResourceTimingInfo
 
   AtomicString type_;
   base::TimeTicks initial_time_;
-  mojom::RequestContextType context_type_;
+  mojom::blink::RequestContextType context_type_;
   network::mojom::RequestDestination request_destination_;
   base::TimeTicks load_response_end_;
   KURL initial_url_;
   ResourceResponse final_response_;
   Vector<ResourceResponse> redirect_chain_;
-  uint64_t transfer_size_ = 0;
   bool has_cross_origin_redirect_ = false;
   bool negative_allowed_ = false;
 
@@ -139,10 +142,8 @@ class PLATFORM_EXPORT ResourceTimingInfo
   // empty.
   mutable mojo::PendingReceiver<mojom::blink::WorkerTimingContainer>
       worker_timing_receiver_;
-
-  DISALLOW_COPY_AND_ASSIGN(ResourceTimingInfo);
 };
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_LOADER_FETCH_RESOURCE_TIMING_INFO_H_

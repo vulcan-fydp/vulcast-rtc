@@ -5,38 +5,48 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_NG_NG_BOX_FRAGMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_NG_NG_BOX_FRAGMENT_H_
 
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/ng/ng_fragment.h"
 #include "third_party/blink/renderer/core/layout/ng/ng_physical_box_fragment.h"
-#include "third_party/blink/renderer/platform/text/text_direction.h"
 #include "third_party/blink/renderer/platform/text/writing_mode.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 
 namespace blink {
 
-struct NGLineHeightMetrics;
-
 class CORE_EXPORT NGBoxFragment final : public NGFragment {
  public:
-  NGBoxFragment(WritingMode writing_mode,
-                TextDirection direction,
+  NGBoxFragment(WritingDirectionMode writing_direction,
                 const NGPhysicalBoxFragment& physical_fragment)
-      : NGFragment(writing_mode, physical_fragment), direction_(direction) {}
+      : NGFragment(writing_direction, physical_fragment) {}
 
-  base::Optional<LayoutUnit> FirstBaseline() const {
-    if (GetWritingMode() != physical_fragment_.Style().GetWritingMode())
-      return base::nullopt;
+  absl::optional<LayoutUnit> FirstBaseline() const {
+    if (writing_direction_.GetWritingMode() !=
+        physical_fragment_.Style().GetWritingMode())
+      return absl::nullopt;
 
     return To<NGPhysicalBoxFragment>(physical_fragment_).Baseline();
+  }
+
+  LayoutUnit FirstBaselineOrSynthesize() const {
+    if (auto first_baseline = FirstBaseline())
+      return *first_baseline;
+
+    // TODO(layout-dev): See |NGBoxFragment::BaselineOrSynthesize()|.
+    if (writing_direction_.GetWritingMode() == WritingMode::kHorizontalTb)
+      return BlockSize();
+
+    return BlockSize() / 2;
   }
 
   // Returns the baseline for this fragment wrt. the parent writing mode. Will
   // return a null baseline if:
   //  - The fragment has no baseline.
   //  - The writing modes differ.
-  base::Optional<LayoutUnit> Baseline() const {
-    if (GetWritingMode() != physical_fragment_.Style().GetWritingMode())
-      return base::nullopt;
+  absl::optional<LayoutUnit> Baseline() const {
+    if (writing_direction_.GetWritingMode() !=
+        physical_fragment_.Style().GetWritingMode())
+      return absl::nullopt;
 
     if (auto last_baseline =
             To<NGPhysicalBoxFragment>(physical_fragment_).LastBaseline())
@@ -45,35 +55,41 @@ class CORE_EXPORT NGBoxFragment final : public NGFragment {
     return To<NGPhysicalBoxFragment>(physical_fragment_).Baseline();
   }
 
+  LayoutUnit BaselineOrSynthesize() const {
+    if (auto baseline = Baseline())
+      return *baseline;
+
+    // TODO(layout-dev): With a vertical writing-mode, and "text-orientation:
+    // sideways" we should also synthesize using the block-end border edge. We
+    // need to pass in the text-orientation (or just parent style) to do this.
+    if (writing_direction_.GetWritingMode() == WritingMode::kHorizontalTb)
+      return BlockSize();
+
+    return BlockSize() / 2;
+  }
+
   // Compute baseline metrics (ascent/descent) for this box.
   //
   // This will synthesize baseline metrics if no baseline is available. See
   // |Baseline()| for when this may occur.
-  NGLineHeightMetrics BaselineMetrics(const NGLineBoxStrut& margins,
-                                      FontBaseline) const;
+  FontHeight BaselineMetrics(const NGLineBoxStrut& margins, FontBaseline) const;
 
   NGBoxStrut Borders() const {
     const NGPhysicalBoxFragment& physical_box_fragment =
         To<NGPhysicalBoxFragment>(physical_fragment_);
-    return physical_box_fragment.Borders().ConvertToLogical(GetWritingMode(),
-                                                            direction_);
+    return physical_box_fragment.Borders().ConvertToLogical(writing_direction_);
   }
   NGBoxStrut Padding() const {
     const NGPhysicalBoxFragment& physical_box_fragment =
         To<NGPhysicalBoxFragment>(physical_fragment_);
-    return physical_box_fragment.Padding().ConvertToLogical(GetWritingMode(),
-                                                            direction_);
+    return physical_box_fragment.Padding().ConvertToLogical(writing_direction_);
   }
 
-  NGBorderEdges BorderEdges() const {
-    const NGPhysicalBoxFragment& physical_box_fragment =
+  bool HasDescendantsForTablePart() const {
+    const NGPhysicalBoxFragment& box_fragment =
         To<NGPhysicalBoxFragment>(physical_fragment_);
-    return NGBorderEdges::FromPhysical(physical_box_fragment.BorderEdges(),
-                                       GetWritingMode());
+    return box_fragment.HasDescendantsForTablePart();
   }
-
- protected:
-  TextDirection direction_;
 };
 
 }  // namespace blink

@@ -247,6 +247,9 @@ wl_global_create(struct wl_display *display,
 		 void *data, wl_global_bind_func_t bind);
 
 void
+wl_global_remove(struct wl_global *global);
+
+void
 wl_global_destroy(struct wl_global *global);
 
 /** A filter function for wl_global objects
@@ -258,8 +261,8 @@ wl_global_destroy(struct wl_global *global);
  * A filter function enables the server to decide which globals to
  * advertise to each client.
  *
- * When a wl_global filter is set, the given callback funtion will be
- * called during wl_global advertisment and binding.
+ * When a wl_global filter is set, the given callback function will be
+ * called during wl_global advertisement and binding.
  *
  * This function should return true if the global object should be made
  * visible to the client or false otherwise.
@@ -278,6 +281,9 @@ wl_global_get_interface(const struct wl_global *global);
 
 void *
 wl_global_get_user_data(const struct wl_global *global);
+
+void
+wl_global_set_user_data(struct wl_global *global, void *data);
 
 struct wl_client *
 wl_client_create(struct wl_display *display, int fd);

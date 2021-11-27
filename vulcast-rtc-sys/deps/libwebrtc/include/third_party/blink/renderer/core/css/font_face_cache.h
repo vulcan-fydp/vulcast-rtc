@@ -42,9 +42,7 @@ namespace blink {
 
 class FontDescription;
 
-class CORE_EXPORT FontFaceCache final {
-  DISALLOW_NEW();
-
+class CORE_EXPORT FontFaceCache final : public GarbageCollected<FontFaceCache> {
  public:
   FontFaceCache();
 
@@ -69,7 +67,7 @@ class CORE_EXPORT FontFaceCache final {
   unsigned Version() const { return version_; }
   void IncrementVersion();
 
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
  private:
   // Two lookup accelerating cashes are needed: For the font selection
@@ -119,4 +117,4 @@ class CORE_EXPORT FontFaceCache final {
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_CSS_FONT_FACE_CACHE_H_

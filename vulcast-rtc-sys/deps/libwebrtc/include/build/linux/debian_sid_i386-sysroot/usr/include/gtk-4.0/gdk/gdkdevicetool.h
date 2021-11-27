@@ -18,7 +18,7 @@
 #ifndef __GDK_DEVICE_TOOL_H__
 #define __GDK_DEVICE_TOOL_H__
 
-#if !defined (__GDK_H_INSIDE__) && !defined (GDK_COMPILATION)
+#if !defined (__GDK_H_INSIDE__) && !defined (GTK_COMPILATION)
 #error "Only <gdk/gdk.h> can be included directly."
 #endif
 
@@ -32,6 +32,11 @@ G_BEGIN_DECLS
 #define GDK_DEVICE_TOOL(o)      (G_TYPE_CHECK_INSTANCE_CAST ((o), GDK_TYPE_DEVICE_TOOL, GdkDeviceTool))
 #define GDK_IS_DEVICE_TOOL(o)   (G_TYPE_CHECK_INSTANCE_TYPE ((o), GDK_TYPE_DEVICE_TOOL))
 
+/**
+ * GdkDeviceTool:
+ *
+ * A physical tool associated to a #GdkDevice.
+ */
 typedef struct _GdkDeviceTool GdkDeviceTool;
 
 /**
@@ -60,16 +65,19 @@ typedef enum {
 } GdkDeviceToolType;
 
 GDK_AVAILABLE_IN_ALL
-GType gdk_device_tool_get_type (void) G_GNUC_CONST;
+GType               gdk_device_tool_get_type        (void) G_GNUC_CONST;
 
 GDK_AVAILABLE_IN_ALL
-guint64 gdk_device_tool_get_serial (GdkDeviceTool *tool);
+guint64             gdk_device_tool_get_serial      (GdkDeviceTool *tool);
 
 GDK_AVAILABLE_IN_ALL
-guint64 gdk_device_tool_get_hardware_id (GdkDeviceTool *tool);
+guint64             gdk_device_tool_get_hardware_id (GdkDeviceTool *tool);
 
 GDK_AVAILABLE_IN_ALL
-GdkDeviceToolType gdk_device_tool_get_tool_type (GdkDeviceTool *tool);
+GdkDeviceToolType   gdk_device_tool_get_tool_type   (GdkDeviceTool *tool);
+
+GDK_AVAILABLE_IN_ALL
+GdkAxisFlags        gdk_device_tool_get_axes        (GdkDeviceTool *tool);
 
 G_END_DECLS
 

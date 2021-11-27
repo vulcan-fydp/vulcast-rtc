@@ -14,6 +14,8 @@
 
 namespace blink {
 
+class FeatureContext;
+
 // UADefinedVariable contains all the user agent defined environment variables.
 // When adding a new variable the string equivalent needs to be added to
 // |GetVariableName|.
@@ -25,6 +27,40 @@ enum class UADefinedVariable {
   kSafeAreaInsetLeft,
   kSafeAreaInsetBottom,
   kSafeAreaInsetRight,
+
+  // The keyboard area insets are six environment variables that define a
+  // virtual keyboard rectangle by its top, right, bottom, left, width and
+  // height insets
+  // from the edge of the viewport.
+  // Explainers:
+  // https://github.com/MicrosoftEdge/MSEdgeExplainers/blob/main/VirtualKeyboardAPI/explainer.md
+  kKeyboardInsetTop,
+  kKeyboardInsetLeft,
+  kKeyboardInsetBottom,
+  kKeyboardInsetRight,
+  kKeyboardInsetWidth,
+  kKeyboardInsetHeight,
+
+  // The fold environment variables define a rectangle that is splitting the
+  // layout viewport.
+  // Explainers:
+  // https://github.com/MicrosoftEdge/MSEdgeExplainers/blob/master/Foldables/explainer.md
+  kFoldTop,
+  kFoldRight,
+  kFoldBottom,
+  kFoldLeft,
+  kFoldWidth,
+  kFoldHeight,
+
+  // The title bar area variables are four environment variables that define a
+  // rectangle by its x and y position as well as its width and height. They are
+  // intended for desktop PWAs that use the window controls overlay.
+  // Explainer:
+  // https://github.com/WICG/window-controls-overlay/blob/main/explainer.md
+  kTitlebarAreaX,
+  kTitlebarAreaY,
+  kTitlebarAreaWidth,
+  kTitlebarAreaHeight
 };
 
 // StyleEnvironmentVariables stores user agent and user defined CSS environment
@@ -36,7 +72,11 @@ class CORE_EXPORT StyleEnvironmentVariables
   static StyleEnvironmentVariables& GetRootInstance();
 
   // Gets the name of a |UADefinedVariable| as a string.
-  static const AtomicString GetVariableName(UADefinedVariable);
+  // |feature_context| is required for a RuntimeEnabledFeatures check for a
+  // variable in origin trial, otherwise nullptr can be passed.
+  static const AtomicString GetVariableName(
+      UADefinedVariable variable,
+      const FeatureContext* feature_context);
 
   // Create a new instance bound to |parent|.
   static scoped_refptr<StyleEnvironmentVariables> Create(
@@ -61,6 +101,12 @@ class CORE_EXPORT StyleEnvironmentVariables
 
   // Detach |this| from |parent|.
   void DetachFromParent();
+
+  // Stringify |value| and append 'px'. Helper for setting variables that are
+  // CSS lengths.
+  static String FormatPx(int value);
+
+  virtual const FeatureContext* GetFeatureContext() const;
 
  protected:
   friend class StyleEnvironmentVariablesTest;

@@ -24,9 +24,7 @@ class CORE_EXPORT CustomProperty : public Variable {
   DISALLOW_NEW();
 
  public:
-  CustomProperty()
-      : CustomProperty(AtomicString(),
-                       static_cast<const PropertyRegistration*>(nullptr)) {}
+  CustomProperty() = default;
   CustomProperty(const AtomicString& name, const Document&);
   CustomProperty(const AtomicString& name, const PropertyRegistry*);
 
@@ -41,18 +39,19 @@ class CORE_EXPORT CustomProperty : public Variable {
                                    const CSSParserContext&,
                                    const CSSParserLocalContext&) const override;
 
-  bool ComputedValuesEqual(const ComputedStyle&,
-                           const ComputedStyle&) const override;
-
   const CSSValue* CSSValueFromComputedStyleInternal(
       const ComputedStyle&,
-      const SVGComputedStyle&,
       const LayoutObject*,
       bool allow_visited_style) const override;
 
   bool IsRegistered() const { return registration_; }
 
-  void Trace(Visitor* visitor) { visitor->Trace(registration_); }
+  bool HasInitialValue() const;
+
+  // https://drafts.csswg.org/css-variables/#guaranteed-invalid-value
+  bool SupportsGuaranteedInvalid() const;
+
+  void Trace(Visitor* visitor) const { visitor->Trace(registration_); }
 
  private:
   CustomProperty(const AtomicString& name,

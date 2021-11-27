@@ -19,14 +19,11 @@ class ServiceDirectory;
 
 namespace base {
 
-namespace fuchsia {
 class FilteredServiceDirectory;
-}  // namespace fuchsia
 
 // Replaces the process-global sys::ComponentContext (as returned by the
-// base::fuchsia::ComponentContextForCurrentProcess() function) with an empty
-// instance which the calling test can configure, and restores the original
-// when deleted.
+// base::ComponentContextForProcess() function) with an empty instance which the
+// calling test can configure, and restores the original when deleted.
 //
 // The test ComponentContext runs on the test main thread, which means that:
 // - Tests using TestComponentContextForProcess must instantiate a
@@ -54,11 +51,11 @@ class FilteredServiceDirectory;
 //   test_context.AddServices({fuchsia::memorypressure::Provider::Name_, ...});
 //   // ... Execute tests which use fuchsia.memorypressure.Provider ...
 //
-// Alternatively InitialState::kEmpty can be passed to the constructor to expose
-// all services listed in /svc, e.g.:
+// Alternatively InitialState::kCloneAll can be passed to the constructor to
+// expose all services listed in /svc, e.g.:
 //
 //   TestComponentContextForProcess test_context(
-//       TestComponentContextForProcess::InitialState::kEmpty);
+//       TestComponentContextForProcess::InitialState::kCloneAll);
 //
 // Fake/mock implementations can be exposed via additional_services():
 //
@@ -80,7 +77,7 @@ class BASE_EXPORT TestComponentContextForProcess {
     kCloneAll,
   };
 
-  TestComponentContextForProcess(
+  explicit TestComponentContextForProcess(
       InitialState initial_state = InitialState::kEmpty);
   ~TestComponentContextForProcess();
 
@@ -107,7 +104,7 @@ class BASE_EXPORT TestComponentContextForProcess {
  private:
   std::unique_ptr<sys::ComponentContext> old_context_;
 
-  std::unique_ptr<fuchsia::FilteredServiceDirectory> context_services_;
+  std::unique_ptr<FilteredServiceDirectory> context_services_;
   std::unique_ptr<sys::ServiceDirectory> published_services_;
 };
 

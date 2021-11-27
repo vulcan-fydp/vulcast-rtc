@@ -20,9 +20,10 @@
 // Functions for recording UMA histograms. These can be used for cases
 // when the histogram name is generated at runtime. The functionality is
 // equivalent to macros defined in histogram_macros.h but allowing non-constant
-// histogram names. These functions are slower compared to their macro
-// equivalent because the histogram objects are not cached between calls.
-// So, these shouldn't be used in performance critical code.
+// histogram names. These functions are slower but result in smaller code size
+// compared to their macro equivalent because the histogram objects are not
+// cached between calls. So, these should be used in non-performance-critical
+// code that is called rarely (not more than once per second).
 //
 // Every function is duplicated to take both std::string and char* for the
 // name. This avoids ctor/dtor instantiation for constant strigs to std::string
@@ -30,19 +31,24 @@
 // in those cases.
 namespace base {
 
-// For histograms with linear buckets.
-// Used for capturing integer data with a linear bucketing scheme. This can be
-// used when you want the exact value of some small numeric count, with a max of
-// 100 or less. If you need to capture a range of greater than 100, we recommend
-// the use of the COUNT histograms below.
+// For numeric measurements where you want exact integer values up to
+// |exclusive_max|. |exclusive_max| itself is included in the overflow bucket.
+// Therefore, if you want an accurate measure up to kMax, then |exclusive_max|
+// should be set to kMax + 1.
+//
+// |exclusive_max| should be 101 or less. If you need to capture a larger range,
+// we recommend the use of the COUNT histograms below.
+//
 // Sample usage:
-//   base::UmaHistogramExactLinear("Histogram.Linear", some_value, 10);
+//   base::UmaHistogramExactLinear("Histogram.Linear", sample, kMax + 1);
+// In this case, buckets are 1, 2, .., kMax, kMax+1, where the kMax+1 bucket
+// captures everything kMax+1 and above.
 BASE_EXPORT void UmaHistogramExactLinear(const std::string& name,
                                          int sample,
-                                         int value_max);
+                                         int exclusive_max);
 BASE_EXPORT void UmaHistogramExactLinear(const char* name,
                                          int sample,
-                                         int value_max);
+                                         int exclusive_max);
 
 // For adding a sample to an enumerated histogram.
 // Sample usage:
@@ -85,7 +91,7 @@ void UmaHistogramEnumeration(const char* name, T sample) {
                                  static_cast<int>(T::kMaxValue) + 1);
 }
 
-// Some legacy histograms may manually specify a max value, with a kCount,
+// Some legacy histograms may manually specify the enum size, with a kCount,
 // COUNT, kMaxValue, or MAX_VALUE sentinel like so:
 //   // These values are persisted to logs. Entries should not be renumbered and
 //   // numeric values should never be reused.
@@ -94,12 +100,12 @@ void UmaHistogramEnumeration(const char* name, T sample) {
 //     kClickTitle = 1,
 //     // kUseSearchbox = 2,  // no longer used, combined into omnibox
 //     kOpenBookmark = 3,
-//     kMaxValue,
+//     kCount,
 //   };
 //   base::UmaHistogramEnumeration("My.Enumeration",
 //                                 NewTabPageAction::kUseSearchbox,
-//                                 kMaxValue);
-// Note: The value in |sample| must be strictly less than |kMaxValue|. This is
+//                                 kCount);
+// Note: The value in |sample| must be strictly less than |enum_size|. This is
 // otherwise functionally equivalent to the above.
 template <typename T>
 void UmaHistogramEnumeration(const std::string& name, T sample, T enum_size) {
@@ -125,12 +131,18 @@ void UmaHistogramEnumeration(const char* name, T sample, T enum_size) {
 BASE_EXPORT void UmaHistogramBoolean(const std::string& name, bool sample);
 BASE_EXPORT void UmaHistogramBoolean(const char* name, bool sample);
 
-// For adding histogram with percent.
-// Percents are integer between 1 and 100.
+// For adding histogram sample denoting a percentage.
+// Percents are integers between 1 and 100, inclusively.
 // Sample usage:
 //   base::UmaHistogramPercentage("My.Percent", 69)
 BASE_EXPORT void UmaHistogramPercentage(const std::string& name, int percent);
 BASE_EXPORT void UmaHistogramPercentage(const char* name, int percent);
+
+// Obsolete. Use |UmaHistogramPercentage| instead. See crbug/1121318.
+BASE_EXPORT void UmaHistogramPercentageObsoleteDoNotUse(const std::string& name,
+                                                        int percent);
+BASE_EXPORT void UmaHistogramPercentageObsoleteDoNotUse(const char* name,
+                                                        int percent);
 
 // For adding counts histogram.
 // Sample usage:
@@ -206,16 +218,6 @@ BASE_EXPORT void UmaHistogramMicrosecondsTimes(const std::string& name,
 BASE_EXPORT void UmaHistogramMicrosecondsTimes(const char* name,
                                                TimeDelta sample);
 
-// For microseconds timings from 1 microsecond up to 10 ms (50 buckets).
-// TODO(crbug.com/983261) Remove this method after moving to
-// UmaHistogramMicrosecondsTimes.
-BASE_EXPORT void UmaHistogramMicrosecondsTimesUnderTenMilliseconds(
-    const std::string& name,
-    TimeDelta sample);
-BASE_EXPORT void UmaHistogramMicrosecondsTimesUnderTenMilliseconds(
-    const char* name,
-    TimeDelta sample);
-
 // For recording memory related histograms.
 // Used to measure common KB-granularity memory stats. Range is up to 500M.
 BASE_EXPORT void UmaHistogramMemoryKB(const std::string& name, int sample);
@@ -253,7 +255,7 @@ BASE_EXPORT void UmaHistogramMemoryLargeMB(const char* name, int sample);
 // many distinct values to the server (across all users). Concretely, keep the
 // number of distinct values <= 100 ideally, definitely <= 1000. If you have no
 // guarantees on the range of your data, use clamping, e.g.:
-//   UmaHistogramSparse("MyHistogram", ClampToRange(value, 0, 200));
+//   UmaHistogramSparse("My.Histogram", base::clamp(value, 0, 200));
 BASE_EXPORT void UmaHistogramSparse(const std::string& name, int sample);
 BASE_EXPORT void UmaHistogramSparse(const char* name, int sample);
 

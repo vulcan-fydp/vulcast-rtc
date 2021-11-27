@@ -7,35 +7,27 @@
  *  in the file PATENTS.  All contributing project authors may
  *  be found in the AUTHORS file in the root of the source tree.
  */
-
 #include "test/test_video_capturer.h"
-
 #include <algorithm>
-
 #include "api/scoped_refptr.h"
 #include "api/video/i420_buffer.h"
 #include "api/video/video_frame_buffer.h"
 #include "api/video/video_rotation.h"
-
 namespace webrtc {
 namespace test {
 TestVideoCapturer::~TestVideoCapturer() = default;
-
 void TestVideoCapturer::OnFrame(const VideoFrame& original_frame) {
   int cropped_width = 0;
   int cropped_height = 0;
   int out_width = 0;
   int out_height = 0;
-
   VideoFrame frame = MaybePreprocess(original_frame);
-
   if (!video_adapter_.AdaptFrameResolution(
           frame.width(), frame.height(), frame.timestamp_us() * 1000,
           &cropped_width, &cropped_height, &out_width, &out_height)) {
     // Drop frame in order to respect frame rate constraint.
     return;
   }
-
   if (out_height != frame.height() || out_width != frame.width()) {
     // Video adapter has requested a down-scale. Allocate a new buffer and
     // return scaled version.
@@ -56,41 +48,34 @@ void TestVideoCapturer::OnFrame(const VideoFrame& original_frame) {
       new_frame_builder.set_update_rect(new_rect);
     }
     broadcaster_.OnFrame(new_frame_builder.build());
-
   } else {
     // No adaptations needed, just return the frame as is.
     broadcaster_.OnFrame(frame);
   }
 }
-
 rtc::VideoSinkWants TestVideoCapturer::GetSinkWants() {
   return broadcaster_.wants();
 }
-
 void TestVideoCapturer::AddOrUpdateSink(
     rtc::VideoSinkInterface<VideoFrame>* sink,
     const rtc::VideoSinkWants& wants) {
   broadcaster_.AddOrUpdateSink(sink, wants);
   UpdateVideoAdapter();
 }
-
 void TestVideoCapturer::RemoveSink(rtc::VideoSinkInterface<VideoFrame>* sink) {
   broadcaster_.RemoveSink(sink);
   UpdateVideoAdapter();
 }
-
 void TestVideoCapturer::UpdateVideoAdapter() {
   video_adapter_.OnSinkWants(broadcaster_.wants());
 }
-
 VideoFrame TestVideoCapturer::MaybePreprocess(const VideoFrame& frame) {
-  rtc::CritScope crit(&lock_);
+  MutexLock lock(&lock_);
   if (preprocessor_ != nullptr) {
     return preprocessor_->Preprocess(frame);
   } else {
     return frame;
   }
 }
-
 }  // namespace test
 }  // namespace webrtc

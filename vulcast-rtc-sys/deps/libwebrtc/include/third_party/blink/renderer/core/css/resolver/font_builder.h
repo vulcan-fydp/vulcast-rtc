@@ -24,7 +24,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_CSS_RESOLVER_FONT_BUILDER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_CSS_RESOLVER_FONT_BUILDER_H_
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/font_size_functions.h"
@@ -35,14 +34,17 @@
 
 namespace blink {
 
-class FontSelector;
 class ComputedStyle;
+class FontSelector;
+class TreeScope;
 
 class CORE_EXPORT FontBuilder {
   STACK_ALLOCATED();
 
  public:
   explicit FontBuilder(Document*);
+  FontBuilder(const FontBuilder&) = delete;
+  FontBuilder& operator=(const FontBuilder&) = delete;
 
   void SetInitial(float effective_zoom);
 
@@ -64,6 +66,8 @@ class CORE_EXPORT FontBuilder {
   void SetWeight(FontSelectionValue);
 
   void SetFamilyDescription(const FontDescription::FamilyDescription&);
+  // font-family is a tree-scoped reference.
+  void SetFamilyTreeScope(const TreeScope*);
   void SetFeatureSettings(scoped_refptr<FontFeatureSettings>);
   void SetLocale(scoped_refptr<const LayoutLocale>);
   void SetVariantCaps(FontDescription::FontVariantCaps);
@@ -79,8 +83,8 @@ class CORE_EXPORT FontBuilder {
   // FIXME: These need to just vend a Font object eventually.
   void UpdateFontDescription(FontDescription&,
                              FontOrientation = FontOrientation::kHorizontal);
-  void CreateFont(ComputedStyle&);
-  void CreateFontForDocument(ComputedStyle&);
+  void CreateFont(ComputedStyle&, const ComputedStyle* parent_style);
+  void CreateInitialFont(ComputedStyle&);
 
   bool FontDirty() const { return flags_; }
 
@@ -128,7 +132,9 @@ class CORE_EXPORT FontBuilder {
   // This function fixes up the default font size if it detects that the current
   // generic font family has changed. -dwh
   void CheckForGenericFamilyChange(const FontDescription&, FontDescription&);
-  void UpdateSpecifiedSize(FontDescription&, const ComputedStyle&);
+  void UpdateSpecifiedSize(FontDescription&,
+                           const ComputedStyle&,
+                           const ComputedStyle* parent_style);
   void UpdateComputedSize(FontDescription&, const ComputedStyle&);
   void UpdateAdjustedSize(FontDescription&,
                           const ComputedStyle&,
@@ -138,7 +144,11 @@ class CORE_EXPORT FontBuilder {
                                          float effective_zoom,
                                          float specified_size);
 
-  Document* document_;
+  FontSelector* FontSelectorFromTreeScope(const TreeScope* tree_scope);
+  FontSelector* ComputeFontSelector(const ComputedStyle& style);
+
+  Document* document_{nullptr};
+  const TreeScope* family_tree_scope_{nullptr};
   FontDescription font_description_;
 
   enum class PropertySetFlag {
@@ -170,10 +180,9 @@ class CORE_EXPORT FontBuilder {
     return flags_ & (1 << unsigned(flag));
   }
 
-  unsigned flags_;
-  DISALLOW_COPY_AND_ASSIGN(FontBuilder);
+  unsigned flags_{0};
 };
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_CSS_RESOLVER_FONT_BUILDER_H_

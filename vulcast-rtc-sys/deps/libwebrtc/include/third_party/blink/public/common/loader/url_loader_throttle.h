@@ -14,16 +14,19 @@
 #include "net/base/request_priority.h"
 #include "services/network/public/mojom/url_loader.mojom-forward.h"
 #include "services/network/public/mojom/url_response_head.mojom-forward.h"
+#include "services/network/public/mojom/web_client_hints_types.mojom.h"
 #include "third_party/blink/public/common/common_export.h"
 
 class GURL;
 
 namespace net {
+class HttpRequestHeaders;
 struct RedirectInfo;
 }
 
 namespace network {
 struct ResourceRequest;
+struct URLLoaderCompletionStatus;
 }  // namespace network
 
 namespace blink {
@@ -121,6 +124,17 @@ class BLINK_COMMON_EXPORT URLLoaderThrottle {
     // using a combined value of all of the |additional_load_flags|.
     virtual void RestartWithURLResetAndFlags(int additional_load_flags);
 
+    // Restarts the URL loader immediately using |additional_load_flags| and the
+    // unmodified URL if it was changed in WillStartRequest().
+    //
+    // Restarting is only valid before BeforeWillProcessResponse() is called.
+    virtual void RestartWithURLResetAndFlagsNow(int additional_load_flags);
+
+    // Restarts the URL loader immediately after adding the provided headers to
+    // the new request.
+    virtual void RestartWithModifiedHeadersNow(
+        const net::HttpRequestHeaders& modified_headers);
+
    protected:
     virtual ~Delegate();
   };
@@ -132,7 +146,8 @@ class BLINK_COMMON_EXPORT URLLoaderThrottle {
   // Will* methods below and may only be called once.
   virtual void DetachFromCurrentSequence();
 
-  // Called before the resource request is started.
+  // Called exactly once before the resource request is started.
+  //
   // |request| needs to be modified before the callback returns (i.e.
   // asynchronously touching the pointer in defer case is not valid)
   // When |request->url| is modified it will make an internal redirect, which
@@ -146,6 +161,10 @@ class BLINK_COMMON_EXPORT URLLoaderThrottle {
   // network, so new throttles are created for another URLLoaderFactory to
   // handle the request.
   virtual void WillStartRequest(network::ResourceRequest* request, bool* defer);
+
+  // If non-null is returned a histogram will be logged using this name when the
+  // throttle defers the navigation in WillStartRequest().
+  virtual const char* NameForLoggingWillStartRequest();
 
   // Called when the request was redirected.  |redirect_info| contains the
   // redirect responses's HTTP status code and some information about the new
@@ -177,6 +196,10 @@ class BLINK_COMMON_EXPORT URLLoaderThrottle {
       network::mojom::URLResponseHead* response_head,
       bool* defer);
 
+  // If non-null is returned a histogram will be logged using this name when the
+  // throttle defers the navigation in WillProcessResponse().
+  virtual const char* NameForLoggingWillProcessResponse();
+
   // Called prior WillProcessResponse() to allow throttles to restart the URL
   // load by calling delegate_->RestartWithFlags().
   //
@@ -192,6 +215,11 @@ class BLINK_COMMON_EXPORT URLLoaderThrottle {
   virtual void WillOnCompleteWithError(
       const network::URLLoaderCompletionStatus& status,
       bool* defer);
+
+  // Called when an ACCEPT_CH frame is observed.
+  virtual void HandleAcceptCHFrameReceived(
+      const GURL& url,
+      const std::vector<network::mojom::WebClientHintsType>& accept_ch_frame);
 
   // Must return true if the throttle may make cross-scheme redirects
   // (which is usually considered unsafe, so allowed only if the setting

@@ -38,7 +38,7 @@
 #error "Only <gtk/gtk.h> can be included directly."
 #endif
 
-#include <gtk/gtkbutton.h>
+#include <gtk/gtkwidget.h>
 
 G_BEGIN_DECLS
 
@@ -54,39 +54,37 @@ typedef struct _GtkScaleButtonClass   GtkScaleButtonClass;
 
 struct _GtkScaleButton
 {
-  GtkButton parent_instance;
+  GtkWidget parent_instance;
 };
 
 struct _GtkScaleButtonClass
 {
-  GtkButtonClass parent_class;
+  GtkWidgetClass parent_class;
 
   /* signals */
   void	(* value_changed) (GtkScaleButton *button,
-                           gdouble         value);
+                           double          value);
 
-  /* Padding for future expansion */
-  void (*_gtk_reserved1) (void);
-  void (*_gtk_reserved2) (void);
-  void (*_gtk_reserved3) (void);
-  void (*_gtk_reserved4) (void);
+  /*< private >*/
+
+  gpointer padding[8];
 };
 
 GDK_AVAILABLE_IN_ALL
 GType            gtk_scale_button_get_type         (void) G_GNUC_CONST;
 GDK_AVAILABLE_IN_ALL
-GtkWidget *      gtk_scale_button_new              (gdouble          min,
-                                                    gdouble          max,
-                                                    gdouble          step,
-                                                    const gchar    **icons);
+GtkWidget *      gtk_scale_button_new              (double           min,
+                                                    double           max,
+                                                    double           step,
+                                                    const char     **icons);
 GDK_AVAILABLE_IN_ALL
 void             gtk_scale_button_set_icons        (GtkScaleButton  *button,
-                                                    const gchar    **icons);
+                                                    const char     **icons);
 GDK_AVAILABLE_IN_ALL
-gdouble          gtk_scale_button_get_value        (GtkScaleButton  *button);
+double           gtk_scale_button_get_value        (GtkScaleButton  *button);
 GDK_AVAILABLE_IN_ALL
 void             gtk_scale_button_set_value        (GtkScaleButton  *button,
-                                                    gdouble          value);
+                                                    double           value);
 GDK_AVAILABLE_IN_ALL
 GtkAdjustment *  gtk_scale_button_get_adjustment   (GtkScaleButton  *button);
 GDK_AVAILABLE_IN_ALL

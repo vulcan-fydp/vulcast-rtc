@@ -18,23 +18,24 @@ fn main() {
         .expect("could not write bindings");
 
     let libwebrtc_path = current_dir.join("deps/libwebrtc");
-    let webrtc_include_path = env::var("LIBWEBRTC_INCLUDE_PATH").unwrap_or(
+    let webrtc_include_path = env::var("LIBWEBRTC_INCLUDE_PATH").unwrap_or_else(|_| {
         libwebrtc_path
             .join("include")
             .into_os_string()
             .into_string()
-            .unwrap(),
-    );
-    let webrtc_binary_path = env::var("LIBWEBRTC_BINARY_PATH").unwrap_or(
+            .unwrap()
+    });
+    let webrtc_binary_path = env::var("LIBWEBRTC_BINARY_PATH").unwrap_or_else(|_| {
         libwebrtc_path
             .join("lib")
             .join(env::var("TARGET").unwrap())
             .into_os_string()
             .into_string()
-            .unwrap(),
-    );
+            .unwrap()
+    });
 
     let dst = cmake::Config::new(".")
+        .define("TARGET", env::var("TARGET").unwrap())
         .define("LIBWEBRTC_INCLUDE_PATH:PATH", &webrtc_include_path)
         .define("LIBWEBRTC_BINARY_PATH:PATH", &webrtc_binary_path)
         .define("MEDIASOUPCLIENT_LOG_DEV", "ON")
@@ -46,7 +47,6 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", webrtc_binary_path);
 
     println!("cargo:rustc-link-lib=static=vulcast-rtc");
-    println!("cargo:rustc-link-lib=static=webrtcextra");
 
     match env::var("PROFILE").unwrap().as_str() {
         "release" => println!("cargo:rustc-link-lib=static=glog"),
@@ -55,6 +55,29 @@ fn main() {
     }
 
     println!("cargo:rustc-link-lib=static=webrtc");
+    println!("cargo:rustc-link-lib=static=webrtcextra");
     println!("cargo:rustc-link-lib=static=mediasoupclient");
     println!("cargo:rustc-link-lib=static=sdptransform");
+
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    if target_arch == "arm" {
+        let rpi_firmware_path = current_dir
+            .join("deps/rpi-firmware/opt/vc/lib")
+            .into_os_string()
+            .into_string()
+            .unwrap();
+        println!("cargo:rustc-link-search=native={}", rpi_firmware_path);
+
+        println!("cargo:rustc-link-lib=static=rpi-webrtc-streamer");
+        println!("cargo:rustc-link-lib=dylib=mmal_core");
+        println!("cargo:rustc-link-lib=dylib=mmal");
+        println!("cargo:rustc-link-lib=dylib=mmal_util");
+        println!("cargo:rustc-link-lib=dylib=vcos");
+        println!("cargo:rustc-link-lib=dylib=vcsm");
+        println!("cargo:rustc-link-lib=dylib=containers");
+        println!("cargo:rustc-link-lib=dylib=bcm_host");
+        println!("cargo:rustc-link-lib=dylib=mmal_vc_client");
+        println!("cargo:rustc-link-lib=dylib=mmal_components");
+        println!("cargo:rustc-link-lib=dylib=vchiq_arm");
+    }
 }

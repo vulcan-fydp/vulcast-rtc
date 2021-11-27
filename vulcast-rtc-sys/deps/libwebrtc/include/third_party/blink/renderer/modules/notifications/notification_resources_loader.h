@@ -5,8 +5,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_NOTIFICATIONS_NOTIFICATION_RESOURCES_LOADER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_NOTIFICATIONS_NOTIFICATION_RESOURCES_LOADER_H_
 
-#include <memory>
-
 #include "third_party/blink/public/mojom/notifications/notification.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/loader/threaded_icon_loader.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
@@ -54,7 +52,7 @@ class MODULES_EXPORT NotificationResourcesLoader final
   // pre-finalizer.
   void Stop();
 
-  virtual void Trace(Visitor* visitor);
+  virtual void Trace(Visitor* visitor) const;
 
  private:
   void LoadIcon(ExecutionContext* context,

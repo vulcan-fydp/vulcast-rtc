@@ -11,5 +11,10 @@ target_sources(${PROJECT_NAME} PRIVATE
 	foreign_frame_generator.hpp
 	foreign_frame_generator.cpp
 )
-target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(${PROJECT_NAME} PUBLIC 
+	${CMAKE_CURRENT_SOURCE_DIR}
+)
+if(${TARGET} STREQUAL "armv7-unknown-linux-gnueabihf")
+	target_compile_definitions(${PROJECT_NAME} PRIVATE VULCAST_RTC_RPI)
+endif()
 target_compile_options(${PROJECT_NAME} PRIVATE "-Wall" "-Wextra")

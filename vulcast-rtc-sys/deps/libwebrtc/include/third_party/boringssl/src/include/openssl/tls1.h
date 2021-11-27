@@ -171,7 +171,6 @@ extern "C" {
 #define TLS1_AD_USER_CANCELLED 90
 #define TLS1_AD_NO_RENEGOTIATION 100
 #define TLS1_AD_MISSING_EXTENSION 109
-// codes 110-114 are from RFC3546
 #define TLS1_AD_UNSUPPORTED_EXTENSION 110
 #define TLS1_AD_CERTIFICATE_UNOBTAINABLE 111
 #define TLS1_AD_UNRECOGNIZED_NAME 112
@@ -180,6 +179,7 @@ extern "C" {
 #define TLS1_AD_UNKNOWN_PSK_IDENTITY 115
 #define TLS1_AD_CERTIFICATE_REQUIRED 116
 #define TLS1_AD_NO_APPLICATION_PROTOCOL 120
+#define TLS1_AD_ECH_REQUIRED 121  // draft-ietf-tls-esni-10
 
 // ExtensionType values from RFC6066
 #define TLSEXT_TYPE_server_name 0
@@ -203,16 +203,23 @@ extern "C" {
 // ExtensionType value from RFC7627
 #define TLSEXT_TYPE_extended_master_secret 23
 
-// ExtensionType value from draft-ietf-tokbind-negotiation-10
-#define TLSEXT_TYPE_token_binding 24
+// ExtensionType value from draft-ietf-quic-tls. Drafts 00 through 32 use
+// 0xffa5 which is part of the Private Use section of the registry, and it
+// collides with TLS-LTS and, based on scans, something else too (though this
+// hasn't been a problem in practice since it's QUIC-only). Drafts 33 onward
+// use the value 57 which was officially registered with IANA.
+#define TLSEXT_TYPE_quic_transport_parameters_legacy 0xffa5
 
-// ExtensionType value from draft-ietf-quic-tls. Note that this collides with
-// TLS-LTS and, based on scans, something else too. Since it's QUIC-only, that
-// shouldn't be a problem in practice.
-#define TLSEXT_TYPE_quic_transport_parameters 0xffa5
+// ExtensionType value from RFC9000
+#define TLSEXT_TYPE_quic_transport_parameters 57
 
-// ExtensionType value assigned to
-// https://tools.ietf.org/html/draft-ietf-tls-certificate-compression-03
+// TLSEXT_TYPE_quic_transport_parameters_standard is an alias for
+// |TLSEXT_TYPE_quic_transport_parameters|. Use
+// |TLSEXT_TYPE_quic_transport_parameters| instead.
+#define TLSEXT_TYPE_quic_transport_parameters_standard \
+  TLSEXT_TYPE_quic_transport_parameters
+
+// ExtensionType value from RFC8879
 #define TLSEXT_TYPE_cert_compression 27
 
 // ExtensionType value from RFC4507
@@ -232,9 +239,18 @@ extern "C" {
 // ExtensionType value from RFC5746
 #define TLSEXT_TYPE_renegotiate 0xff01
 
-// ExtensionType value from draft-ietf-tls-subcerts. This is not an IANA defined
+// ExtensionType value from draft-ietf-tls-subcerts.
+#define TLSEXT_TYPE_delegated_credential 0x22
+
+// ExtensionType value from draft-vvv-tls-alps. This is not an IANA defined
 // extension number.
-#define TLSEXT_TYPE_delegated_credential 0xff02
+#define TLSEXT_TYPE_application_settings 17513
+
+// ExtensionType values from draft-ietf-tls-esni-10. This is not an IANA defined
+// extension number.
+#define TLSEXT_TYPE_encrypted_client_hello 0xfe0a
+#define TLSEXT_TYPE_ech_is_inner 0xda09
+#define TLSEXT_TYPE_ech_outer_extensions 0xfd00
 
 // ExtensionType value from RFC6962
 #define TLSEXT_TYPE_certificate_timestamp 18
@@ -268,7 +284,7 @@ extern "C" {
 #define TLSEXT_hash_sha384 5
 #define TLSEXT_hash_sha512 6
 
-// From https://tools.ietf.org/html/draft-ietf-tls-certificate-compression-03#section-3
+// From https://www.rfc-editor.org/rfc/rfc8879.html#section-3
 #define TLSEXT_cert_compression_zlib 1
 #define TLSEXT_cert_compression_brotli 2
 

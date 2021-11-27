@@ -7,6 +7,11 @@
 // code. The annotations can also help program analysis tools to identify
 // potential thread safety issues.
 //
+// Note that no analysis is done inside constructors and destructors,
+// regardless of what attributes are used. See
+// https://clang.llvm.org/docs/ThreadSafetyAnalysis.html#no-checking-inside-constructors-and-destructors
+// for details.
+//
 // Note that the annotations we use are described as deprecated in the Clang
 // documentation, linked below. E.g. we use EXCLUSIVE_LOCKS_REQUIRED where the
 // Clang docs use REQUIRES.
@@ -32,7 +37,7 @@
 #ifndef BASE_THREAD_ANNOTATIONS_H_
 #define BASE_THREAD_ANNOTATIONS_H_
 
-#include "base/logging.h"
+#include "base/check_op.h"
 #include "build/build_config.h"
 
 #if defined(__clang__)
@@ -243,15 +248,9 @@ inline T& ts_unchecked_read(T& v) NO_THREAD_SAFETY_ANALYSIS {
 #if DCHECK_IS_ON()
 
 // Equivalent to GUARDED_BY for SequenceChecker/ThreadChecker. Currently,
-// clang's error message "requires holding mutex" is misleading. Usage of this
-// macro is discouraged until the message is updated.
-// TODO(etiennep): Update comment above once clang's error message is updated.
 #define GUARDED_BY_CONTEXT(name) GUARDED_BY(name)
 
 // Equivalent to EXCLUSIVE_LOCKS_REQUIRED for SequenceChecker/ThreadChecker.
-// Currently, clang's error message "requires holding mutex" is misleading.
-// Usage of this macro is discouraged until the message is updated.
-// TODO(etiennep): Update comment above once clang's error message is updated.
 #define VALID_CONTEXT_REQUIRED(name) EXCLUSIVE_LOCKS_REQUIRED(name)
 
 #else  // DCHECK_IS_ON()

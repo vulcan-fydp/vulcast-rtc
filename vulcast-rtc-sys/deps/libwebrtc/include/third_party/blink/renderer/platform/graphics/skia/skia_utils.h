@@ -117,6 +117,8 @@ inline SkPoint FloatPointToSkPoint(const FloatPoint& point) {
 }
 
 SkMatrix PLATFORM_EXPORT AffineTransformToSkMatrix(const AffineTransform&);
+SkMatrix PLATFORM_EXPORT
+TransformationMatrixToSkMatrix(const TransformationMatrix&);
 
 bool NearlyIntegral(float value);
 
@@ -140,19 +142,21 @@ inline float BlurRadiusToStdDev(float radius) {
   return radius * 0.5f;
 }
 
-template <typename PrimitiveType>
-void DrawPlatformFocusRing(const PrimitiveType&,
-                           cc::PaintCanvas*,
-                           SkColor,
-                           float width,
-                           float border_radius);
+void PLATFORM_EXPORT DrawPlatformFocusRing(const SkRRect&,
+                                           cc::PaintCanvas*,
+                                           SkColor,
+                                           float width);
+void PLATFORM_EXPORT DrawPlatformFocusRing(const SkPath&,
+                                           cc::PaintCanvas*,
+                                           SkColor,
+                                           float width,
+                                           float corner_radius);
 
-// TODO(fmalita): remove in favor of direct SrcRectConstraint use.
-inline cc::PaintCanvas::SrcRectConstraint
-WebCoreClampingModeToSkiaRectConstraint(Image::ImageClampingMode clamp_mode) {
+inline SkCanvas::SrcRectConstraint WebCoreClampingModeToSkiaRectConstraint(
+    Image::ImageClampingMode clamp_mode) {
   return clamp_mode == Image::kClampImageToSourceRect
-             ? cc::PaintCanvas::kStrict_SrcRectConstraint
-             : cc::PaintCanvas::kFast_SrcRectConstraint;
+             ? SkCanvas::kStrict_SrcRectConstraint
+             : SkCanvas::kFast_SrcRectConstraint;
 }
 
 // Attempts to allocate an SkData on the PartitionAlloc buffer partition.

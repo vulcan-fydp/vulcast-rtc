@@ -24,6 +24,7 @@ namespace blink {
 
 class DetachableConsoleLogger;
 class DetachableResourceFetcherProperties;
+class LoadingBehaviorObserver;
 
 // Client interface to use the throttling/scheduling functionality that
 // ResourceLoadScheduler provides.
@@ -33,7 +34,7 @@ class PLATFORM_EXPORT ResourceLoadSchedulerClient
   // Called when the request is granted to run.
   virtual void Run() = 0;
 
-  void Trace(Visitor* visitor) override {}
+  void Trace(Visitor* visitor) const override {}
 };
 
 // ResourceLoadScheduler provides a unified per-frame infrastructure to schedule
@@ -81,6 +82,11 @@ class PLATFORM_EXPORT ResourceLoadSchedulerClient
 //     and sub frames. When the frame has been background for more than five
 //     minutes, all throttleable resource loading requests are throttled
 //     indefinitely (i.e., threshold is zero in such a circumstance).
+//   - (As of M86): Low-priority requests are delayed behind "important"
+//     requests before some general loading milestone has been reached.
+//     "Important", for the experiment means either kHigh or kMedium priority,
+//     and the milestones being experimented with are first paint and first
+//     contentful paint so far.
 class PLATFORM_EXPORT ResourceLoadScheduler final
     : public GarbageCollected<ResourceLoadScheduler>,
       public FrameOrWorkerScheduler::Observer {
@@ -167,10 +173,13 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
                         ThrottleOptionOverride throttle_option_override,
                         const DetachableResourceFetcherProperties&,
                         FrameOrWorkerScheduler*,
-                        DetachableConsoleLogger& console_logger);
+                        DetachableConsoleLogger& console_logger,
+                        LoadingBehaviorObserver* loading_behavior_observer);
+  ResourceLoadScheduler(const ResourceLoadScheduler&) = delete;
+  ResourceLoadScheduler& operator=(const ResourceLoadScheduler&) = delete;
   ~ResourceLoadScheduler() override;
 
-  void Trace(Visitor*);
+  void Trace(Visitor*) const;
 
   // Changes the policy from |kTight| to |kNormal|. This function can be called
   // multiple times, and does nothing when the scheduler is already working with
@@ -247,7 +256,7 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
           intra_priority(intra_priority) {}
 
     const ClientId client_id;
-    const WebURLRequest::Priority priority;
+    const ResourceLoadPriority priority;
     const int intra_priority;
   };
 
@@ -261,13 +270,15 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
           priority(priority),
           intra_priority(intra_priority) {}
 
-    void Trace(Visitor* visitor) { visitor->Trace(client); }
+    void Trace(Visitor* visitor) const { visitor->Trace(client); }
 
     Member<ResourceLoadSchedulerClient> client;
     ThrottleOption option;
     ResourceLoadPriority priority;
     int intra_priority;
   };
+
+  using PendingRequestMap = HeapHashMap<ClientId, Member<ClientInfo>>;
 
   // Checks if |pending_requests_| for the specified option is effectively
   // empty, that means it does not contain any request that is still alive in
@@ -276,6 +287,9 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
 
   // Gets the highest priority pending request that is allowed to be run.
   bool GetNextPendingRequest(ClientId* id);
+
+  // Determines whether or not a low-priority request should be delayed.
+  bool ShouldDelay(PendingRequestMap::iterator found) const;
 
   // Returns whether we can throttle a request with the given option based
   // on life cycle state.
@@ -288,7 +302,10 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
   void MaybeRun();
 
   // Grants a client to run,
-  void Run(ClientId, ResourceLoadSchedulerClient*, bool throttleable);
+  void Run(ClientId,
+           ResourceLoadSchedulerClient*,
+           bool throttleable,
+           ResourceLoadPriority priority);
 
   size_t GetOutstandingLimit(ResourceLoadPriority priority) const;
 
@@ -319,7 +336,7 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
   ClientId current_id_ = kInvalidClientId;
 
   // Holds clients that were granted and are running.
-  HashSet<ClientId> running_requests_;
+  HashMap<ClientId, ResourceLoadPriority> running_requests_;
 
   HashSet<ClientId> running_throttleable_requests_;
 
@@ -330,7 +347,7 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
       scheduler::SchedulingLifecycleState::kNotThrottled;
 
   // Holds clients that haven't been granted, and are waiting for a grant.
-  HeapHashMap<ClientId, Member<ClientInfo>> pending_request_map_;
+  PendingRequestMap pending_request_map_;
 
   // We use std::set here because WTF doesn't have its counterpart.
   // This tracks two sets of requests, throttleable and stoppable.
@@ -352,9 +369,9 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
 
   ThrottleOptionOverride throttle_option_override_;
 
-  DISALLOW_COPY_AND_ASSIGN(ResourceLoadScheduler);
+  Member<LoadingBehaviorObserver> loading_behavior_observer_;
 };
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_LOADER_FETCH_RESOURCE_LOAD_SCHEDULER_H_

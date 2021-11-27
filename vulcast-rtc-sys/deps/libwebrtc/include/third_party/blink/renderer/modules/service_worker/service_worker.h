@@ -54,7 +54,6 @@ class MODULES_EXPORT ServiceWorker final
       public ActiveScriptWrappable<ServiceWorker>,
       public mojom::blink::ServiceWorkerObject {
   DEFINE_WRAPPERTYPEINFO();
-  USING_GARBAGE_COLLECTED_MIXIN(ServiceWorker);
 
  public:
   static ServiceWorker* From(ExecutionContext*,
@@ -73,7 +72,7 @@ class MODULES_EXPORT ServiceWorker final
 
   ServiceWorker(ExecutionContext*, WebServiceWorkerObjectInfo);
   ~ServiceWorker() override;
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
   void postMessage(ScriptState*,
                    const ScriptValue& message,
@@ -116,14 +115,10 @@ class MODULES_EXPORT ServiceWorker final
   // |host_| keeps the Mojo connection to the
   // browser-side ServiceWorkerObjectHost, whose lifetime is bound
   // to |host_| via the Mojo connection.
-  HeapMojoAssociatedRemote<mojom::blink::ServiceWorkerObjectHost,
-                           HeapMojoWrapperMode::kWithoutContextObserver>
-      host_;
+  HeapMojoAssociatedRemote<mojom::blink::ServiceWorkerObjectHost> host_;
   // Receives messages from the content::ServiceWorkerObjectHost in the browser
   // process.
-  HeapMojoAssociatedReceiver<mojom::blink::ServiceWorkerObject,
-                             ServiceWorker,
-                             HeapMojoWrapperMode::kWithoutContextObserver>
+  HeapMojoAssociatedReceiver<mojom::blink::ServiceWorkerObject, ServiceWorker>
       receiver_;
 };
 

@@ -35,7 +35,6 @@
 
 #include "base/single_thread_task_runner.h"
 #include "third_party/blink/public/mojom/scroll/scroll_into_view_params.mojom-blink-forward.h"
-#include "third_party/blink/public/platform/web_size.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
@@ -91,18 +90,17 @@ struct PaintPropertyTreeBuilderFragmentContext;
 //           +- scroll_translation_node_ (scroll: scroll_node_)
 // Effect tree:
 //  parent effect state
+//  +- overscroll_elasticity_effect_node_
 //  +- horizontal_scrollbar_effect_node_
 //  +- vertical_scrollbar_effect_node_
 //
 class CORE_EXPORT VisualViewport : public GarbageCollected<VisualViewport>,
                                    public ScrollableArea {
-  USING_GARBAGE_COLLECTED_MIXIN(VisualViewport);
-
  public:
   explicit VisualViewport(Page&);
   ~VisualViewport() override;
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
   void InitializeScrollbars();
 
@@ -162,6 +160,10 @@ class CORE_EXPORT VisualViewport : public GarbageCollected<VisualViewport>,
   // viepwort.
   void ClampToBoundaries();
 
+  // See
+  // http://www.chromium.org/developers/design-documents/blink-coordinate-spaces.
+  // These methods are used to convert coordinates from/to viewport to root
+  // frame. Root frame coordinates x page scale(pinch zoom) -> Viewport
   FloatRect ViewportToRootFrame(const FloatRect&) const;
   IntRect ViewportToRootFrame(const IntRect&) const;
   FloatRect RootFrameToViewport(const FloatRect&) const;
@@ -216,18 +218,20 @@ class CORE_EXPORT VisualViewport : public GarbageCollected<VisualViewport>,
   cc::Layer* LayerForHorizontalScrollbar() const override;
   cc::Layer* LayerForVerticalScrollbar() const override;
   bool ScheduleAnimation() override;
+  bool UsesCompositedScrolling() const override { return true; }
   cc::AnimationHost* GetCompositorAnimationHost() const override;
   CompositorAnimationTimeline* GetCompositorAnimationTimeline() const override;
   IntRect VisibleContentRect(
       IncludeScrollbarsInRect = kExcludeScrollbars) const override;
   scoped_refptr<base::SingleThreadTaskRunner> GetTimerTaskRunner()
       const override;
-  WebColorScheme UsedColorScheme() const override;
+  mojom::blink::ColorScheme UsedColorScheme() const override;
 
   // VisualViewport scrolling may involve pinch zoom and gets routed through
-  // WebViewImpl explicitly rather than via ScrollingCoordinator::DidScroll
-  // since it needs to be set in tandem with the page scale delta.
-  void DidScroll(const FloatPoint&) final { NOTREACHED(); }
+  // WebViewImpl explicitly rather than via
+  // ScrollingCoordinator::DidCompositorScroll() since it needs to be set in
+  // tandem with the page scale delta.
+  void DidCompositorScroll(const FloatPoint&) final { NOTREACHED(); }
 
   // Visual Viewport API implementation.
   double OffsetLeft() const;
@@ -256,6 +260,7 @@ class CORE_EXPORT VisualViewport : public GarbageCollected<VisualViewport>,
 
   TransformPaintPropertyNode* GetDeviceEmulationTransformNode() const;
   TransformPaintPropertyNode* GetOverscrollElasticityTransformNode() const;
+  EffectPaintPropertyNode* GetOverscrollElasticityEffectNode() const;
   TransformPaintPropertyNode* GetPageScaleNode() const;
   TransformPaintPropertyNode* GetScrollTranslationNode() const;
   ScrollPaintPropertyNode* GetScrollNode() const;
@@ -284,6 +289,7 @@ class CORE_EXPORT VisualViewport : public GarbageCollected<VisualViewport>,
   void EnqueueScrollEvent();
   void EnqueueResizeEvent();
 
+  EScrollbarWidth CSSScrollbarWidth() const;
   int ScrollbarThickness() const;
   void UpdateScrollbarLayer(ScrollbarOrientation);
 
@@ -291,7 +297,7 @@ class CORE_EXPORT VisualViewport : public GarbageCollected<VisualViewport>,
 
   RootFrameViewport* GetRootFrameViewport() const;
 
-  LocalFrame* MainFrame() const;
+  LocalFrame* LocalMainFrame() const;
 
   Page& GetPage() const {
     DCHECK(page_);
@@ -312,13 +318,14 @@ class CORE_EXPORT VisualViewport : public GarbageCollected<VisualViewport>,
   scoped_refptr<cc::ScrollbarLayerBase> scrollbar_layer_horizontal_;
   scoped_refptr<cc::ScrollbarLayerBase> scrollbar_layer_vertical_;
 
-  PropertyTreeState parent_property_tree_state_;
+  PropertyTreeStateOrAlias parent_property_tree_state_;
   scoped_refptr<TransformPaintPropertyNode> device_emulation_transform_node_;
   scoped_refptr<TransformPaintPropertyNode>
       overscroll_elasticity_transform_node_;
   scoped_refptr<TransformPaintPropertyNode> page_scale_node_;
   scoped_refptr<TransformPaintPropertyNode> scroll_translation_node_;
   scoped_refptr<ScrollPaintPropertyNode> scroll_node_;
+  scoped_refptr<EffectPaintPropertyNode> overscroll_elasticity_effect_node_;
   scoped_refptr<EffectPaintPropertyNode> horizontal_scrollbar_effect_node_;
   scoped_refptr<EffectPaintPropertyNode> vertical_scrollbar_effect_node_;
 
@@ -352,6 +359,8 @@ class CORE_EXPORT VisualViewport : public GarbageCollected<VisualViewport>,
   // For scrolling, on scroll_layer_, scroll_node_, and scroll element ids of
   // scrollbar layers.
   CompositorElementId scroll_element_id_;
+  // For overscroll elasticity.
+  CompositorElementId elasticity_effect_node_id_;
 
   bool needs_paint_property_update_;
 };

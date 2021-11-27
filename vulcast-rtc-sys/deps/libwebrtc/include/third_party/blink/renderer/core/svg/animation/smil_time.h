@@ -32,7 +32,6 @@
 #include "base/time/time.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
-#include "third_party/blink/renderer/platform/wtf/assertions.h"
 #include "third_party/blink/renderer/platform/wtf/hash_traits.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
 
@@ -108,10 +107,15 @@ class SMILTime {
   SMILTime operator-() const { return -time_; }
   // Division and /modulo are used primarily for computing interval
   // progress/repeats.
-  int64_t operator/(SMILTime other) const {
+  double operator/(SMILTime other) const {
     DCHECK(IsFinite());
     DCHECK(other.IsFinite());
     return time_ / other.time_;
+  }
+  int64_t IntDiv(SMILTime other) const {
+    DCHECK(IsFinite());
+    DCHECK(other.IsFinite());
+    return time_.IntDiv(other.time_);
   }
   SMILTime operator%(SMILTime other) const {
     DCHECK(IsFinite());
@@ -119,17 +123,25 @@ class SMILTime {
     return SMILTime(time_ % other.time_);
   }
 
-  bool operator==(SMILTime other) const { return time_ == other.time_; }
+  constexpr bool operator==(SMILTime other) const {
+    return time_ == other.time_;
+  }
   explicit operator bool() const { return IsFinite() && !time_.is_zero(); }
-  bool operator!=(SMILTime other) const { return time_ != other.time_; }
+  constexpr bool operator!=(SMILTime other) const {
+    return time_ != other.time_;
+  }
 
   // Ordering of SMILTimes has to follow: finite < indefinite < unresolved. We
   // set this up by assigning consecutive sentinel values for the two latter
   // (see above).
-  bool operator>(SMILTime other) const { return time_ > other.time_; }
-  bool operator<(SMILTime other) const { return time_ < other.time_; }
-  bool operator>=(SMILTime other) const { return time_ >= other.time_; }
-  bool operator<=(SMILTime other) const { return time_ <= other.time_; }
+  constexpr bool operator>(SMILTime other) const { return time_ > other.time_; }
+  constexpr bool operator<(SMILTime other) const { return time_ < other.time_; }
+  constexpr bool operator>=(SMILTime other) const {
+    return time_ >= other.time_;
+  }
+  constexpr bool operator<=(SMILTime other) const {
+    return time_ <= other.time_;
+  }
 
  private:
   constexpr SMILTime(base::TimeDelta time) : time_(time) {}

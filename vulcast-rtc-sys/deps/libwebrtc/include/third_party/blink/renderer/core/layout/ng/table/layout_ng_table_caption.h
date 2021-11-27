@@ -11,6 +11,14 @@
 
 namespace blink {
 
+class LayoutNGTableInterface;
+class NGPhysicalFragment;
+
+extern template class CORE_EXTERN_TEMPLATE_EXPORT
+    LayoutNGBlockFlowMixin<LayoutTableCaption>;
+extern template class CORE_EXTERN_TEMPLATE_EXPORT
+    LayoutNGMixin<LayoutTableCaption>;
+
 class CORE_EXPORT LayoutNGTableCaption final
     : public LayoutNGBlockFlowMixin<LayoutTableCaption> {
  public:
@@ -21,8 +29,15 @@ class CORE_EXPORT LayoutNGTableCaption final
   const char* GetName() const override { return "LayoutNGTableCaption"; }
 
  private:
+  // Legacy-only API.
+  void InsertedIntoTree() override;
+  // Legacy-only API.
+  void WillBeRemovedFromTree() override;
+  // Legacy-only API.
   void CalculateAndSetMargins(const NGConstraintSpace&,
                               const NGPhysicalFragment&);
+
+  LayoutNGTableInterface* TableInterface() const;
 };
 
 // wtf/casting.h helper.

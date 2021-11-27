@@ -25,7 +25,6 @@ class MODULES_EXPORT MediaRecorder
     : public EventTargetWithInlineData,
       public ActiveScriptWrappable<MediaRecorder>,
       public ExecutionContextLifecycleObserver {
-  USING_GARBAGE_COLLECTED_MIXIN(MediaRecorder);
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -50,6 +49,7 @@ class MODULES_EXPORT MediaRecorder
   String state() const;
   uint32_t videoBitsPerSecond() const { return video_bits_per_second_; }
   uint32_t audioBitsPerSecond() const { return audio_bits_per_second_; }
+  String audioBitrateMode() const;
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(start, kStart)
   DEFINE_ATTRIBUTE_EVENT_LISTENER(stop, kStop)
@@ -75,7 +75,7 @@ class MODULES_EXPORT MediaRecorder
   void ContextDestroyed() override;
 
   // ScriptWrappable
-  bool HasPendingActivity() const final { return !stopped_; }
+  bool HasPendingActivity() const final { return state_ != State::kInactive; }
 
   virtual void WriteData(const char* data,
                          size_t length,
@@ -87,7 +87,7 @@ class MODULES_EXPORT MediaRecorder
   // be sent, unless recording isn't active in which case nothing happens.
   void OnAllTracksEnded();
 
-  void Trace(Visitor* visitor) override;
+  void Trace(Visitor* visitor) const override;
 
  private:
   void CreateBlobEvent(Blob* blob, double timecode);
@@ -98,7 +98,6 @@ class MODULES_EXPORT MediaRecorder
 
   Member<MediaStream> stream_;
   String mime_type_;
-  bool stopped_;
   int audio_bits_per_second_;
   int video_bits_per_second_;
 

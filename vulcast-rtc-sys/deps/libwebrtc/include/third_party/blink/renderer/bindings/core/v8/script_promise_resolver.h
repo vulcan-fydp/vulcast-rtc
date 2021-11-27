@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_SCRIPT_PROMISE_RESOLVER_H_
 #define THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_SCRIPT_PROMISE_RESOLVER_H_
 
+#include "base/dcheck_is_on.h"
 #include "base/macros.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_for_core.h"
@@ -38,12 +39,11 @@ namespace blink {
 class CORE_EXPORT ScriptPromiseResolver
     : public GarbageCollected<ScriptPromiseResolver>,
       public ExecutionContextLifecycleObserver {
-  USING_GARBAGE_COLLECTED_MIXIN(ScriptPromiseResolver);
   USING_PRE_FINALIZER(ScriptPromiseResolver, Dispose);
 
  public:
   explicit ScriptPromiseResolver(ScriptState*);
-  virtual ~ScriptPromiseResolver();
+  ~ScriptPromiseResolver() override;
 
   void Dispose();
 
@@ -97,7 +97,7 @@ class CORE_EXPORT ScriptPromiseResolver
   // promise is pending and the associated ExecutionContext isn't stopped.
   void KeepAliveWhilePending();
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   typedef ScriptPromise::InternalResolver Resolver;
@@ -126,9 +126,11 @@ class CORE_EXPORT ScriptPromiseResolver
     // resolveOrReject shouldn't be called inside a ScriptForbiddenScope.
     {
       ScriptForbiddenScope::AllowUserAgentScript allow_script;
-      value_.Set(script_state_->GetIsolate(),
-                 ToV8(value, script_state_->GetContext()->Global(),
-                      script_state_->GetIsolate()));
+      v8::Isolate* isolate = script_state_->GetIsolate();
+      v8::MicrotasksScope microtasks_scope(
+          isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+      value_.Set(isolate, ToV8(value, script_state_->GetContext()->Global(),
+                               script_state_->GetIsolate()));
     }
 
     if (GetExecutionContext()->IsContextPaused()) {

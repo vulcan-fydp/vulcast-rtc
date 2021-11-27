@@ -47,12 +47,8 @@ struct BLINK_COMMON_EXPORT
     return input.user_activation;
   }
 
-  static bool transfer_user_activation(blink::TransferableMessage& input) {
-    return input.transfer_user_activation;
-  }
-
-  static bool allow_autoplay(blink::TransferableMessage& input) {
-    return input.allow_autoplay;
+  static bool delegate_payment_request(blink::TransferableMessage& input) {
+    return input.delegate_payment_request;
   }
 
   static bool Read(blink::mojom::TransferableMessage::DataView data,

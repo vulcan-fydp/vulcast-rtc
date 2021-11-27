@@ -12,6 +12,7 @@
 #include "third_party/blink/renderer/core/loader/threadable_loader_client.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
+#include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
@@ -26,7 +27,6 @@ class TextResourceDecoder;
 // If the fetch fails, the callback will be called with two empty objects.
 class ManifestFetcher final : public GarbageCollected<ManifestFetcher>,
                               public ThreadableLoaderClient {
-  USING_GARBAGE_COLLECTED_MIXIN(ManifestFetcher);
   // This will be called asynchronously after the URL has been fetched,
   // successfully or not.  If there is a failure, response and data will both be
   // empty.  |response| and |data| are both valid until the ManifestFetcher
@@ -40,6 +40,7 @@ class ManifestFetcher final : public GarbageCollected<ManifestFetcher>,
 
   void Start(LocalDOMWindow& window,
              bool use_credentials,
+             ResourceFetcher* resource_fetcher,
              ManifestFetcher::Callback callback);
   void Cancel();
 
@@ -47,10 +48,10 @@ class ManifestFetcher final : public GarbageCollected<ManifestFetcher>,
   void DidReceiveResponse(uint64_t, const ResourceResponse&) override;
   void DidReceiveData(const char*, unsigned) override;
   void DidFinishLoading(uint64_t) override;
-  void DidFail(const ResourceError&) override;
-  void DidFailRedirectCheck() override;
+  void DidFail(uint64_t, const ResourceError&) override;
+  void DidFailRedirectCheck(uint64_t) override;
 
-  void Trace(Visitor* visitor) override;
+  void Trace(Visitor* visitor) const override;
 
  private:
   KURL url_;

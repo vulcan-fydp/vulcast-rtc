@@ -28,6 +28,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_CSS_RESOLVER_STYLE_BUILDER_CONVERTER_H_
 
 #include "cc/input/scroll_snap_data.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/css/css_function_value.h"
 #include "third_party/blink/renderer/core/css/css_identifier_value.h"
 #include "third_party/blink/renderer/core/css/css_primitive_value.h"
@@ -46,7 +47,6 @@
 #include "third_party/blink/renderer/core/style/shadow_list.h"
 #include "third_party/blink/renderer/core/style/style_offset_rotation.h"
 #include "third_party/blink/renderer/core/style/style_reflection.h"
-#include "third_party/blink/renderer/core/style/svg_computed_style_defs.h"
 #include "third_party/blink/renderer/core/style/transform_origin.h"
 #include "third_party/blink/renderer/platform/fonts/font_description.h"
 #include "third_party/blink/renderer/platform/geometry/length_size.h"
@@ -89,7 +89,8 @@ class StyleBuilderConverterBase {
   static FontDescription::Size ConvertFontSize(
       const CSSValue&,
       const CSSToLengthConversionData&,
-      FontDescription::Size parent_size);
+      FontDescription::Size parent_size,
+      const Document*);
 };
 
 // Note that we assume the parser only allows valid CSSValue types.
@@ -99,9 +100,6 @@ class StyleBuilderConverter {
  public:
   static scoped_refptr<StyleReflection> ConvertBoxReflect(StyleResolverState&,
                                                           const CSSValue&);
-  static Color ConvertColor(StyleResolverState&,
-                            const CSSValue&,
-                            bool for_visited_link = false);
   template <typename T>
   static T ConvertComputedLength(StyleResolverState&, const CSSValue&);
   static LengthBox ConvertClip(StyleResolverState&, const CSSValue&);
@@ -111,7 +109,8 @@ class StyleBuilderConverter {
       StyleResolverState&,
       const CSSValue&);
   static FilterOperations ConvertFilterOperations(StyleResolverState&,
-                                                  const CSSValue&);
+                                                  const CSSValue&,
+                                                  CSSPropertyID);
   static FilterOperations ConvertOffscreenFilterOperations(const CSSValue&,
                                                            const Font&);
   template <typename T>
@@ -123,7 +122,7 @@ class StyleBuilderConverter {
       StyleResolverState&,
       const CSSValue&);
   static scoped_refptr<FontVariationSettings> ConvertFontVariationSettings(
-      StyleResolverState&,
+      const StyleResolverState&,
       const CSSValue&);
   static FontDescription::Size ConvertFontSize(StyleResolverState&,
                                                const CSSValue&);
@@ -152,18 +151,18 @@ class StyleBuilderConverter {
   static StyleContentAlignmentData ConvertContentAlignmentData(
       StyleResolverState&,
       const CSSValue&);
-  static GapLength ConvertGapLength(StyleResolverState&, const CSSValue&);
   static GridAutoFlow ConvertGridAutoFlow(StyleResolverState&, const CSSValue&);
   static GridPosition ConvertGridPosition(StyleResolverState&, const CSSValue&);
   static GridTrackSize ConvertGridTrackSize(StyleResolverState&,
                                             const CSSValue&);
-  static Vector<GridTrackSize> ConvertGridTrackSizeList(StyleResolverState&,
-                                                        const CSSValue&);
+  static GridTrackList ConvertGridTrackSizeList(StyleResolverState&,
+                                                const CSSValue&);
   template <typename T>
   static T ConvertLineWidth(StyleResolverState&, const CSSValue&);
-  static float ConvertBorderWidth(StyleResolverState&, const CSSValue&);
+  static LayoutUnit ConvertBorderWidth(StyleResolverState&, const CSSValue&);
   static LayoutUnit ConvertLayoutUnit(StyleResolverState&, const CSSValue&);
-  static GapLength ConvertGapLength(const StyleResolverState&, const CSSValue&);
+  static absl::optional<Length> ConvertGapLength(const StyleResolverState&,
+                                                 const CSSValue&);
   static Length ConvertLength(const StyleResolverState&, const CSSValue&);
   static UnzoomedLength ConvertUnzoomedLength(const StyleResolverState&,
                                               const CSSValue&);
@@ -204,7 +203,9 @@ class StyleBuilderConverter {
   static StyleAutoColor ConvertStyleAutoColor(StyleResolverState&,
                                               const CSSValue&,
                                               bool for_visited_link = false);
-  static SVGPaint ConvertSVGPaint(StyleResolverState&, const CSSValue&);
+  static SVGPaint ConvertSVGPaint(StyleResolverState&,
+                                  const CSSValue&,
+                                  bool for_visited_link);
   static TextDecorationThickness ConvertTextDecorationThickness(
       StyleResolverState&,
       const CSSValue&);
@@ -226,13 +227,13 @@ class StyleBuilderConverter {
 
   static void ConvertGridTrackList(
       const CSSValue&,
-      Vector<GridTrackSize>&,
+      GridTrackList&,
       NamedGridLinesMap&,
       OrderedNamedGridLines&,
-      Vector<GridTrackSize>& auto_repeat_track_sizes,
+      Vector<GridTrackSize, 1>& auto_repeat_track_sizes,
       NamedGridLinesMap&,
       OrderedNamedGridLines&,
-      size_t& auto_repeat_insertion_point,
+      wtf_size_t& auto_repeat_insertion_point,
       AutoRepeatType&,
       StyleResolverState&);
   static void CreateImplicitNamedGridLinesFromGridArea(
@@ -279,9 +280,11 @@ class StyleBuilderConverter {
 
   static LengthSize ConvertIntrinsicSize(StyleResolverState&, const CSSValue&);
 
-  static base::Optional<IntSize> ConvertAspectRatio(StyleResolverState&,
-                                                    const CSSValue&);
+  static StyleAspectRatio ConvertAspectRatio(const StyleResolverState&,
+                                             const CSSValue&);
 
+  static bool ConvertInternalAlignSelfBlock(StyleResolverState& state,
+                                            const CSSValue& value);
   static bool ConvertInternalEmptyLineHeight(StyleResolverState& state,
                                              const CSSValue& value);
 
@@ -289,6 +292,15 @@ class StyleBuilderConverter {
 
   static RubyPosition ConvertRubyPosition(StyleResolverState& state,
                                           const CSSValue& value);
+
+  static ScrollbarGutter ConvertScrollbarGutter(StyleResolverState& state,
+                                                const CSSValue& value);
+
+  static AtomicString ConvertContainerName(StyleResolverState&,
+                                           const CSSValue&);
+
+  static void CountSystemColorComputeToSelfUsage(
+      const StyleResolverState& state);
 };
 
 template <typename T>
@@ -388,4 +400,4 @@ AtomicString StyleBuilderConverter::ConvertString(StyleResolverState&,
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_CSS_RESOLVER_STYLE_BUILDER_CONVERTER_H_

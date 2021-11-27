@@ -21,13 +21,12 @@ class PLATFORM_EXPORT UnacceleratedStaticBitmapImage final
   // The ImageOrientation should be derived from the source of the image data.
   static scoped_refptr<UnacceleratedStaticBitmapImage> Create(
       sk_sp<SkImage>,
-      ImageOrientation orientation = kDefaultImageOrientation);
+      ImageOrientation orientation = ImageOrientationEnum::kDefault);
   static scoped_refptr<UnacceleratedStaticBitmapImage> Create(
       PaintImage,
-      ImageOrientation orientation = kDefaultImageOrientation);
+      ImageOrientation orientation = ImageOrientationEnum::kDefault);
 
   bool CurrentFrameKnownToBeOpaque() override;
-  IntSize Size() const override;
   bool IsPremultiplied() const override;
   scoped_refptr<StaticBitmapImage> ConvertToColorSpace(sk_sp<SkColorSpace>,
                                                        SkColorType) override;
@@ -36,7 +35,7 @@ class PLATFORM_EXPORT UnacceleratedStaticBitmapImage final
             const cc::PaintFlags&,
             const FloatRect& dst_rect,
             const FloatRect& src_rect,
-            RespectImageOrientationEnum,
+            const ImageDrawOptions& draw_options,
             ImageClampingMode,
             ImageDecodingMode) override;
 
@@ -44,9 +43,13 @@ class PLATFORM_EXPORT UnacceleratedStaticBitmapImage final
 
   void Transfer() final;
 
+  bool CopyToResourceProvider(CanvasResourceProvider*) override;
+
  private:
   UnacceleratedStaticBitmapImage(sk_sp<SkImage>, ImageOrientation);
   UnacceleratedStaticBitmapImage(PaintImage, ImageOrientation);
+
+  IntSize SizeInternal() const override;
 
   PaintImage paint_image_;
   THREAD_CHECKER(thread_checker_);
@@ -57,4 +60,4 @@ class PLATFORM_EXPORT UnacceleratedStaticBitmapImage final
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_UNACCELERATED_STATIC_BITMAP_IMAGE_H_

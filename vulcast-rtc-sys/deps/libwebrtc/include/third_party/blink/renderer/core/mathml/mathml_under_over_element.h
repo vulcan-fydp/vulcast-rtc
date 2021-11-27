@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_MATHML_MATHML_UNDER_OVER_ELEMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_MATHML_MATHML_UNDER_OVER_ELEMENT_H_
 
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/mathml/mathml_scripts_element.h"
 
 namespace blink {
@@ -14,6 +15,11 @@ class Document;
 class CORE_EXPORT MathMLUnderOverElement final : public MathMLScriptsElement {
  public:
   MathMLUnderOverElement(const QualifiedName& tagName, Document& document);
+  absl::optional<bool> Accent() const;
+  absl::optional<bool> AccentUnder() const;
+
+ private:
+  void ParseAttribute(const AttributeModificationParams&) final;
 };
 
 template <>

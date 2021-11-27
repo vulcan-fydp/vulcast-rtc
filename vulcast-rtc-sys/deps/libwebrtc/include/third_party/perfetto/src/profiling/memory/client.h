@@ -35,11 +35,20 @@
 namespace perfetto {
 namespace profiling {
 
-uint64_t GetMaxTries(const ClientConfiguration& client_config);
-const char* GetThreadStackBase();
+struct StackRange {
+  const char* begin;
+  // One past the highest address part of the stack.
+  const char* end;
+};
+
+StackRange GetThreadStackRange();
+StackRange GetSigAltStackRange();
+StackRange GetMainThreadStackRange();
 
 constexpr uint64_t kInfiniteTries = 0;
 constexpr uint32_t kClientSockTimeoutMs = 1000;
+
+uint64_t GetMaxTries(const ClientConfiguration& client_config);
 
 // Profiling client, used to sample and record the malloc/free family of calls,
 // and communicate the necessary state to a separate profiling daemon process.
@@ -76,16 +85,12 @@ class Client {
   // Add address to buffer of deallocations. Flushes the buffer if necessary.
   bool RecordFree(uint32_t heap_id,
                   uint64_t alloc_address) PERFETTO_WARN_UNUSED_RESULT;
-  bool RecordHeapName(uint32_t heap_id, const char* heap_name);
+  bool RecordHeapInfo(uint32_t heap_id,
+                      const char* heap_name,
+                      uint64_t interval);
 
-  // Returns the number of bytes to assign to an allocation with the given
-  // |alloc_size|, based on the current sampling rate. A return value of zero
-  // means that the allocation should not be recorded. Not idempotent, each
-  // invocation mutates the sampler state.
-  //
-  // Not thread-safe.
-  size_t GetSampleSizeLocked(size_t alloc_size) {
-    return sampler_.SampleSize(alloc_size);
+  void AddClientSpinlockBlockedUs(size_t n) {
+    shmem_.AddClientSpinlockBlockedUs(n);
   }
 
   // Public for std::allocate_shared. Use CreateAndHandshake() to create
@@ -93,18 +98,24 @@ class Client {
   Client(base::UnixSocketRaw sock,
          ClientConfiguration client_config,
          SharedRingBuffer shmem,
-         Sampler sampler,
          pid_t pid_at_creation,
-         const char* main_thread_stack_base);
+         StackRange main_thread_stack_range);
 
   ~Client();
 
   const ClientConfiguration& client_config() { return client_config_; }
+  uint64_t adaptive_sampling_shmem_threshold() {
+    return client_config_.adaptive_sampling_shmem_threshold;
+  }
+  uint64_t adaptive_sampling_max_sampling_interval_bytes() {
+    return client_config_.adaptive_sampling_max_sampling_interval_bytes;
+  }
+  uint64_t write_avail() { return shmem_.write_avail(); }
 
   bool IsConnected();
 
  private:
-  const char* GetStackBase();
+  const char* GetStackEnd(const char* stacktop);
   bool SendControlSocketByte() PERFETTO_WARN_UNUSED_RESULT;
   int64_t SendWireMessageWithRetriesIfBlocking(const WireMessage&)
       PERFETTO_WARN_UNUSED_RESULT;
@@ -114,11 +125,9 @@ class Client {
 
   ClientConfiguration client_config_;
   uint64_t max_shmem_tries_;
-  // sampler_ operations are not thread-safe.
-  Sampler sampler_;
   base::UnixSocketRaw sock_;
 
-  const char* main_thread_stack_base_{nullptr};
+  StackRange main_thread_stack_range_{nullptr, nullptr};
   std::atomic<uint64_t>
       sequence_number_[base::ArraySize(ClientConfiguration{}.heaps)] = {};
   SharedRingBuffer shmem_;

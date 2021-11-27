@@ -100,7 +100,7 @@ class MediaList final : public ScriptWrappable {
 
   void Reattach(scoped_refptr<MediaQuerySet>);
 
-  void Trace(Visitor*) override;
+  void Trace(Visitor*) const override;
 
  private:
   scoped_refptr<MediaQuerySet> media_queries_;
@@ -110,4 +110,4 @@ class MediaList final : public ScriptWrappable {
 
 }  // namespace blink
 
-#endif
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_CSS_MEDIA_LIST_H_

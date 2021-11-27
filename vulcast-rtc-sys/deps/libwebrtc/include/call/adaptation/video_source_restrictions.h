@@ -11,6 +11,7 @@
 #ifndef CALL_ADAPTATION_VIDEO_SOURCE_RESTRICTIONS_H_
 #define CALL_ADAPTATION_VIDEO_SOURCE_RESTRICTIONS_H_
 
+#include <string>
 #include <utility>
 
 #include "absl/types/optional.h"
@@ -38,6 +39,8 @@ class VideoSourceRestrictions {
     return !(*this == rhs);
   }
 
+  std::string ToString() const;
+
   // The source must produce a resolution less than or equal to
   // max_pixels_per_frame().
   const absl::optional<size_t>& max_pixels_per_frame() const;
@@ -58,8 +61,8 @@ class VideoSourceRestrictions {
   void set_max_frame_rate(absl::optional<double> max_frame_rate);
 
  private:
-  // These map to rtc::VideoSinkWants's |max_pixel_count| and
-  // |target_pixel_count|.
+  // These map to rtc::VideoSinkWants's `max_pixel_count` and
+  // `target_pixel_count`.
   absl::optional<size_t> max_pixels_per_frame_;
   absl::optional<size_t> target_pixels_per_frame_;
   absl::optional<double> max_frame_rate_;
