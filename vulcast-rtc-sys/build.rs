@@ -18,23 +18,24 @@ fn main() {
         .expect("could not write bindings");
 
     let libwebrtc_path = current_dir.join("deps/libwebrtc");
-    let webrtc_include_path = env::var("LIBWEBRTC_INCLUDE_PATH").unwrap_or(
+    let webrtc_include_path = env::var("LIBWEBRTC_INCLUDE_PATH").unwrap_or_else(|_| {
         libwebrtc_path
             .join("include")
             .into_os_string()
             .into_string()
-            .unwrap(),
-    );
-    let webrtc_binary_path = env::var("LIBWEBRTC_BINARY_PATH").unwrap_or(
+            .unwrap()
+    });
+    let webrtc_binary_path = env::var("LIBWEBRTC_BINARY_PATH").unwrap_or_else(|_| {
         libwebrtc_path
             .join("lib")
             .join(env::var("TARGET").unwrap())
             .into_os_string()
             .into_string()
-            .unwrap(),
-    );
+            .unwrap()
+    });
 
     let dst = cmake::Config::new(".")
+        .define("TARGET", env::var("TARGET").unwrap())
         .define("LIBWEBRTC_INCLUDE_PATH:PATH", &webrtc_include_path)
         .define("LIBWEBRTC_BINARY_PATH:PATH", &webrtc_binary_path)
         .define("MEDIASOUPCLIENT_LOG_DEV", "ON")

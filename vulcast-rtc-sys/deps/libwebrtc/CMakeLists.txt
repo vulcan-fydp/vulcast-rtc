@@ -25,6 +25,7 @@ target_sources(webrtcextra PRIVATE
 target_include_directories(webrtcextra SYSTEM PUBLIC
 	${LIBWEBRTC_INCLUDE_PATH}
 	${LIBWEBRTC_INCLUDE_PATH}/third_party/abseil-cpp
+	${LIBWEBRTC_INCLUDE_PATH}/third_party/jsoncpp/source/include
 )
 
 target_compile_definitions(webrtcextra PUBLIC
