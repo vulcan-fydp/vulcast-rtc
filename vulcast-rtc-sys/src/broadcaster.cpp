@@ -1,6 +1,5 @@
 #include "broadcaster.hpp"
 
-#include <PeerConnection.hpp>
 #include <chrono>
 #include <cstdlib>
 #include <ctime>
