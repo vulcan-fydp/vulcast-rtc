@@ -6,7 +6,10 @@ use std::{
 };
 
 use futures::Stream;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{
+    broadcast,
+    mpsc::{self, error::TrySendError},
+};
 
 use crate::types::*;
 use vulcast_rtc_sys as sys;
@@ -48,7 +51,7 @@ pub type Data = Vec<u8>;
 pub struct DataConsumer {
     sys_data_consumer: *mut sys::mediasoupclient_DataConsumer,
     data_consumer_id: DataConsumerId,
-    data_rx: mpsc::UnboundedReceiver<Data>,
+    data_rx: mpsc::Receiver<Data>,
 }
 unsafe impl Send for DataConsumer {}
 unsafe impl Sync for DataConsumer {}
@@ -61,7 +64,7 @@ impl DataConsumer {
     ) -> Self {
         let data_consumer_id = data_consumer_options.id;
 
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, rx) = mpsc::channel(16);
 
         tokio::spawn({
             let data_consumer_id = data_consumer_id.clone();
@@ -75,8 +78,12 @@ impl DataConsumer {
                                     data,
                                 } if id == data_consumer_id => {
                                     log::trace!("{:?}: data (len={:?})", &id, data.len());
-                                    if let Err(_) = tx.send(data) {
-                                        return;
+                                    match tx.try_send(data) {
+                                        Err(TrySendError::Closed(_)) => return,
+                                        Err(TrySendError::Full(_)) => {
+                                            log::warn!("{:?}: message dropped, you are reading stream too slowly", &id)
+                                        },
+                                        _ => {}
                                     }
                                 }
                                 Message::StateChanged {
