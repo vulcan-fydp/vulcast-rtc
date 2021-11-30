@@ -1,5 +1,6 @@
 #include "broadcaster.hpp"
 
+#include <PeerConnection.hpp>
 #include <chrono>
 #include <cstdlib>
 #include <ctime>
@@ -9,8 +10,9 @@
 
 #include <glog/logging.h>
 #include <json.hpp>
-#include <media_stream_track_factory.hpp>
 #include <mediasoupclient.hpp>
+
+#include "media_stream_track_factory.hpp"
 
 using json = nlohmann::json;
 
@@ -74,13 +76,18 @@ std::future<std::string> Broadcaster::OnProduceData(
     const json & /*sctpStreamParameters*/, const std::string & /*label*/,
     const std::string & /*protocol*/, const json & /*appData*/) {
   // unreachable
-  LOG(FATAL) << "Broadcaster::OnProduceData()" << std::endl;
+  LOG(FATAL) << "Broadcaster::OnProduceData()";
 }
 
 void Broadcaster::Start() {
   LOG(INFO) << "Broadcaster::Start()";
   auto routerRtpCapabilities = signaller_.GetServerRtpCapabilities();
-  this->device_.Load(routerRtpCapabilities);
+
+  auto factory = GetPeerConnectionFactory();
+  mediasoupclient::PeerConnection::Options options;
+  options.factory = factory.get();
+  this->device_.Load(routerRtpCapabilities, &options);
+  // this->device_.Load(routerRtpCapabilities);
 
   auto rtp_capabilities = device_.GetRtpCapabilities();
   signaller_.OnRtpCapabilities(rtp_capabilities);
@@ -112,19 +119,35 @@ mediasoupclient::Producer *Broadcaster::Produce(
 void Broadcaster::CreateSendTransport() {
   LOG(INFO) << "Broadcaster::CreateSendTransport()";
   auto response = signaller_.CreateWebrtcTransport();
+
+  auto factory = GetPeerConnectionFactory();
+  mediasoupclient::PeerConnection::Options options;
+  options.factory = factory.get();
   this->send_transport_ = device_.CreateSendTransport(
       this, response["id"], response["iceParameters"],
       response["iceCandidates"], response["dtlsParameters"],
-      response["sctpParameters"]);
+      response["sctpParameters"], &options);
+  // this->send_transport_ = device_.CreateSendTransport(
+  //     this, response["id"], response["iceParameters"],
+  //     response["iceCandidates"], response["dtlsParameters"],
+  //     response["sctpParameters"]);
 }
 
 void Broadcaster::CreateRecvTransport() {
   LOG(INFO) << "Broadcaster::CreateRecvTransport()";
   auto response = signaller_.CreateWebrtcTransport();
+
+  auto factory = GetPeerConnectionFactory();
+  mediasoupclient::PeerConnection::Options options;
+  options.factory = factory.get();
   this->recv_transport_ = device_.CreateRecvTransport(
       this, response["id"], response["iceParameters"],
       response["iceCandidates"], response["dtlsParameters"],
-      response["sctpParameters"]);
+      response["sctpParameters"], &options);
+  // this->recv_transport_ = device_.CreateRecvTransport(
+  //     this, response["id"], response["iceParameters"],
+  //     response["iceCandidates"], response["dtlsParameters"],
+  //     response["sctpParameters"]);
 }
 
 void Broadcaster::OnMessage(mediasoupclient::DataConsumer *data_consumer,

@@ -1,20 +1,17 @@
-#ifndef MSC_TEST_MEDIA_STREAM_TRACK_FACTORY_HPP
-#define MSC_TEST_MEDIA_STREAM_TRACK_FACTORY_HPP
+#pragma once
 
-#include "api/media_stream_interface.h"
+#include <api/media_stream_interface.h>
+#include <api/peer_connection_interface.h>
 
 #include "foreign_frame_generator.hpp"
 
-rtc::scoped_refptr<webrtc::AudioTrackInterface> createAudioTrack();
+rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>
+GetPeerConnectionFactory();
 
-rtc::scoped_refptr<webrtc::VideoTrackInterface> createVideoTrack();
-
-rtc::scoped_refptr<webrtc::VideoTrackInterface> createSquaresVideoTrack();
-
-rtc::scoped_refptr<webrtc::VideoTrackInterface> createVcmCapturerVideoTrack();
-
+rtc::scoped_refptr<webrtc::AudioTrackInterface> CreateAudioTrack();
+rtc::scoped_refptr<webrtc::VideoTrackInterface> CreateVideoTrack();
+rtc::scoped_refptr<webrtc::VideoTrackInterface> CreateSquaresVideoTrack();
+rtc::scoped_refptr<webrtc::VideoTrackInterface> CreateVcmCapturerVideoTrack();
 rtc::scoped_refptr<webrtc::VideoTrackInterface>
-createForeignVideoTrack(size_t width, size_t height, size_t fps, void *ctx,
+CreateForeignVideoTrack(size_t width, size_t height, size_t fps, void *ctx,
                         frame_callback_t callback);
-
-#endif

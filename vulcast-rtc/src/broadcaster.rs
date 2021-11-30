@@ -184,12 +184,13 @@ impl Broadcaster {
             .await?;
 
         // spawn on blocking thread
-        let weak_broadcaster = self.downgrade();
-        let data_consumer = tokio::task::spawn_blocking(move || {
-            let broadcaster = weak_broadcaster.upgrade().unwrap();
-            let sys = broadcaster.sys();
-            let data_consumer_rx = broadcaster.shared.data_consumer_tx.subscribe();
-            DataConsumer::new(sys, data_consumer_options, data_consumer_rx)
+        let data_consumer = tokio::task::spawn_blocking({
+            let broadcaster = self.clone();
+            move || {
+                let sys = broadcaster.sys();
+                let data_consumer_rx = broadcaster.shared.data_consumer_tx.subscribe();
+                DataConsumer::new(sys, data_consumer_options, data_consumer_rx)
+            }
         })
         .await
         .unwrap();
@@ -225,11 +226,12 @@ impl Broadcaster {
         fps: u32,
     ) -> ForeignProducer {
         // spawn on blocking thread
-        let weak_broadcaster = self.downgrade();
-        tokio::task::spawn_blocking(move || {
-            let broadcaster = weak_broadcaster.upgrade().unwrap();
-            let sys = broadcaster.sys();
-            ForeignProducer::new(sys, frame_source, width, height, fps)
+        tokio::task::spawn_blocking({
+            let broadcaster = self.clone();
+            move || {
+                let sys = broadcaster.sys();
+                ForeignProducer::new(sys, frame_source, width, height, fps)
+            }
         })
         .await
         .unwrap()

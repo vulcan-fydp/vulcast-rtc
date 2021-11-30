@@ -5,6 +5,8 @@ project(vulcast-rtc)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -ggdb")
+
 message("\n=========== vulcast-rtc Build Configuration ===========\n")
 message(STATUS "TARGET                 : " ${TARGET})
 message(STATUS "LIBWEBRTC_INCLUDE_PATH : " ${LIBWEBRTC_INCLUDE_PATH})

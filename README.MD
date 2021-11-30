@@ -21,11 +21,10 @@ Only cross-compilation for armv7-unknown-linux-gnueabihf is supported.
 
 1. Install cross-compiler toolchain for arm-linux-gnueabihf  
 
-You **must** use a toolchain that has a relatively old version of glibc (<2.32). 
-
-e.g. You can use 
- Raspberry Pi GCC Cross-Compiler Toolchains (Buster) gcc 10.3.0 from 
-https://github.com/abhiTronix/raspberry-pi-cross-compilers. Just extract it somewhere for now.
+You **must** use a toolchain that has a relatively old version of glibc (<2.32),
+such as Raspberry Pi GCC Cross-Compiler Toolchains (Buster) gcc 10.3.0 from 
+https://github.com/abhiTronix/raspberry-pi-cross-compilers. The rest of these
+instructions assume you are using this toolchain.
 
 2. Install Rust cross-compiler toolchain for armv7-unknown-linux-gnueabihf
 ```bash
@@ -40,10 +39,12 @@ Replace `/path/to/cross-pi-gcc-10.3.0-2` with where you extracted the toolchain 
 # add cross-compiler toolchain to PATH
 export PATH=/mnt/scratch/cross-pi-gcc-10.3.0-2/bin:$PATH
 # set linker for cargo to use for armv7-unknown-linux-gnueabihf target
-export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER='/path/to/cross-pi-gcc-10.3.0-2/bin/arm-linux-gnueabihf-gcc'
-# set paths to C++ standard library and platform defines for bindgen
-export BINDGEN_EXTRA_CLANG_ARGS='-I/path/to/cross-pi-gcc-10.3.0-2/arm-linux-gnueabihf/include/c++/10.3.0 \
-	 -I/path/to/cross-pi-gcc-10.3.0-2/arm-linux-gnueabihf/include/c++/10.3.0/arm-linux-gnueabihf/'
+export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER='\
+	/path/to/cross-pi-gcc-10.3.0-2/bin/arm-linux-gnueabihf-gcc'
+# set sysroot and platform defines for bindgen 
+export BINDGEN_EXTRA_CLANG_ARGS='\
+	--sysroot=/path/to/cross-pi-gcc-10.3.0-2/arm-linux-gnueabihf/ \
+	-I/path/to/cross-pi-gcc-10.3.0-2/arm-linux-gnueabihf/libc/usr/include/' 
 cargo build --example echo --target=armv7-unknown-linux-gnueabihf
 ```
 

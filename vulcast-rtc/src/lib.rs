@@ -13,7 +13,7 @@ static NATIVE_INIT: Once = Once::new();
 pub enum LogLevel {
     /// glog=INFO, ms=DEBUG, rtc=VERBOSE
     Spam,
-    /// glog=INFO, ms=DEBUG, rtc=INFO
+    /// glog=INFO, ms=WARN, rtc=INFO
     Verbose,
     /// glog=INFO, ms=WARN, rtc=WARNING
     Debug,
@@ -46,7 +46,7 @@ pub fn set_native_log_level(level: LogLevel) {
             }
             LogLevel::Verbose => {
                 sys::set_glog_log_level(sys::GlogLogLevel_INFO);
-                sys::set_mediasoup_log_level(sys::MediasoupLogLevel_LOG_DEBUG);
+                sys::set_mediasoup_log_level(sys::MediasoupLogLevel_LOG_WARN);
                 sys::set_rtc_log_level(sys::RtcLogLevel_LS_INFO);
             }
             LogLevel::Debug => {
