@@ -47,6 +47,7 @@ pub struct Opts {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
+    // vulcast_rtc::set_native_log_level(vulcast_rtc::LogLevel::Verbose);
     vulcast_rtc::set_native_log_level(vulcast_rtc::LogLevel::Debug);
 
     let opts: Opts = Opts::parse();
@@ -113,6 +114,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _producer = broadcaster
         .produce_video_from_frame_source(Arc::new(echo_frame_source), 352, 240, 60)
         .await;
+    // broadcaster.debug_produce_video_from_vcm_capturer();
+    // broadcaster.debug_produce_fake_media();
 
     let _ = graphql_signaller.shutdown().recv().await;
 

@@ -74,9 +74,12 @@ mediasoupclient::Producer *producer_new_from_fake_video(Broadcaster *b) {
   CHECK(producer != nullptr);
   return producer;
 }
-mediasoupclient::Producer *producer_new_from_vcm_capturer(Broadcaster *b) {
+mediasoupclient::Producer *
+producer_new_from_vcm_capturer(Broadcaster *b, int device_idx, uint32_t width,
+                               uint32_t height, uint32_t fps) {
   LOG(INFO) << "producer_new_from_vcm_capturer(" << std::hex << b << ")";
-  auto video_track = CreateVcmCapturerVideoTrack();
+  auto video_track =
+      CreateVcmCapturerVideoTrack(device_idx, width, height, fps);
   auto producer = b->Produce(video_track);
   CHECK(producer != nullptr);
   return producer;

@@ -86,7 +86,7 @@ impl Signaller for GraphQLSignaller {
         &self,
         transport_id: vulcast_rtc::types::TransportId,
         data_producer_id: vulcast_rtc::types::DataProducerId,
-    ) -> Result<vulcast_rtc::types::DataConsumerOptions, vulcast_rtc::broadcaster::Error> {
+    ) -> Result<vulcast_rtc::types::DataConsumerOptions, Box<dyn std::error::Error>> {
         Ok(self
             .client
             .query_unchecked::<schema::ConsumeData>(schema::consume_data::Variables {

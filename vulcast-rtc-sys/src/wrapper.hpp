@@ -55,7 +55,9 @@ void data_consumer_delete(mediasoupclient::DataConsumer *consumer);
 
 mediasoupclient::Producer *producer_new_from_fake_audio(Broadcaster *b);
 mediasoupclient::Producer *producer_new_from_fake_video(Broadcaster *b);
-mediasoupclient::Producer *producer_new_from_vcm_capturer(Broadcaster *b);
+mediasoupclient::Producer *
+producer_new_from_vcm_capturer(Broadcaster *b, int device_idx, uint32_t width,
+                               uint32_t height, uint32_t fps);
 mediasoupclient::Producer *
 producer_new_from_foreign(Broadcaster *b, uint32_t width, uint32_t height,
                           uint32_t fps, void *ctx, frame_callback_t callback);

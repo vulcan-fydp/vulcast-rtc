@@ -49,13 +49,13 @@ CreatePeerConnectionFactory() {
       networkThread, workerThread, signalingThread, fakeAudioCaptureModule,
       webrtc::CreateBuiltinAudioEncoderFactory(),
       webrtc::CreateBuiltinAudioDecoderFactory(),
-// #ifdef VULCAST_RTC_RPI
-//       webrtc::CreateRaspiVideoEncoderFactory(),
-//       webrtc::CreateRaspiVideoDecoderFactory(),
-// #else
+      // #ifdef VULCAST_RTC_RPI
+      //       webrtc::CreateRaspiVideoEncoderFactory(),
+      //       webrtc::CreateRaspiVideoDecoderFactory(),
+      // #else
       webrtc::CreateBuiltinVideoEncoderFactory(),
       webrtc::CreateBuiltinVideoDecoderFactory(),
-// #endif
+      // #endif
       nullptr /*audio_mixer*/, nullptr /*audio_processing*/);
 }
 } // namespace
@@ -108,10 +108,8 @@ rtc::scoped_refptr<webrtc::VideoTrackInterface> CreateSquaresVideoTrack() {
 
 class CapturerTrackSource : public webrtc::VideoTrackSource {
 public:
-  static rtc::scoped_refptr<CapturerTrackSource> Create() {
-    const size_t kWidth = 640;
-    const size_t kHeight = 480;
-    const size_t kFps = 30;
+  static rtc::scoped_refptr<CapturerTrackSource>
+  Create(int device_idx, size_t width, size_t height, size_t fps) {
     std::unique_ptr<webrtc::test::VcmCapturer> capturer;
     std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(
         webrtc::VideoCaptureFactory::CreateDeviceInfo());
@@ -119,12 +117,22 @@ public:
       return nullptr;
     }
     int num_devices = info->NumberOfDevices();
-    for (int i = 0; i < num_devices; ++i) {
+    if (device_idx > 0) {
+      CHECK(device_idx < num_devices);
       capturer = absl::WrapUnique(
-          webrtc::test::VcmCapturer::Create(kWidth, kHeight, kFps, i));
+          webrtc::test::VcmCapturer::Create(width, height, fps, device_idx));
       if (capturer) {
         return new rtc::RefCountedObject<CapturerTrackSource>(
             std::move(capturer));
+      }
+    } else {
+      for (int i = 0; i < num_devices; ++i) {
+        capturer = absl::WrapUnique(
+            webrtc::test::VcmCapturer::Create(width, height, fps, i));
+        if (capturer) {
+          return new rtc::RefCountedObject<CapturerTrackSource>(
+              std::move(capturer));
+        }
       }
     }
 
@@ -143,11 +151,13 @@ private:
   std::unique_ptr<webrtc::test::VcmCapturer> capturer_;
 };
 
-rtc::scoped_refptr<webrtc::VideoTrackInterface> CreateVcmCapturerVideoTrack() {
+rtc::scoped_refptr<webrtc::VideoTrackInterface>
+CreateVcmCapturerVideoTrack(int device_idx, size_t width, size_t height,
+                            size_t fps) {
   auto factory = GetPeerConnectionFactory();
 
   rtc::scoped_refptr<CapturerTrackSource> video_device =
-      CapturerTrackSource::Create();
+      CapturerTrackSource::Create(device_idx, width, height, fps);
   CHECK(video_device);
   return factory->CreateVideoTrack(rtc::CreateRandomUuid(), video_device);
 }

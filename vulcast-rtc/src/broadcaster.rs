@@ -14,6 +14,7 @@ use crate::data_consumer::{self, DataConsumer};
 use crate::foreign_producer::ForeignProducer;
 use crate::frame_source::FrameSource;
 use crate::types::*;
+use crate::vcm_capturer::VcmCapturer;
 use vulcast_rtc_sys as sys;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -75,9 +76,6 @@ pub struct WeakBroadcaster {
     shared: Weak<Shared>,
 }
 
-#[derive(Debug)]
-pub struct Error;
-
 #[async_trait]
 pub trait Signaller: Send + Sync {
     async fn server_rtp_capabilities(&self) -> RtpCapabilitiesFinalized;
@@ -98,7 +96,7 @@ pub trait Signaller: Send + Sync {
         &self,
         transport_id: TransportId,
         data_producer_id: DataProducerId,
-    ) -> Result<DataConsumerOptions, Error>;
+    ) -> Result<DataConsumerOptions, Box<dyn std::error::Error>>;
     async fn on_connection_state_changed(
         &self,
         transport_id: TransportId,
@@ -174,7 +172,7 @@ impl Broadcaster {
     pub async fn consume_data(
         &self,
         data_producer_id: DataProducerId,
-    ) -> Result<DataConsumer, Error> {
+    ) -> Result<DataConsumer, Box<dyn std::error::Error>> {
         let recv_transport_id = self.get_recv_transport_id();
 
         let data_consumer_options = self
@@ -208,11 +206,35 @@ impl Broadcaster {
 
     /// Produce a fake media stream from the first available video device for
     /// debugging purposes (leaks memory).
-    pub fn debug_produce_video_from_vcm_capturer(&self) {
-        // deadlock risk
-        unsafe {
-            sys::producer_new_from_vcm_capturer(self.sys());
-        }
+    // pub fn debug_produce_video_from_vcm_capturer(&self) {
+    //     // deadlock risk
+    //     unsafe {
+    //         sys::producer_new_from_vcm_capturer(self.sys());
+    //     }
+    // }
+
+    /// Produce a video stream using VcmCapturer, allowing us to capture from
+    /// any video device (e.g. webcam, capture card). The video device must
+    /// support the given width, height, and FPS using the I420 video format.
+    /// You can query the capabilities of your video device with
+    /// `v4l2-ctl -d /dev/videoX --list-formats-ext`.
+    pub async fn produce_video_from_vcm_capturer(
+        &self,
+        device_idx: Option<i32>,
+        width: u32,
+        height: u32,
+        fps: u32,
+    ) -> VcmCapturer {
+        // spawn on blocking thread
+        tokio::task::spawn_blocking({
+            let broadcaster = self.clone();
+            move || {
+                let sys = broadcaster.sys();
+                VcmCapturer::new(sys, device_idx, width, height, fps)
+            }
+        })
+        .await
+        .unwrap()
     }
 
     /// Produce a video stream from a programatically generated source.
@@ -302,7 +324,10 @@ extern "C" fn on_rtp_capabilities(ctx: *const c_void, rtp_caps: *const c_char) {
         serde_json::from_str::<serde_json::Value>(rtp_caps).unwrap(),
     ));
     tokio::spawn(async move {
-        let _ = tx.send(fut.await);
+        let _ = {
+            fut.await;
+            tx.send(())
+        };
     });
     let _ = rx.recv().unwrap();
 }
@@ -352,7 +377,10 @@ extern "C" fn on_connect_webrtc_transport(
             ),
         );
         tokio::spawn(async move {
-            let _ = tx.send(fut.await);
+            let _ = {
+                fut.await;
+                tx.send(())
+            };
         });
 
         let _ = rx.recv().unwrap();

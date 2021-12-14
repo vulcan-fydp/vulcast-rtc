@@ -3,6 +3,7 @@ pub mod data_consumer;
 pub mod foreign_producer;
 pub mod frame_source;
 pub mod types;
+pub mod vcm_capturer;
 
 use std::{ffi::CString, sync::Once};
 
