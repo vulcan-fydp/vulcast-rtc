@@ -112,7 +112,7 @@ mediasoupclient::Producer *Broadcaster::Produce(
   LOG(INFO) << "Broadcaster::Produce(" << std::hex << track << "," << std::hex
             << encodings << "," << codec_options << "," << appdata << ")";
   return send_transport_->Produce(this, track, encodings, &codec_options,
-                                  appdata);
+                                  nullptr, appdata);
 }
 
 void Broadcaster::CreateSendTransport() {
