@@ -50,7 +50,7 @@ bool VcmCapturer::Init(size_t width,
   capability_.width = static_cast<int32_t>(width);
   capability_.height = static_cast<int32_t>(height);
   capability_.maxFPS = static_cast<int32_t>(target_fps);
-  capability_.videoType = VideoType::kI420;
+  capability_.videoType = VideoType::kMJPEG;
 
   if (vcm_->StartCapture(capability_) != 0) {
     Destroy();
