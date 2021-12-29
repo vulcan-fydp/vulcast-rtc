@@ -7,21 +7,9 @@ use http::Uri;
 use tokio::net::TcpStream;
 use tokio_tungstenite::Connector;
 
-use crate::echo_frame_source::EchoFrameSource;
 use crate::graphql_signaller::GraphQLSignaller;
 use vulcast_rtc::broadcaster::Broadcaster;
 
-macro_rules! enclose {
-    ( ($( $x:ident ),*) $y:expr ) => {
-        {
-            $(let $x = $x.clone();)*
-            $y
-        }
-    };
-}
-
-mod controller_message;
-mod echo_frame_source;
 mod graphql_signaller;
 mod signal_schema;
 
@@ -47,7 +35,7 @@ pub struct Opts {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    vulcast_rtc::set_native_log_level(vulcast_rtc::LogLevel::Debug);
+    vulcast_rtc::set_native_log_level(vulcast_rtc::LogLevel::Verbose);
 
     let opts: Opts = Opts::parse();
 
@@ -106,15 +94,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let graphql_signaller = Arc::new(GraphQLSignaller::new(client.clone()));
     let broadcaster = Broadcaster::new(graphql_signaller.clone());
 
-    let data_producer_available = client.subscribe::<signal_schema::DataProducerAvailable>(
-        signal_schema::data_producer_available::Variables,
-    );
-    let echo_frame_source = EchoFrameSource::new(broadcaster.downgrade(), data_producer_available);
-    let _producer = broadcaster
-        .produce_video_from_frame_source(Arc::new(echo_frame_source), 352, 240, 60)
+    let _vcm_capturer = broadcaster
+        .produce_video_from_vcm_capturer(Some(-1), 1920, 1080, 30)
         .await;
-    // broadcaster.debug_produce_video_from_vcm_capturer();
-    // broadcaster.debug_produce_fake_media();
 
     let _ = graphql_signaller.shutdown().recv().await;
 

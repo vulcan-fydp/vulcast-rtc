@@ -11,7 +11,7 @@ use crate::frame_source::FrameSource;
 
 #[derive(Clone)]
 pub struct ForeignProducer {
-    shared: Pin<Arc<Shared>>,
+    _shared: Pin<Arc<Shared>>,
 }
 struct Shared {
     state: Mutex<State>,
@@ -50,7 +50,7 @@ impl ForeignProducer {
             let mut state = shared.state.lock().unwrap();
             state.sys_producer = sys_producer;
         }
-        ForeignProducer { shared }
+        ForeignProducer { _shared: shared }
     }
 }
 

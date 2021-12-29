@@ -8,7 +8,7 @@ use vulcast_rtc_sys as sys;
 
 #[derive(Clone)]
 pub struct VcmCapturer {
-    shared: Pin<Arc<Shared>>,
+    _shared: Pin<Arc<Shared>>,
 }
 struct Shared {
     state: Mutex<State>,
@@ -43,7 +43,7 @@ impl VcmCapturer {
             let mut state = shared.state.lock().unwrap();
             state.sys_producer = sys_producer;
         }
-        VcmCapturer { shared }
+        VcmCapturer { _shared: shared }
     }
 }
 
