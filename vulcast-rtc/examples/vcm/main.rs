@@ -98,6 +98,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .produce_video_from_vcm_capturer(Some(-1), 1920, 1080, 30)
         .await;
 
+    let _audio_producer = broadcaster.produce_audio_from_default_alsa().await;
+
     let _ = graphql_signaller.shutdown().recv().await;
 
     Ok(())

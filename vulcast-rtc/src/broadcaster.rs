@@ -10,6 +10,7 @@ use std::{
 use async_trait::async_trait;
 use tokio::sync::{broadcast, mpsc};
 
+use crate::alsa_capturer::AlsaCapturer;
 use crate::data_consumer::{self, DataConsumer};
 use crate::foreign_producer::ForeignProducer;
 use crate::frame_source::FrameSource;
@@ -196,13 +197,13 @@ impl Broadcaster {
     }
 
     /// Produce a fake media stream for debugging purposes (leaks memory).
-    pub fn debug_produce_fake_media(&self) {
-        // deadlock risk
-        unsafe {
-            sys::producer_new_from_fake_audio(self.sys());
-            sys::producer_new_from_fake_video(self.sys());
-        }
-    }
+    // pub fn debug_produce_fake_media(&self) {
+    //     // deadlock risk
+    //     unsafe {
+    //         sys::producer_new_from_fake_audio(self.sys());
+    //         sys::producer_new_from_fake_video(self.sys());
+    //     }
+    // }
 
     /// Produce a fake media stream from the first available video device for
     /// debugging purposes (leaks memory).
@@ -212,6 +213,20 @@ impl Broadcaster {
     //         sys::producer_new_from_vcm_capturer(self.sys());
     //     }
     // }
+
+    // Produce an audio stream using AlsaCapturer, from the default ALSA device.
+    pub async fn produce_audio_from_default_alsa(&self) -> AlsaCapturer {
+        // spawn on blocking thread
+        tokio::task::spawn_blocking({
+            let broadcaster = self.clone();
+            move || {
+                let sys = broadcaster.sys();
+                AlsaCapturer::new(sys)
+            }
+        })
+        .await
+        .unwrap()
+    }
 
     /// Produce a video stream using VcmCapturer, allowing us to capture from
     /// any video device (e.g. webcam, capture card). The video device must

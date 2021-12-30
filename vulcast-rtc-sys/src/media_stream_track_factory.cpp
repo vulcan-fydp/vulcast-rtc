@@ -27,36 +27,27 @@ namespace {
 
 static rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>
 CreatePeerConnectionFactory() {
-  auto networkThread = rtc::Thread::CreateWithSocketServer().release();
-  auto signalingThread = rtc::Thread::Create().release();
-  auto workerThread = rtc::Thread::Create().release();
+  auto network_thread = rtc::Thread::CreateWithSocketServer().release();
+  auto worker_thread = rtc::Thread::Create().release();
+  auto signalling_thread = rtc::Thread::Create().release();
 
-  networkThread->SetName("network_thread", nullptr);
-  signalingThread->SetName("signaling_thread", nullptr);
-  workerThread->SetName("worker_thread", nullptr);
+  network_thread->SetName("network_thread", nullptr);
+  worker_thread->SetName("worker_thread", nullptr);
+  signalling_thread->SetName("signalling_thread", nullptr);
 
-  if (!networkThread->Start() || !signalingThread->Start() ||
-      !workerThread->Start()) {
-    LOG(FATAL) << "thread start errored";
-  }
-
-  auto fakeAudioCaptureModule = FakeAudioCaptureModule::Create();
-  if (!fakeAudioCaptureModule) {
-    LOG(FATAL) << "audio capture module creation errored";
+  if (!network_thread->Start() || !worker_thread->Start() ||
+      !signalling_thread->Start()) {
+    LOG(FATAL) << "could not start webrtc threads";
   }
 
   return webrtc::CreatePeerConnectionFactory(
-      networkThread, workerThread, signalingThread, fakeAudioCaptureModule,
+      network_thread /*network_thread*/, worker_thread /*worker_thread*/,
+      signalling_thread /*signalling_thread*/, nullptr /*default_adm*/,
       webrtc::CreateBuiltinAudioEncoderFactory(),
       webrtc::CreateBuiltinAudioDecoderFactory(),
-      // #ifdef VULCAST_RTC_RPI
-      //       webrtc::CreateRaspiVideoEncoderFactory(),
-      //       webrtc::CreateRaspiVideoDecoderFactory(),
-      // #else
       webrtc::CreateBuiltinVideoEncoderFactory(),
-      webrtc::CreateBuiltinVideoDecoderFactory(),
-      // #endif
-      nullptr /*audio_mixer*/, nullptr /*audio_processing*/);
+      webrtc::CreateBuiltinVideoDecoderFactory(), nullptr /*audio_mixer*/,
+      nullptr /*audio_processing*/);
 }
 } // namespace
 

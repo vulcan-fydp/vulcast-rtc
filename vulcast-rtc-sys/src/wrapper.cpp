@@ -57,8 +57,8 @@ void data_consumer_delete(mediasoupclient::DataConsumer *consumer) {
   consumer->Close();
 }
 
-mediasoupclient::Producer *producer_new_from_fake_audio(Broadcaster *b) {
-  LOG(INFO) << "producer_new_from_fake_audio(" << std::hex << b << ")";
+mediasoupclient::Producer *producer_new_from_default_audio(Broadcaster *b) {
+  LOG(INFO) << "producer_new_from_default_audio(" << std::hex << b << ")";
   CHECK(b->CanProduceAudio());
   auto audio_track = CreateAudioTrack();
   nlohmann::json codec_options = {{"opusStereo", true}, {"opusDtx", true}};

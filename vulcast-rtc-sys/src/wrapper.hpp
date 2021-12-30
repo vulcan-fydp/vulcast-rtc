@@ -53,7 +53,7 @@ data_consumer_new(Broadcaster *b, const char *data_consumer_id,
                   const char *sctp_stream_parameters);
 void data_consumer_delete(mediasoupclient::DataConsumer *consumer);
 
-mediasoupclient::Producer *producer_new_from_fake_audio(Broadcaster *b);
+mediasoupclient::Producer *producer_new_from_default_audio(Broadcaster *b);
 mediasoupclient::Producer *producer_new_from_fake_video(Broadcaster *b);
 mediasoupclient::Producer *
 producer_new_from_vcm_capturer(Broadcaster *b, int device_idx, uint32_t width,
