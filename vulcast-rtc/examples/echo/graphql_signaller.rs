@@ -103,7 +103,7 @@ impl Signaller for GraphQLSignaller {
         state: vulcast_rtc::broadcaster::TransportConnectionState,
     ) {
         match state {
-            TransportConnectionState::Disconnected | TransportConnectionState::Failed => {
+            TransportConnectionState::Closed | TransportConnectionState::Failed => {
                 let _ = self.shutdown_tx.send(());
             }
             _ => (),
