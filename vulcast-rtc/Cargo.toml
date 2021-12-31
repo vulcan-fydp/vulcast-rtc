@@ -20,13 +20,13 @@ async-trait = "0.1.50"
 
 [dev-dependencies]
 graphql_client = "0.10"
-graphql-ws = { version = "0.3", git = "https://github.com/Netdex/graphql-ws" }
-tokio-tungstenite = { version = "0.15", features = ["rustls-tls"] }
-rustls = { version = "0.19", features = ["dangerous_configuration"] }
+graphql-ws = { version = "0.4", git = "https://github.com/Netdex/graphql-ws" }
+tokio-tungstenite = { version = "0.16", features = ["rustls-tls-webpki-roots"] }
+rustls = { version = "0.20", features = ["dangerous_configuration"] }
 http = "0.2"
-clap = "3.0.0-beta.2"
-webpki = "0.21.0"
-env_logger = "0.8"
+clap = { version = "3.0.0-rc.11", features = ["derive"] }
+webpki = "0.22.0"
+env_logger = "0.9"
 bitflags = "1.2"
-tiny-skia = "0.5.1"
+tiny-skia = "0.6.2"
 font8x8 = "0.3.1"
