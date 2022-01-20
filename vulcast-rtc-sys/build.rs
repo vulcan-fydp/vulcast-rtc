@@ -59,26 +59,4 @@ fn main() {
     println!("cargo:rustc-link-lib=static=webrtcextra");
     println!("cargo:rustc-link-lib=static=mediasoupclient");
     println!("cargo:rustc-link-lib=static=sdptransform");
-
-    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
-    if target_arch == "arm" {
-        let rpi_firmware_path = current_dir
-            .join("deps/rpi-firmware/opt/vc/lib")
-            .into_os_string()
-            .into_string()
-            .unwrap();
-        println!("cargo:rustc-link-search=native={}", rpi_firmware_path);
-
-        println!("cargo:rustc-link-lib=static=rpi-webrtc-streamer");
-        println!("cargo:rustc-link-lib=dylib=mmal_core");
-        println!("cargo:rustc-link-lib=dylib=mmal");
-        println!("cargo:rustc-link-lib=dylib=mmal_util");
-        println!("cargo:rustc-link-lib=dylib=vcos");
-        println!("cargo:rustc-link-lib=dylib=vcsm");
-        println!("cargo:rustc-link-lib=dylib=containers");
-        println!("cargo:rustc-link-lib=dylib=bcm_host");
-        println!("cargo:rustc-link-lib=dylib=mmal_vc_client");
-        println!("cargo:rustc-link-lib=dylib=mmal_components");
-        println!("cargo:rustc-link-lib=dylib=vchiq_arm");
-    }
 }

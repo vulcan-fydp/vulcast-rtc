@@ -18,11 +18,6 @@
 
 #include <glog/logging.h>
 
-#ifdef VULCAST_RTC_RPI
-#include "raspi_decoder.h"
-#include "raspi_encoder.h"
-#endif
-
 namespace {
 
 static rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>

@@ -28,9 +28,3 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(glog)
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${glog_SOURCE_DIR}/src)
 target_link_libraries(${PROJECT_NAME} PUBLIC glog::glog)
-
-# rpi firmware
-add_subdirectory(rpi-firmware)
-
-add_subdirectory(rpi-webrtc-streamer)
-target_link_libraries(${PROJECT_NAME} PUBLIC rpi-webrtc-streamer)
