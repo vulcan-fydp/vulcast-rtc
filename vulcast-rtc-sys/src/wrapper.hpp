@@ -57,7 +57,7 @@ mediasoupclient::Producer *producer_new_from_default_audio(Broadcaster *b);
 mediasoupclient::Producer *producer_new_from_fake_video(Broadcaster *b);
 mediasoupclient::Producer *
 producer_new_from_vcm_capturer(Broadcaster *b, int device_idx, uint32_t width,
-                               uint32_t height, uint32_t fps);
+                               uint32_t height, uint32_t fps, int video_type);
 mediasoupclient::Producer *
 producer_new_from_foreign(Broadcaster *b, uint32_t width, uint32_t height,
                           uint32_t fps, void *ctx, frame_callback_t callback);

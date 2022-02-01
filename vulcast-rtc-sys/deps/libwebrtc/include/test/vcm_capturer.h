@@ -26,7 +26,8 @@ class VcmCapturer : public TestVideoCapturer,
   static VcmCapturer* Create(size_t width,
                              size_t height,
                              size_t target_fps,
-                             size_t capture_device_index);
+                             size_t capture_device_index,
+                             webrtc::VideoType video_type);
   virtual ~VcmCapturer();
 
   void OnFrame(const VideoFrame& frame) override;
@@ -36,7 +37,8 @@ class VcmCapturer : public TestVideoCapturer,
   bool Init(size_t width,
             size_t height,
             size_t target_fps,
-            size_t capture_device_index);
+            size_t capture_device_index,
+            webrtc::VideoType video_type);
   void Destroy();
 
   rtc::scoped_refptr<VideoCaptureModule> vcm_;

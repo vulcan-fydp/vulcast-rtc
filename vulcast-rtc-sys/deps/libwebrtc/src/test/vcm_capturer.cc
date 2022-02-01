@@ -23,10 +23,9 @@ namespace test {
 
 VcmCapturer::VcmCapturer() : vcm_(nullptr) {}
 
-bool VcmCapturer::Init(size_t width,
-                       size_t height,
-                       size_t target_fps,
-                       size_t capture_device_index) {
+bool VcmCapturer::Init(size_t width, size_t height, size_t target_fps,
+                       size_t capture_device_index,
+                       webrtc::VideoType video_type) {
   std::unique_ptr<VideoCaptureModule::DeviceInfo> device_info(
       VideoCaptureFactory::CreateDeviceInfo());
 
@@ -50,7 +49,7 @@ bool VcmCapturer::Init(size_t width,
   capability_.width = static_cast<int32_t>(width);
   capability_.height = static_cast<int32_t>(height);
   capability_.maxFPS = static_cast<int32_t>(target_fps);
-  capability_.videoType = VideoType::kMJPEG;
+  capability_.videoType = video_type;
 
   if (vcm_->StartCapture(capability_) != 0) {
     Destroy();
@@ -62,12 +61,12 @@ bool VcmCapturer::Init(size_t width,
   return true;
 }
 
-VcmCapturer* VcmCapturer::Create(size_t width,
-                                 size_t height,
-                                 size_t target_fps,
-                                 size_t capture_device_index) {
+VcmCapturer *VcmCapturer::Create(size_t width, size_t height, size_t target_fps,
+                                 size_t capture_device_index,
+                                 webrtc::VideoType video_type) {
   std::unique_ptr<VcmCapturer> vcm_capturer(new VcmCapturer());
-  if (!vcm_capturer->Init(width, height, target_fps, capture_device_index)) {
+  if (!vcm_capturer->Init(width, height, target_fps, capture_device_index,
+                          video_type)) {
     RTC_LOG(LS_WARNING) << "Failed to create VcmCapturer(w = " << width
                         << ", h = " << height << ", fps = " << target_fps
                         << ")";
@@ -86,13 +85,11 @@ void VcmCapturer::Destroy() {
   vcm_ = nullptr;
 }
 
-VcmCapturer::~VcmCapturer() {
-  Destroy();
-}
+VcmCapturer::~VcmCapturer() { Destroy(); }
 
-void VcmCapturer::OnFrame(const VideoFrame& frame) {
+void VcmCapturer::OnFrame(const VideoFrame &frame) {
   TestVideoCapturer::OnFrame(frame);
 }
 
-}  // namespace test
-}  // namespace webrtc
+} // namespace test
+} // namespace webrtc

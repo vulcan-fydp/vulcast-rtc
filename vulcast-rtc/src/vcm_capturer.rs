@@ -19,6 +19,19 @@ struct State {
     sys_producer: *mut sys::mediasoupclient_Producer,
 }
 
+pub enum VideoType {
+    Unknown = 0,
+    I420,
+    IYUV,
+    RGB24,
+    ARGB,
+    RGB565,
+    YUY2,
+    YV12,
+    UYVY,
+    MJPEG,
+    BGRA,
+}
 impl VcmCapturer {
     pub fn new(
         sys_broadcaster: *mut sys::Broadcaster,
@@ -26,6 +39,7 @@ impl VcmCapturer {
         width: u32,
         height: u32,
         fps: u32,
+        video_type: VideoType,
     ) -> Self {
         let shared = Arc::pin(Shared {
             state: Mutex::new(State {
@@ -39,6 +53,7 @@ impl VcmCapturer {
                 width,
                 height,
                 fps,
+                video_type as i32
             );
             let mut state = shared.state.lock().unwrap();
             state.sys_producer = sys_producer;

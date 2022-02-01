@@ -15,7 +15,7 @@ use crate::data_consumer::{self, DataConsumer};
 use crate::foreign_producer::ForeignProducer;
 use crate::frame_source::FrameSource;
 use crate::types::*;
-use crate::vcm_capturer::VcmCapturer;
+use crate::vcm_capturer::{VcmCapturer, VideoType};
 use vulcast_rtc_sys as sys;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -230,9 +230,29 @@ impl Broadcaster {
 
     /// Produce a video stream using VcmCapturer, allowing us to capture from
     /// any video device (e.g. webcam, capture card). The video device must
-    /// support the given width, height, and FPS using the I420 video format.
-    /// You can query the capabilities of your video device with
+    /// support the given width, height, and FPS with the specified video
+    /// format. You can query the capabilities of your video device with
     /// `v4l2-ctl -d /dev/videoX --list-formats-ext`.
+    pub async fn produce_video_from_vcm_capturer_with_format(
+        &self,
+        device_idx: Option<i32>,
+        width: u32,
+        height: u32,
+        fps: u32,
+        video_type: VideoType,
+    ) -> VcmCapturer {
+        // spawn on blocking thread
+        tokio::task::spawn_blocking({
+            let broadcaster = self.clone();
+            move || {
+                let sys = broadcaster.sys();
+                VcmCapturer::new(sys, device_idx, width, height, fps, video_type)
+            }
+        })
+        .await
+        .unwrap()
+    }
+
     pub async fn produce_video_from_vcm_capturer(
         &self,
         device_idx: Option<i32>,
@@ -240,16 +260,14 @@ impl Broadcaster {
         height: u32,
         fps: u32,
     ) -> VcmCapturer {
-        // spawn on blocking thread
-        tokio::task::spawn_blocking({
-            let broadcaster = self.clone();
-            move || {
-                let sys = broadcaster.sys();
-                VcmCapturer::new(sys, device_idx, width, height, fps)
-            }
-        })
+        self.produce_video_from_vcm_capturer_with_format(
+            device_idx,
+            width,
+            height,
+            fps,
+            VideoType::MJPEG,
+        )
         .await
-        .unwrap()
     }
 
     /// Produce a video stream from a programatically generated source.

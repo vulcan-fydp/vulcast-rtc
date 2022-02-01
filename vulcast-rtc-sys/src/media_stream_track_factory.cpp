@@ -95,7 +95,8 @@ rtc::scoped_refptr<webrtc::VideoTrackInterface> CreateSquaresVideoTrack() {
 class CapturerTrackSource : public webrtc::VideoTrackSource {
 public:
   static rtc::scoped_refptr<CapturerTrackSource>
-  Create(int device_idx, size_t width, size_t height, size_t fps) {
+  Create(int device_idx, size_t width, size_t height, size_t fps,
+         webrtc::VideoType video_type) {
     std::unique_ptr<webrtc::test::VcmCapturer> capturer;
     std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(
         webrtc::VideoCaptureFactory::CreateDeviceInfo());
@@ -105,16 +106,16 @@ public:
     int num_devices = info->NumberOfDevices();
     if (device_idx > 0) {
       CHECK(device_idx < num_devices);
-      capturer = absl::WrapUnique(
-          webrtc::test::VcmCapturer::Create(width, height, fps, device_idx));
+      capturer = absl::WrapUnique(webrtc::test::VcmCapturer::Create(
+          width, height, fps, device_idx, video_type));
       if (capturer) {
         return new rtc::RefCountedObject<CapturerTrackSource>(
             std::move(capturer));
       }
     } else {
       for (int i = 0; i < num_devices; ++i) {
-        capturer = absl::WrapUnique(
-            webrtc::test::VcmCapturer::Create(width, height, fps, i));
+        capturer = absl::WrapUnique(webrtc::test::VcmCapturer::Create(
+            width, height, fps, i, video_type));
         if (capturer) {
           return new rtc::RefCountedObject<CapturerTrackSource>(
               std::move(capturer));
@@ -139,11 +140,11 @@ private:
 
 rtc::scoped_refptr<webrtc::VideoTrackInterface>
 CreateVcmCapturerVideoTrack(int device_idx, size_t width, size_t height,
-                            size_t fps) {
+                            size_t fps, webrtc::VideoType video_type) {
   auto factory = GetPeerConnectionFactory();
 
   rtc::scoped_refptr<CapturerTrackSource> video_device =
-      CapturerTrackSource::Create(device_idx, width, height, fps);
+      CapturerTrackSource::Create(device_idx, width, height, fps, video_type);
   CHECK(video_device);
   return factory->CreateVideoTrack(rtc::CreateRandomUuid(), video_device);
 }
