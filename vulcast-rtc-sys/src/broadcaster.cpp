@@ -19,65 +19,6 @@ Broadcaster::Broadcaster(Signaller signaller) : signaller_(signaller) {}
 
 Broadcaster::~Broadcaster() { this->Stop(); }
 
-void Broadcaster::OnTransportClose(mediasoupclient::Producer *producer) {
-  LOG(INFO) << "Broadcaster::OnTransportClose(" << producer->GetId() << ")";
-}
-
-/* Transport::Listener::OnConnect
- *
- * Fired for the first Transport::Consume() or Transport::Produce().
- * Update the already created remote transport with the local DTLS parameters.
- */
-std::future<void> Broadcaster::OnConnect(mediasoupclient::Transport *transport,
-                                         const json &dtlsParameters) {
-  LOG(INFO) << "Broadcaster::OnConnect(" << transport->GetId() << ","
-            << dtlsParameters << ")";
-  std::promise<void> promise;
-  signaller_.OnConnectWebrtcTransport(transport->GetId(), dtlsParameters);
-  promise.set_value();
-  return promise.get_future();
-}
-
-/*
- * Transport::Listener::OnConnectionStateChange.
- */
-void Broadcaster::OnConnectionStateChange(mediasoupclient::Transport *transport,
-                                          const std::string &connectionState) {
-  LOG(INFO) << "Broadcaster::OnConnectionStateChange(" << transport->GetId()
-            << "," << connectionState << ")";
-  signaller_.OnConnectionStateChanged(transport->GetId(), connectionState);
-}
-
-/* Producer::Listener::OnProduce
- *
- * Fired when a producer needs to be created in mediasoup.
- * Retrieve the remote producer ID and feed the caller with it.
- */
-std::future<std::string>
-Broadcaster::OnProduce(mediasoupclient::SendTransport *transport,
-                       const std::string &kind, json rtpParameters,
-                       const json &appData) {
-  LOG(INFO) << "Broadcaster::OnProduce(" << transport->GetId() << "," << kind
-            << "," << rtpParameters << "," << appData << ")";
-  std::promise<std::string> promise;
-  promise.set_value(
-      signaller_.OnProduce(transport->GetId(), kind, rtpParameters));
-  return promise.get_future();
-}
-
-/* Producer::Listener::OnProduceData
- *
- * Fired when a data producer needs to be created in mediasoup.
- * Retrieve the remote producer ID and feed the caller with it.
- */
-std::future<std::string> Broadcaster::OnProduceData(
-    mediasoupclient::SendTransport * /*transport*/,
-    const json & /*sctpStreamParameters*/, const std::string & /*label*/,
-    const std::string & /*protocol*/, const json & /*appData*/) {
-  // unreachable
-  LOG(FATAL) << "Broadcaster::OnProduceData()";
-}
-
 void Broadcaster::Start() {
   LOG(INFO) << "Broadcaster::Start()";
   auto routerRtpCapabilities = signaller_.GetServerRtpCapabilities();
@@ -95,6 +36,10 @@ void Broadcaster::Start() {
   this->CreateRecvTransport();
 }
 
+mediasoupclient::DataProducer *Broadcaster::ProduceData() {
+  LOG(INFO) << "Broadcaster::ProduceData()";
+  return send_transport_->ProduceData(this);
+}
 mediasoupclient::DataConsumer *
 Broadcaster::ConsumeData(const std::string &data_consumer_id,
                          const std::string &data_producer_id,
@@ -126,10 +71,6 @@ void Broadcaster::CreateSendTransport() {
       this, response["id"], response["iceParameters"],
       response["iceCandidates"], response["dtlsParameters"],
       response["sctpParameters"], &options);
-  // this->send_transport_ = device_.CreateSendTransport(
-  //     this, response["id"], response["iceParameters"],
-  //     response["iceCandidates"], response["dtlsParameters"],
-  //     response["sctpParameters"]);
 }
 
 void Broadcaster::CreateRecvTransport() {
@@ -143,12 +84,69 @@ void Broadcaster::CreateRecvTransport() {
       this, response["id"], response["iceParameters"],
       response["iceCandidates"], response["dtlsParameters"],
       response["sctpParameters"], &options);
-  // this->recv_transport_ = device_.CreateRecvTransport(
-  //     this, response["id"], response["iceParameters"],
-  //     response["iceCandidates"], response["dtlsParameters"],
-  //     response["sctpParameters"]);
 }
 
+void Broadcaster::Stop() {
+  LOG(INFO) << "Broadcaster::Stop()";
+  if (this->recv_transport_) {
+    recv_transport_->Close();
+  }
+  if (this->send_transport_) {
+    send_transport_->Close();
+  }
+}
+
+/* SendTransport::Listener */
+std::future<void> Broadcaster::OnConnect(mediasoupclient::Transport *transport,
+                                         const json &dtlsParameters) {
+  // Fired for the first Transport::Consume() or Transport::Produce().
+  // Update the already created remote transport with the local DTLS parameters.
+  LOG(INFO) << "Broadcaster::OnConnect(" << transport->GetId() << ","
+            << dtlsParameters << ")";
+  std::promise<void> promise;
+  signaller_.OnConnectWebrtcTransport(transport->GetId(), dtlsParameters);
+  promise.set_value();
+  return promise.get_future();
+}
+
+void Broadcaster::OnConnectionStateChange(mediasoupclient::Transport *transport,
+                                          const std::string &connectionState) {
+  LOG(INFO) << "Broadcaster::OnConnectionStateChange(" << transport->GetId()
+            << "," << connectionState << ")";
+  signaller_.OnConnectionStateChanged(transport->GetId(), connectionState);
+}
+
+std::future<std::string>
+Broadcaster::OnProduce(mediasoupclient::SendTransport *transport,
+                       const std::string &kind, json rtpParameters,
+                       const json &appData) {
+  // Fired when a producer needs to be created in mediasoup.
+  // Retrieve the remote producer ID and feed the caller with it.
+  LOG(INFO) << "Broadcaster::OnProduce(" << transport->GetId() << "," << kind
+            << "," << rtpParameters << "," << appData << ")";
+  std::promise<std::string> promise;
+  promise.set_value(
+      signaller_.OnProduce(transport->GetId(), kind, rtpParameters));
+  return promise.get_future();
+}
+
+std::future<std::string>
+Broadcaster::OnProduceData(mediasoupclient::SendTransport *transport,
+                           const json &sctpStreamParameters,
+                           const std::string &label,
+                           const std::string &protocol, const json &appData) {
+  // Fired when a data producer needs to be created in mediasoup.
+  // Retrieve the remote producer ID and feed the caller with it.
+  LOG(INFO) << "Broadcaster::OnProduceData(" << transport->GetId() << ","
+            << sctpStreamParameters << "," << label << "," << protocol << ","
+            << appData << ")";
+  std::promise<std::string> promise;
+  promise.set_value(
+      signaller_.OnProduceData(transport->GetId(), sctpStreamParameters));
+  return promise.get_future();
+}
+
+/* DataConsumer::Listener */
 void Broadcaster::OnMessage(mediasoupclient::DataConsumer *data_consumer,
                             const webrtc::DataBuffer &buffer) {
   LOG(INFO) << "Broadcaster::OnMessage(" << data_consumer->GetId()
@@ -186,12 +184,28 @@ void Broadcaster::OnTransportClose(
             << ")";
 }
 
-void Broadcaster::Stop() {
-  LOG(INFO) << "Broadcaster::Stop()";
-  if (this->recv_transport_) {
-    recv_transport_->Close();
-  }
-  if (this->send_transport_) {
-    send_transport_->Close();
-  }
+/* Producer::Listener */
+void Broadcaster::OnTransportClose(mediasoupclient::Producer *producer) {
+  LOG(INFO) << "Broadcaster::OnTransportClose(" << producer->GetId() << ")";
+}
+
+/* DataProducer::Listener */
+void Broadcaster::OnOpen(mediasoupclient::DataProducer *data_producer) {
+  //
+  signaller_.OnDataConsumerStateChanged(
+      data_producer->GetId(), webrtc::DataChannelInterface::DataStateString(
+                                  data_producer->GetReadyState()));
+}
+void Broadcaster::OnClose(mediasoupclient::DataProducer *data_producer) {
+
+  //
+}
+void Broadcaster::OnBufferedAmountChange(
+    mediasoupclient::DataProducer *data_producer, uint64_t sent_data_size) {
+
+  //
+}
+void Broadcaster::OnTransportClose(
+    mediasoupclient::DataProducer *data_producer) {
+  //
 }

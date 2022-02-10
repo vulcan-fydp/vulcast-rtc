@@ -14,9 +14,10 @@
 class Broadcaster : public mediasoupclient::SendTransport::Listener,
                     public mediasoupclient::RecvTransport::Listener,
                     mediasoupclient::Producer::Listener,
+                    mediasoupclient::DataProducer::Listener,
                     mediasoupclient::DataConsumer::Listener {
 public:
-  /* Virtual methods inherited from SendTransport::Listener. */
+  /* SendTransport::Listener */
 public:
   std::future<void> OnConnect(mediasoupclient::Transport *transport,
                               const nlohmann::json &dtlsParameters) override;
@@ -26,18 +27,25 @@ public:
                                      const std::string &kind,
                                      nlohmann::json rtpParameters,
                                      const nlohmann::json &appData) override;
-
   std::future<std::string>
   OnProduceData(mediasoupclient::SendTransport *transport,
                 const nlohmann::json &sctpStreamParameters,
                 const std::string &label, const std::string &protocol,
                 const nlohmann::json &appData) override;
 
-  /* Virtual methods inherited from Producer::Listener. */
+  /* Producer::Listener */
 public:
   void OnTransportClose(mediasoupclient::Producer *producer) override;
 
-  /* Virtual methods inherited from DataConsumer::Listener */
+  /* DataProducer::Listener */
+public:
+  void OnOpen(mediasoupclient::DataProducer *dataProducer) override;
+  void OnClose(mediasoupclient::DataProducer *dataProducer) override;
+  void OnBufferedAmountChange(mediasoupclient::DataProducer *dataProducer,
+                              uint64_t sentDataSize) override;
+  void OnTransportClose(mediasoupclient::DataProducer *dataProducer) override;
+
+  /* DataConsumer::Listener */
 public:
   void OnMessage(mediasoupclient::DataConsumer *data_consumer,
                  const webrtc::DataBuffer &buffer) override;
@@ -54,6 +62,7 @@ public:
   Broadcaster(Signaller signaller);
   virtual ~Broadcaster();
 
+  mediasoupclient::DataProducer *ProduceData();
   mediasoupclient::DataConsumer *
   ConsumeData(const std::string &data_consumer_id,
               const std::string &data_producer_id,

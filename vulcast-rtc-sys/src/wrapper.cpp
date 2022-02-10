@@ -13,7 +13,7 @@
 #include "media_stream_track_factory.hpp"
 
 namespace {
-[[nodiscard]] char *copy_cstr(const std::string &str) {
+[[nodiscard]] char *cpp_marshal_str(const std::string &str) {
   char *buf = new char[str.length() + 1];
   std::strcpy(buf, str.c_str());
   return buf;
@@ -38,9 +38,8 @@ void broadcaster_delete(Broadcaster *broadcaster) {
   LOG(INFO) << "broadcaster_delete(" << std::hex << broadcaster << ")";
   delete broadcaster;
 }
-char *broadcaster_get_recv_transport_id(Broadcaster *b) {
-  std::string recv_transport_id = b->GetRecvTransportId();
-  return copy_cstr(recv_transport_id);
+char *broadcaster_marshal_recv_transport_id(Broadcaster *b) {
+  return cpp_marshal_str(b->GetRecvTransportId());
 }
 
 mediasoupclient::DataConsumer *
@@ -99,6 +98,20 @@ void producer_delete(mediasoupclient::Producer *producer) {
   CHECK(producer != nullptr);
   producer->Close();
 }
+mediasoupclient::DataProducer *data_producer_new(Broadcaster *b) {
+  LOG(INFO) << "data_producer_new(" << std::hex << b << ")";
+  auto data_producer = b->ProduceData();
+  CHECK(data_producer != nullptr);
+  return data_producer;
+}
+char *data_producer_marshal_id(mediasoupclient::DataProducer *data_producer) {
+  return cpp_marshal_str(data_producer->GetId());
+}
+void data_producer_delete(mediasoupclient::DataProducer *data_producer) {
+  LOG(INFO) << "data_producer_delete(" << std::hex << data_producer << ")";
+  CHECK(data_producer != nullptr);
+  data_producer->Close();
+}
 
 void debug_enumerate_capture_devices() {
   LOG(INFO) << "debug_enumerate_capture_devices()";
@@ -136,4 +149,4 @@ void set_rtc_log_level(RtcLogLevel level) {
   rtc::LogMessage::LogToDebug(static_cast<rtc::LoggingSeverity>(level));
 }
 
-void delete_str(char *str) { delete[] str; }
+void cpp_unmarshal_str(char *str) { delete[] str; }

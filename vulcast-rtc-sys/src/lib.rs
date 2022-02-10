@@ -10,6 +10,6 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 /// Retake ownership of a string that was previously released with CString::into_raw.
 #[no_mangle]
-pub unsafe extern "C" fn retake_cstr(s: *mut c_char) {
+pub unsafe extern "C" fn rust_unmarshal_str(s: *mut c_char) {
     drop(CString::from_raw(s));
 }

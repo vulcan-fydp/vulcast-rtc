@@ -44,6 +44,8 @@ pub struct RtpCapabilitiesFinalized(serde_json::Value);
 pub struct WebRtcTransportOptions(serde_json::Value);
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, From, Into)]
 pub struct DtlsParameters(serde_json::Value);
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, From, Into)]
+pub struct SctpStreamParameters(serde_json::Value);
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, From, Into)]
 #[serde(rename_all = "camelCase")]

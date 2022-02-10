@@ -46,7 +46,6 @@ pub struct Opts {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    vulcast_rtc::set_native_log_level(vulcast_rtc::LogLevel::Debug);
 
     let opts: Opts = Opts::parse();
 

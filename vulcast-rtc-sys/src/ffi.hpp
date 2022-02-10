@@ -1,5 +1,5 @@
 #pragma once
 
 extern "C" {
-void retake_cstr(char *);
+void rust_unmarshal_str(char *);
 }

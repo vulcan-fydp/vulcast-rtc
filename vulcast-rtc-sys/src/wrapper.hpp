@@ -6,6 +6,7 @@
 class Broadcaster;
 namespace mediasoupclient {
 class DataConsumer;
+class DataProducer;
 class Producer;
 } // namespace mediasoupclient
 
@@ -24,6 +25,9 @@ struct SignalHandler {
   // Called when client wants to produce. Expects ProducerId.
   char *(*on_produce)(const void *ctx, const char *transport_id,
                       const char *kind, const char *rtp_parameters);
+  // Called when client wants to produce data. Expects ProducerId.
+  char *(*on_produce_data)(const void *ctx, const char *transport_id,
+                           const char *sctp_stream_parameters);
   // Called when client wants to connect WebRTC transport.
   void (*on_connect_webrtc_transport)(const void *ctx, const char *transport_id,
                                       const char *dtls_parameters);
@@ -36,6 +40,10 @@ struct SignalHandler {
   void (*on_data_consumer_state_changed)(const void *ctx,
                                          const char *data_consumer_id,
                                          const char *state);
+  // Called when a DataProducer RTC DataState changes.
+  void (*on_data_producer_state_changed)(const void *ctx,
+                                         const char *data_producer_id,
+                                         const char *state);
   // Called when a transport connection state changes.
   void (*on_connection_state_changed)(const void *ctx, const char *transport_id,
                                       const char *state);
@@ -45,7 +53,7 @@ void init(const char *argv0);
 
 Broadcaster *broadcaster_new(const void *ctx, SignalHandler signal_handler);
 void broadcaster_delete(Broadcaster *broadcaster);
-char *broadcaster_get_recv_transport_id(Broadcaster *b);
+char *broadcaster_marshal_recv_transport_id(Broadcaster *b);
 
 mediasoupclient::DataConsumer *
 data_consumer_new(Broadcaster *b, const char *data_consumer_id,
@@ -63,6 +71,10 @@ producer_new_from_foreign(Broadcaster *b, uint32_t width, uint32_t height,
                           uint32_t fps, void *ctx, frame_callback_t callback);
 void producer_delete(mediasoupclient::Producer *producer);
 
+mediasoupclient::DataProducer *data_producer_new(Broadcaster *b);
+char *data_producer_marshal_id(mediasoupclient::DataProducer *data_producer);
+void data_producer_delete(mediasoupclient::DataProducer *data_producer);
+
 void debug_enumerate_capture_devices();
 
 enum GlogLogLevel { INFO, WARNING, ERROR, FATAL };
@@ -73,4 +85,4 @@ void set_glog_log_level(GlogLogLevel level);
 void set_mediasoup_log_level(MediasoupLogLevel level);
 void set_rtc_log_level(RtcLogLevel level);
 
-void delete_str(char *str);
+void cpp_unmarshal_str(char *str);

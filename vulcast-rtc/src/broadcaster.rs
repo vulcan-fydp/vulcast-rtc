@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use tokio::sync::{broadcast, mpsc};
 
 use crate::alsa_capturer::AlsaCapturer;
-use crate::data_consumer::{self, DataConsumer};
+use crate::data_channel::{self, DataConsumer};
 use crate::foreign_producer::ForeignProducer;
 use crate::frame_source::FrameSource;
 use crate::types::*;
@@ -63,7 +63,7 @@ struct Shared {
     state: Mutex<State>,
     signaller: Arc<dyn Signaller>,
 
-    data_consumer_tx: broadcast::Sender<data_consumer::Message>,
+    data_channel_tx: broadcast::Sender<data_channel::Message>,
     channel_tx: mpsc::UnboundedSender<InternalMessage>,
 }
 unsafe impl Send for Shared {}
@@ -88,6 +88,11 @@ pub trait Signaller: Send + Sync {
         kind: MediaKind,
         rtp_parameters: RtpParameters,
     ) -> ProducerId;
+    async fn on_produce_data(
+        &self,
+        transport_id: TransportId,
+        sctp_stream_parameters: SctpStreamParameters,
+    ) -> DataProducerId;
     async fn on_connect_webrtc_transport(
         &self,
         transport_id: TransportId,
@@ -116,7 +121,7 @@ impl Broadcaster {
                 sys_broadcaster: ptr::null_mut(),
             }),
             signaller: signaller.clone(),
-            data_consumer_tx: broadcast::channel(16).0,
+            data_channel_tx: broadcast::channel(16).0,
             channel_tx,
         });
         unsafe {
@@ -127,10 +132,12 @@ impl Broadcaster {
                     server_rtp_capabilities: Some(server_rtp_capabilities),
                     on_rtp_capabilities: Some(on_rtp_capabilities),
                     on_produce: Some(on_produce),
+                    on_produce_data: Some(on_produce_data),
                     on_connect_webrtc_transport: Some(on_connect_webrtc_transport),
                     create_webrtc_transport: Some(create_webrtc_transport),
                     on_data_consumer_message: Some(on_data_consumer_message),
                     on_data_consumer_state_changed: Some(on_data_consumer_state_changed),
+                    on_data_producer_state_changed: Some(on_data_producer_state_changed),
                     on_connection_state_changed: Some(on_connection_state_changed),
                 },
             );
@@ -157,14 +164,14 @@ impl Broadcaster {
 
     fn get_recv_transport_id(&self) -> TransportId {
         unsafe {
-            let recv_transport_id_ptr = sys::broadcaster_get_recv_transport_id(self.sys());
+            let recv_transport_id_marshal = sys::broadcaster_marshal_recv_transport_id(self.sys());
             let recv_transport_id = TransportId::from(
-                CStr::from_ptr(recv_transport_id_ptr)
+                CStr::from_ptr(recv_transport_id_marshal)
                     .to_str()
                     .unwrap()
                     .to_owned(),
             );
-            sys::delete_str(recv_transport_id_ptr);
+            sys::cpp_unmarshal_str(recv_transport_id_marshal);
             recv_transport_id
         }
     }
@@ -187,7 +194,7 @@ impl Broadcaster {
             let broadcaster = self.clone();
             move || {
                 let sys = broadcaster.sys();
-                let data_consumer_rx = broadcaster.shared.data_consumer_tx.subscribe();
+                let data_consumer_rx = broadcaster.shared.data_channel_tx.subscribe();
                 DataConsumer::new(sys, data_consumer_options, data_consumer_rx)
             }
         })
@@ -391,6 +398,32 @@ extern "C" fn on_produce(
         CString::new(String::from(producer_id)).unwrap().into_raw()
     }
 }
+extern "C" fn on_produce_data(
+    ctx: *const c_void,
+    transport_id: *const c_char,
+    sctp_stream_parameters: *const c_char,
+) -> *mut c_char {
+    log::trace!("on_produce_data({:?})", ctx);
+    unsafe {
+        let shared = &*(ctx as *const Shared);
+        let transport_id_cstr = CStr::from_ptr(transport_id);
+        let sctp_stream_parameters = CStr::from_ptr(sctp_stream_parameters).to_str().unwrap();
+
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        let fut = shared.signaller.on_produce_data(
+            TransportId::from(transport_id_cstr.to_str().unwrap().to_owned()),
+            SctpStreamParameters::from(
+                serde_json::from_str::<serde_json::Value>(sctp_stream_parameters).unwrap(),
+            ),
+        );
+        tokio::spawn(async move {
+            let _ = tx.send(fut.await);
+        });
+
+        let producer_id = rx.recv().unwrap();
+        CString::new(String::from(producer_id)).unwrap().into_raw()
+    }
+}
 extern "C" fn on_connect_webrtc_transport(
     ctx: *const c_void,
     transport_id: *const c_char,
@@ -430,7 +463,7 @@ extern "C" fn on_data_consumer_message(
         let shared = &*(ctx as *const Shared);
         let data_consumer_id_cstr = CStr::from_ptr(data_consumer_id);
         let message_data = std::slice::from_raw_parts(data as *const u8, len as usize).to_vec();
-        let _ = shared.data_consumer_tx.send(data_consumer::Message::Data {
+        let _ = shared.data_channel_tx.send(data_channel::Message::Data {
             data_consumer_id: DataConsumerId::from(
                 data_consumer_id_cstr.to_str().unwrap().to_owned(),
             ),
@@ -449,12 +482,33 @@ extern "C" fn on_data_consumer_state_changed(
         let data_consumer_id_cstr = CStr::from_ptr(data_consumer_id);
         let state_cstr = CStr::from_ptr(state);
         let _ = shared
-            .data_consumer_tx
-            .send(data_consumer::Message::StateChanged {
+            .data_channel_tx
+            .send(data_channel::Message::DataConsumerStateChanged {
                 data_consumer_id: DataConsumerId::from(
                     data_consumer_id_cstr.to_str().unwrap().to_owned(),
                 ),
-                state: data_consumer::DataChannelState::from_str(state_cstr.to_str().unwrap())
+                state: data_channel::DataChannelState::from_str(state_cstr.to_str().unwrap())
+                    .unwrap(),
+            });
+    }
+}
+extern "C" fn on_data_producer_state_changed(
+    ctx: *const c_void,
+    data_producer_id: *const c_char,
+    state: *const c_char,
+) {
+    log::trace!("on_data_producer_state_changed({:?})", ctx);
+    unsafe {
+        let shared = &*(ctx as *const Shared);
+        let data_producer_id_cstr = CStr::from_ptr(data_producer_id);
+        let state_cstr = CStr::from_ptr(state);
+        let _ = shared
+            .data_channel_tx
+            .send(data_channel::Message::DataProducerStateChanged {
+                data_producer_id: DataProducerId::from(
+                    data_producer_id_cstr.to_str().unwrap().to_owned(),
+                ),
+                state: data_channel::DataChannelState::from_str(state_cstr.to_str().unwrap())
                     .unwrap(),
             });
     }

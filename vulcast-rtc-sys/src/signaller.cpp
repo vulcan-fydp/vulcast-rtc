@@ -11,7 +11,7 @@ nlohmann::json Signaller::GetServerRtpCapabilities() const {
   char *rtp_capabilities_cstr = handler_.server_rtp_capabilities(ctx_);
   DCHECK(rtp_capabilities_cstr != nullptr);
   auto rtp_capabilities = nlohmann::json::parse(rtp_capabilities_cstr);
-  retake_cstr(rtp_capabilities_cstr);
+  cpp_unmarshal_str(rtp_capabilities_cstr);
   return rtp_capabilities;
 }
 
@@ -20,7 +20,7 @@ nlohmann::json Signaller::CreateWebrtcTransport() const {
   DCHECK(webrtc_transport_options_cstr != nullptr);
   auto webrtc_transport_options =
       nlohmann::json::parse(webrtc_transport_options_cstr);
-  retake_cstr(webrtc_transport_options_cstr);
+  cpp_unmarshal_str(webrtc_transport_options_cstr);
   return webrtc_transport_options;
 }
 
@@ -48,6 +48,17 @@ std::string Signaller::OnProduce(const std::string &transport_id,
   return producer_id;
 }
 
+std::string
+Signaller::OnProduceData(const std::string &transport_id,
+                         const nlohmann::json &sctp_stream_parameters) const {
+  auto sctp_stream_parameters_str = sctp_stream_parameters.dump();
+  char *data_producer_id_cstr = handler_.on_produce_data(
+      ctx_, transport_id.c_str(), sctp_stream_parameters_str.c_str());
+  DCHECK(data_producer_id_cstr != nullptr);
+  std::string data_producer_id(data_producer_id_cstr);
+  return data_producer_id;
+}
+
 void Signaller::OnDataConsumerMessage(const std::string &data_consumer_id,
                                       const char *data, std::size_t len) const {
   handler_.on_data_consumer_message(ctx_, data_consumer_id.c_str(), data, len);
@@ -56,6 +67,12 @@ void Signaller::OnDataConsumerMessage(const std::string &data_consumer_id,
 void Signaller::OnDataConsumerStateChanged(const std::string &data_consumer_id,
                                            const std::string &state) const {
   handler_.on_data_consumer_state_changed(ctx_, data_consumer_id.c_str(),
+                                          state.c_str());
+}
+
+void Signaller::OnDataProducerStateChanged(const std::string &data_producer_id,
+                                           const std::string &state) const {
+  handler_.on_data_producer_state_changed(ctx_, data_producer_id.c_str(),
                                           state.c_str());
 }
 
