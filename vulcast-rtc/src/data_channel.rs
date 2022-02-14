@@ -119,6 +119,7 @@ impl DataProducer {
         if let Some(DataChannelState::Closed) = *state {
             return Err(DataChannelError::ChannelClosed);
         }
+        // this could potentially freeze the executor
         unsafe { sys::data_producer_send(self.sys_data_producer, data.as_ptr(), data.len() as u64) }
         Ok(())
     }

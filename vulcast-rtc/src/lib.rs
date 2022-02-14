@@ -38,12 +38,12 @@ fn native_init() {
                 }
                 log::LevelFilter::Debug => {
                     sys::set_glog_log_level(sys::GlogLogLevel_INFO);
-                    sys::set_mediasoup_log_level(sys::MediasoupLogLevel_LOG_WARN);
+                    sys::set_mediasoup_log_level(sys::MediasoupLogLevel_LOG_DEBUG);
                     sys::set_rtc_log_level(sys::RtcLogLevel_LS_INFO);
                 }
                 log::LevelFilter::Trace => {
                     sys::set_glog_log_level(sys::GlogLogLevel_INFO);
-                    sys::set_mediasoup_log_level(sys::MediasoupLogLevel_LOG_DEBUG);
+                    sys::set_mediasoup_log_level(sys::MediasoupLogLevel_LOG_TRACE);
                     sys::set_rtc_log_level(sys::RtcLogLevel_LS_VERBOSE);
                 }
             }
