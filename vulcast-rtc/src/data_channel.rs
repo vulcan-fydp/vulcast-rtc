@@ -6,6 +6,7 @@ use std::{
 };
 
 use futures::Stream;
+use thiserror::Error;
 use tokio::sync::{
     broadcast,
     mpsc::{self, error::TrySendError},
@@ -14,6 +15,12 @@ use tokio::sync::{
 
 use crate::types::*;
 use vulcast_rtc_sys as sys;
+
+#[derive(Debug, Error)]
+pub enum DataChannelError {
+    #[error("channel is closed")]
+    ChannelClosed,
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum DataChannelState {
@@ -107,9 +114,16 @@ impl DataProducer {
             state: state_rx,
         }
     }
-    pub fn send(&self, data: Data) {
-        // let state = self.state.
-
+    pub fn send(&mut self, data: Data) -> Result<(), DataChannelError> {
+        let state = self.state.borrow_and_update();
+        if let Some(DataChannelState::Closed) = *state {
+            return Err(DataChannelError::ChannelClosed);
+        }
+        unsafe { sys::data_producer_send(self.sys_data_producer, data.as_ptr(), data.len() as u64) }
+        Ok(())
+    }
+    pub fn id(&self) -> &DataProducerId {
+        &self.data_producer_id
     }
 }
 impl Drop for DataProducer {

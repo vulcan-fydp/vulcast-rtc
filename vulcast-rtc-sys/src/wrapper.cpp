@@ -107,6 +107,11 @@ mediasoupclient::DataProducer *data_producer_new(Broadcaster *b) {
 char *data_producer_marshal_id(mediasoupclient::DataProducer *data_producer) {
   return cpp_marshal_str(data_producer->GetId());
 }
+void data_producer_send(mediasoupclient::DataProducer *data_producer,
+                        const uint8_t *data, size_t len) {
+  webrtc::DataBuffer data_buffer(rtc::CopyOnWriteBuffer(data, len), true);
+  data_producer->Send(data_buffer);
+}
 void data_producer_delete(mediasoupclient::DataProducer *data_producer) {
   LOG(INFO) << "data_producer_delete(" << std::hex << data_producer << ")";
   CHECK(data_producer != nullptr);

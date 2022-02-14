@@ -73,6 +73,8 @@ void producer_delete(mediasoupclient::Producer *producer);
 
 mediasoupclient::DataProducer *data_producer_new(Broadcaster *b);
 char *data_producer_marshal_id(mediasoupclient::DataProducer *data_producer);
+void data_producer_send(mediasoupclient::DataProducer *data_producer,
+                        const uint8_t *data, size_t len);
 void data_producer_delete(mediasoupclient::DataProducer *data_producer);
 
 void debug_enumerate_capture_devices();

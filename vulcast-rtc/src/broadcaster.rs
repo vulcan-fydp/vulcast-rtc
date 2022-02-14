@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use tokio::sync::{broadcast, mpsc};
 
 use crate::alsa_capturer::AlsaCapturer;
-use crate::data_channel::{self, DataConsumer};
+use crate::data_channel::{self, DataConsumer, DataProducer};
 use crate::foreign_producer::ForeignProducer;
 use crate::frame_source::FrameSource;
 use crate::types::*;
@@ -162,20 +162,6 @@ impl Broadcaster {
         Self { shared }
     }
 
-    fn get_recv_transport_id(&self) -> TransportId {
-        unsafe {
-            let recv_transport_id_marshal = sys::broadcaster_marshal_recv_transport_id(self.sys());
-            let recv_transport_id = TransportId::from(
-                CStr::from_ptr(recv_transport_id_marshal)
-                    .to_str()
-                    .unwrap()
-                    .to_owned(),
-            );
-            sys::cpp_unmarshal_str(recv_transport_id_marshal);
-            recv_transport_id
-        }
-    }
-
     /// Consume data from the given data producer.
     pub async fn consume_data(
         &self,
@@ -201,6 +187,22 @@ impl Broadcaster {
         .await
         .unwrap();
         Ok(data_consumer)
+    }
+
+    /// Produce data on send transport.
+    pub async fn produce_data(&self) -> DataProducer {
+        // spawn on blocking thread
+        let data_producer = tokio::task::spawn_blocking({
+            let broadcaster = self.clone();
+            move || {
+                let sys = broadcaster.sys();
+                let data_producer_rx = broadcaster.shared.data_channel_tx.subscribe();
+                DataProducer::new(sys, data_producer_rx)
+            }
+        })
+        .await
+        .unwrap();
+        data_producer
     }
 
     /// Produce a fake media stream for debugging purposes (leaks memory).
@@ -307,6 +309,20 @@ impl Broadcaster {
     pub fn downgrade(&self) -> WeakBroadcaster {
         WeakBroadcaster {
             shared: Arc::downgrade(&self.shared),
+        }
+    }
+
+    fn get_recv_transport_id(&self) -> TransportId {
+        unsafe {
+            let recv_transport_id_marshal = sys::broadcaster_marshal_recv_transport_id(self.sys());
+            let recv_transport_id = TransportId::from(
+                CStr::from_ptr(recv_transport_id_marshal)
+                    .to_str()
+                    .unwrap()
+                    .to_owned(),
+            );
+            sys::cpp_unmarshal_str(recv_transport_id_marshal);
+            recv_transport_id
         }
     }
 }

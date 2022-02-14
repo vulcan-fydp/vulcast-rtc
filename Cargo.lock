@@ -1491,6 +1491,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "thiserror",
  "tiny-skia",
  "tokio",
  "tokio-stream",

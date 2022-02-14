@@ -1,5 +1,7 @@
+use font8x8::UnicodeFonts;
 use serde::Serialize;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration, convert::TryInto};
+use tokio_stream::StreamExt;
 
 use clap::Parser;
 use graphql_ws::GraphQLWebSocket;
@@ -100,6 +102,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_gql_signaller = Arc::new(GraphQLSignaller::new(client_conn.clone()));
     let vulcast_broadcaster = Broadcaster::new(vulcast_gql_signaller.clone());
     let client_broadcaster = Broadcaster::new(client_gql_signaller.clone());
+    let mut client_data_producer = client_broadcaster.produce_data().await;
+    let mut vulcast_data_consumer = vulcast_broadcaster
+        .consume_data(client_data_producer.id().clone())
+        .await
+        .unwrap();
+    tokio::spawn(async move {
+        let mut i: u32 = 0;
+        loop {
+            client_data_producer
+                .send(i.to_le_bytes().to_vec())
+                .unwrap();
+            i += 1;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    });
+    tokio::spawn(async move {
+        loop {
+            while let Some(message) = vulcast_data_consumer.next().await {
+                let i = u32::from_le_bytes(message.try_into().unwrap());
+                println!("{}", i);
+            }
+        }
+    });
 
     vulcast_gql_signaller.shutdown().recv().await.unwrap();
     client_gql_signaller.shutdown().recv().await.unwrap();
