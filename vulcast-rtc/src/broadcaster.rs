@@ -1,4 +1,4 @@
-use std::os::raw::c_ulong;
+use std::os::raw::c_uint;
 use std::ptr;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, Weak};
@@ -472,7 +472,7 @@ extern "C" fn on_data_consumer_message(
     ctx: *const c_void,
     data_consumer_id: *const c_char,
     data: *const c_char,
-    len: c_ulong,
+    len: c_uint,
 ) {
     log::trace!("on_data_consumer_message({:?}, len={})", ctx, len);
     unsafe {
