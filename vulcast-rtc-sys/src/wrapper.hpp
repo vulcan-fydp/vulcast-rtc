@@ -35,7 +35,7 @@ struct SignalHandler {
   // Called when new message is available from a DataConsumer.
   void (*on_data_consumer_message)(const void *ctx,
                                    const char *data_consumer_id,
-                                   const char *data, uint32_t len);
+                                   const char *data, size_t len);
   // Called when a DataConsumer RTC DataState changes.
   void (*on_data_consumer_state_changed)(const void *ctx,
                                          const char *data_consumer_id,

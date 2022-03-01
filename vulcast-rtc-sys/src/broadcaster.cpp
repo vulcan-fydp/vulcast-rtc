@@ -150,9 +150,8 @@ Broadcaster::OnProduceData(mediasoupclient::SendTransport *transport,
 /* DataConsumer::Listener */
 void Broadcaster::OnMessage(mediasoupclient::DataConsumer *data_consumer,
                             const webrtc::DataBuffer &buffer) {
-  LOG_EVERY_N(INFO, 200) << "Broadcaster::OnMessage(" << data_consumer->GetId()
-                         << ",len=" << buffer.data.size() << ") "
-                         << "x" << google::COUNTER;
+  LOG_EVERY_N(INFO, 200) << "[x" << google::COUNTER << "] " << "Broadcaster::OnMessage(" << data_consumer->GetId()
+                         << ",len=" << buffer.data.size() << ")";
   signaller_.OnDataConsumerMessage(
       data_consumer->GetId(), buffer.data.data<char>(), buffer.data.size());
 }
