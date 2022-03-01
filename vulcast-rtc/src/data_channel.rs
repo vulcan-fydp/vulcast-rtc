@@ -173,9 +173,12 @@ impl DataConsumer {
                                 } if id == data_consumer_id => {
                                     log::trace!("{:?}: data (len={:?})", &id, data.len());
                                     match tx.try_send(data) {
-                                        Err(TrySendError::Closed(_)) => return,
+                                        Err(TrySendError::Closed(_)) => {
+                                            log::debug!("{:?}: consumer dropped, stopping message processing", &data_consumer_id);
+                                            return;
+                                        },
                                         Err(TrySendError::Full(_)) => {
-                                            log::warn!("{:?}: message dropped, you are reading stream too slowly", &id)
+                                            log::warn!("{:?}: message dropped, you are reading stream too slowly!", &data_consumer_id)
                                         },
                                         _ => {}
                                     }
@@ -186,14 +189,21 @@ impl DataConsumer {
                                 } if id == data_consumer_id => {
                                     log::debug!("{:?}: state_changed {:?}", &id, &channel_state);
                                     if channel_state == DataChannelState::Closed {
+                                        log::warn!("{:?}: data channel dropped, stopping message processing", &data_consumer_id);
                                         return;
                                     }
                                 }
                                 _ => (),
                             }
                         },
-                        _ = tx.closed() => {break},
-                        else => {break}
+                        _ = tx.closed() => {
+                            log::debug!("{:?}: receiver dropped, stopping message processing", &data_consumer_id);
+                            break;
+                        },
+                        else => {
+                            log::error!("{:?}: unexpected message, processing halt", &data_consumer_id);
+                            break;
+                        }
                     }
                 }
             }

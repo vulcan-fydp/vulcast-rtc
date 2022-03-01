@@ -27,7 +27,6 @@ void Broadcaster::Start() {
   mediasoupclient::PeerConnection::Options options;
   options.factory = factory.get();
   this->device_.Load(routerRtpCapabilities, &options);
-  // this->device_.Load(routerRtpCapabilities);
 
   auto rtp_capabilities = device_.GetRtpCapabilities();
   signaller_.OnRtpCapabilities(rtp_capabilities);
@@ -151,8 +150,9 @@ Broadcaster::OnProduceData(mediasoupclient::SendTransport *transport,
 /* DataConsumer::Listener */
 void Broadcaster::OnMessage(mediasoupclient::DataConsumer *data_consumer,
                             const webrtc::DataBuffer &buffer) {
-  LOG(INFO) << "Broadcaster::OnMessage(" << data_consumer->GetId()
-            << ",len=" << buffer.data.size() << ")";
+  LOG_EVERY_N(INFO, 200) << "Broadcaster::OnMessage(" << data_consumer->GetId()
+                         << ",len=" << buffer.data.size() << ") "
+                         << "x" << google::COUNTER;
   signaller_.OnDataConsumerMessage(
       data_consumer->GetId(), buffer.data.data<char>(), buffer.data.size());
 }
@@ -193,21 +193,20 @@ void Broadcaster::OnTransportClose(mediasoupclient::Producer *producer) {
 
 /* DataProducer::Listener */
 void Broadcaster::OnOpen(mediasoupclient::DataProducer *data_producer) {
-  //
-  signaller_.OnDataConsumerStateChanged(
+  signaller_.OnDataProducerStateChanged(
       data_producer->GetId(), webrtc::DataChannelInterface::DataStateString(
                                   data_producer->GetReadyState()));
 }
 void Broadcaster::OnClose(mediasoupclient::DataProducer *data_producer) {
-
-  //
+  signaller_.OnDataProducerStateChanged(
+      data_producer->GetId(), webrtc::DataChannelInterface::DataStateString(
+                                  data_producer->GetReadyState()));
 }
 void Broadcaster::OnBufferedAmountChange(
-    mediasoupclient::DataProducer *data_producer, uint64_t sent_data_size) {
-
-  //
-}
+    mediasoupclient::DataProducer *data_producer, uint64_t sent_data_size) {}
 void Broadcaster::OnTransportClose(
     mediasoupclient::DataProducer *data_producer) {
-  //
+  signaller_.OnDataProducerStateChanged(
+      data_producer->GetId(), webrtc::DataChannelInterface::DataStateString(
+                                  data_producer->GetReadyState()));
 }

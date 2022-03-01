@@ -53,7 +53,7 @@ impl VcmCapturer {
                 width,
                 height,
                 fps,
-                video_type as i32
+                video_type as i32,
             );
             let mut state = shared.state.lock().unwrap();
             state.sys_producer = sys_producer;
