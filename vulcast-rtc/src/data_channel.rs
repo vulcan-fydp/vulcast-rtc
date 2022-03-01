@@ -6,6 +6,7 @@ use std::{
 };
 
 use futures::Stream;
+use std::convert::TryInto;
 use thiserror::Error;
 use tokio::sync::{
     broadcast,
@@ -120,7 +121,13 @@ impl DataProducer {
             return Err(DataChannelError::ChannelClosed);
         }
         // this could potentially freeze the executor
-        unsafe { sys::data_producer_send(self.sys_data_producer, data.as_ptr(), data.len() as u64) }
+        unsafe {
+            sys::data_producer_send(
+                self.sys_data_producer,
+                data.as_ptr(),
+                data.len().try_into().unwrap(),
+            )
+        }
         Ok(())
     }
     pub fn id(&self) -> &DataProducerId {
