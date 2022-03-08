@@ -6,9 +6,10 @@ target_link_libraries(${PROJECT_NAME} PUBLIC webrtc)
 target_link_libraries(${PROJECT_NAME} PUBLIC webrtcextra)
 
 # mediasoup
+set(SDPTRANSFORM_BUILD_TESTS OFF CACHE INTERNAL "")
 FetchContent_Declare(
   mediasoupclient
-  GIT_REPOSITORY https://github.com/versatica/libmediasoupclient.git
+  GIT_REPOSITORY https://github.com/netdex/libmediasoupclient.git
   GIT_TAG v3
 )
 FetchContent_MakeAvailable(mediasoupclient)
