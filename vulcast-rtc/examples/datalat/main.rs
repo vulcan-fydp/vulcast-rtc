@@ -109,8 +109,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await?;
     let vulcast_gql_signaller = Arc::new(GraphQLSignaller::new(vulcast_conn.clone()));
     let client_gql_signaller = Arc::new(GraphQLSignaller::new(client_conn.clone()));
-    let vulcast_broadcaster = Broadcaster::new(vulcast_gql_signaller.clone());
-    let client_broadcaster = Broadcaster::new(client_gql_signaller.clone());
+    let vulcast_broadcaster = Broadcaster::new(vulcast_gql_signaller.clone()).await;
+    let client_broadcaster = Broadcaster::new(client_gql_signaller.clone()).await;
     let mut client_data_producer = client_broadcaster.produce_data().await;
     let mut vulcast_data_consumer = vulcast_broadcaster
         .consume_data(client_data_producer.id().clone())
@@ -123,12 +123,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         lat: Vec<f64>,
         iat: Vec<f64>,
         ooo: u32,
+        count: u32
     }
     let state = Arc::new(Mutex::new(State {
         send_time: HashMap::new(),
         lat: vec![],
         iat: vec![],
         ooo: 0,
+        count: 0
     }));
 
     println!("{:#?}", opts);
@@ -166,6 +168,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     lat,
                     iat,
                     ooo,
+                    count
                 } = &mut *state;
 
                 let now = std::time::Instant::now();
@@ -188,6 +191,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 last_id = Some(i);
+                *count += 1;
 
                 drop(state);
 
@@ -200,12 +204,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = tokio::join!(j1, j2);
 
     let mut state = Arc::try_unwrap(state).unwrap().into_inner();
-    let State { lat, iat, ooo, .. } = &mut state;
+    let State { lat, iat, ooo, count,.. } = &mut state;
     let mut lat = Data::new(lat);
     let mut iat = Data::new(iat);
 
     println!("Results");
     println!("----------------------------------------");
+    let dropped = opts.count - *count;
+    println!(
+        "dropped: {} ({:.2}%)",
+        dropped,
+        (dropped as f64 / opts.count as f64) * 100.0
+    );
     println!(
         "ooo: {} ({:.2}%)",
         ooo,

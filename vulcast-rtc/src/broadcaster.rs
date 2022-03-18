@@ -112,39 +112,47 @@ pub trait Signaller: Send + Sync {
 
 impl Broadcaster {
     /// Create a new broadcaster with the given signalling handlers.
-    pub fn new(signaller: Arc<dyn Signaller>) -> Self {
+    pub async fn new(signaller: Arc<dyn Signaller>) -> Self {
         super::native_init();
 
         let (channel_tx, mut channel_rx) = mpsc::unbounded_channel();
-        let shared = Arc::new(Shared {
-            state: Mutex::new(State {
-                sys_broadcaster: ptr::null_mut(),
-            }),
-            signaller: signaller.clone(),
-            data_channel_tx: broadcast::channel(16).0,
-            channel_tx,
-        });
-        unsafe {
-            // this could actually deadlock the executor... but let's pretend it doesn't
-            let sys_broadcaster = sys::broadcaster_new(
-                &*shared as *const _ as *const c_void,
-                sys::SignalHandler {
-                    server_rtp_capabilities: Some(server_rtp_capabilities),
-                    on_rtp_capabilities: Some(on_rtp_capabilities),
-                    on_produce: Some(on_produce),
-                    on_produce_data: Some(on_produce_data),
-                    on_connect_webrtc_transport: Some(on_connect_webrtc_transport),
-                    create_webrtc_transport: Some(create_webrtc_transport),
-                    on_data_consumer_message: Some(on_data_consumer_message),
-                    on_data_consumer_state_changed: Some(on_data_consumer_state_changed),
-                    on_data_producer_state_changed: Some(on_data_producer_state_changed),
-                    on_connection_state_changed: Some(on_connection_state_changed),
-                },
-            );
-            log::trace!("broadcaster new {:?}", sys_broadcaster);
-            let mut state = shared.state.lock().unwrap();
-            state.sys_broadcaster = sys_broadcaster;
-        }
+        let shared = tokio::task::spawn_blocking({
+            let signaller = signaller.clone();
+            move || {
+                let shared = Arc::new(Shared {
+                    state: Mutex::new(State {
+                        sys_broadcaster: ptr::null_mut(),
+                    }),
+                    signaller,
+                    data_channel_tx: broadcast::channel(16).0,
+                    channel_tx,
+                });
+                let sys_broadcaster = unsafe {
+                    sys::broadcaster_new(
+                        &*shared as *const _ as *const c_void,
+                        sys::SignalHandler {
+                            server_rtp_capabilities: Some(server_rtp_capabilities),
+                            on_rtp_capabilities: Some(on_rtp_capabilities),
+                            on_produce: Some(on_produce),
+                            on_produce_data: Some(on_produce_data),
+                            on_connect_webrtc_transport: Some(on_connect_webrtc_transport),
+                            create_webrtc_transport: Some(create_webrtc_transport),
+                            on_data_consumer_message: Some(on_data_consumer_message),
+                            on_data_consumer_state_changed: Some(on_data_consumer_state_changed),
+                            on_data_producer_state_changed: Some(on_data_producer_state_changed),
+                            on_connection_state_changed: Some(on_connection_state_changed),
+                        },
+                    )
+                };
+                log::trace!("broadcaster new {:?}", sys_broadcaster);
+                let mut state = shared.state.lock().unwrap();
+                state.sys_broadcaster = sys_broadcaster;
+                drop(state);
+                shared
+            }
+        })
+        .await
+        .unwrap();
         tokio::spawn(async move {
             while let Some(message) = channel_rx.recv().await {
                 match message {
@@ -345,13 +353,13 @@ extern "C" fn server_rtp_capabilities(ctx: *const c_void) -> *mut c_char {
     log::trace!("server_rtp_capabilities({:?})", ctx);
     let shared = unsafe { &*(ctx as *const Shared) };
 
-    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    let (tx, mut rx) = mpsc::channel(1);
     let fut = shared.signaller.server_rtp_capabilities();
     tokio::spawn(async move {
-        let _ = tx.send(fut.await);
+        tx.send(fut.await).await.unwrap();
     });
 
-    let server_rtp_capabilities = rx.recv().unwrap();
+    let server_rtp_capabilities = rx.blocking_recv().unwrap();
     CString::new(serde_json::to_string(&server_rtp_capabilities).unwrap())
         .unwrap()
         .into_raw()
@@ -359,13 +367,13 @@ extern "C" fn server_rtp_capabilities(ctx: *const c_void) -> *mut c_char {
 extern "C" fn create_webrtc_transport(ctx: *const c_void) -> *mut c_char {
     log::trace!("create_webrtc_transport({:?})", ctx);
     let shared = unsafe { &*(ctx as *const Shared) };
-    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    let (tx, mut rx) = mpsc::channel(1);
     let fut = shared.signaller.create_webrtc_transport();
     tokio::spawn(async move {
-        let _ = tx.send(fut.await);
+        tx.send(fut.await).await.unwrap();
     });
 
-    let webrtc_transport_options = rx.recv().unwrap();
+    let webrtc_transport_options = rx.blocking_recv().unwrap();
     CString::new(serde_json::to_string(&webrtc_transport_options).unwrap())
         .unwrap()
         .into_raw()
@@ -375,17 +383,12 @@ extern "C" fn on_rtp_capabilities(ctx: *const c_void, rtp_caps: *const c_char) {
     let shared = unsafe { &*(ctx as *const Shared) };
     let rtp_caps = unsafe { CStr::from_ptr(rtp_caps).to_str().unwrap() };
 
-    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    let (tx, mut rx) = mpsc::channel(1);
     let fut = shared.signaller.on_rtp_capabilities(RtpCapabilities::from(
         serde_json::from_str::<serde_json::Value>(rtp_caps).unwrap(),
     ));
-    tokio::spawn(async move {
-        let _ = {
-            fut.await;
-            tx.send(())
-        };
-    });
-    let _ = rx.recv().unwrap();
+    tokio::spawn(async move { tx.send(fut.await).await.unwrap() });
+    let _ = rx.blocking_recv().unwrap();
 }
 extern "C" fn on_produce(
     ctx: *const c_void,
@@ -400,17 +403,17 @@ extern "C" fn on_produce(
         let kind_cstr = CStr::from_ptr(kind);
         let rtp_parameters = CStr::from_ptr(rtp_parameters).to_str().unwrap();
 
-        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        let (tx, mut rx) = mpsc::channel(1);
         let fut = shared.signaller.on_produce(
             TransportId::from(transport_id_cstr.to_str().unwrap().to_owned()),
             MediaKind::from_str(kind_cstr.to_string_lossy().as_ref()).unwrap(),
             RtpParameters::from(serde_json::from_str::<serde_json::Value>(rtp_parameters).unwrap()),
         );
         tokio::spawn(async move {
-            let _ = tx.send(fut.await);
+            tx.send(fut.await).await.unwrap();
         });
 
-        let producer_id = rx.recv().unwrap();
+        let producer_id = rx.blocking_recv().unwrap();
         CString::new(String::from(producer_id)).unwrap().into_raw()
     }
 }
@@ -425,7 +428,7 @@ extern "C" fn on_produce_data(
         let transport_id_cstr = CStr::from_ptr(transport_id);
         let sctp_stream_parameters = CStr::from_ptr(sctp_stream_parameters).to_str().unwrap();
 
-        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        let (tx, mut rx) = mpsc::channel(1);
         let fut = shared.signaller.on_produce_data(
             TransportId::from(transport_id_cstr.to_str().unwrap().to_owned()),
             SctpStreamParameters::from(
@@ -433,10 +436,10 @@ extern "C" fn on_produce_data(
             ),
         );
         tokio::spawn(async move {
-            let _ = tx.send(fut.await);
+            tx.send(fut.await).await.unwrap();
         });
 
-        let producer_id = rx.recv().unwrap();
+        let producer_id = rx.blocking_recv().unwrap();
         CString::new(String::from(producer_id)).unwrap().into_raw()
     }
 }
@@ -451,21 +454,15 @@ extern "C" fn on_connect_webrtc_transport(
         let transport_id_cstr = CStr::from_ptr(transport_id);
         let dtls_parameters = CStr::from_ptr(dtls_parameters).to_str().unwrap();
 
-        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        let (tx, mut rx) = mpsc::channel(1);
         let fut = shared.signaller.on_connect_webrtc_transport(
             TransportId::from(transport_id_cstr.to_str().unwrap().to_owned()),
             DtlsParameters::from(
                 serde_json::from_str::<serde_json::Value>(dtls_parameters).unwrap(),
             ),
         );
-        tokio::spawn(async move {
-            let _ = {
-                fut.await;
-                tx.send(())
-            };
-        });
-
-        let _ = rx.recv().unwrap();
+        tokio::spawn(async move { tx.send(fut.await).await.unwrap() });
+        let _ = rx.blocking_recv().unwrap();
     }
 }
 extern "C" fn on_data_consumer_message(
