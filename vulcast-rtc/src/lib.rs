@@ -14,7 +14,7 @@ static NATIVE_INIT: Once = Once::new();
 
 fn native_init() {
     NATIVE_INIT.call_once(|| {
-        log::trace!("native_init()");
+        log::trace!("native_init(): inferring log level {:?}", log::max_level());
         let argv0 = std::env::args().next().unwrap();
         unsafe {
             let c_str = CString::new(argv0).unwrap();
