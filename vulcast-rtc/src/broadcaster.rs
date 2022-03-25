@@ -124,7 +124,7 @@ impl Broadcaster {
                         sys_broadcaster: ptr::null_mut(),
                     }),
                     signaller,
-                    data_channel_tx: broadcast::channel(16).0,
+                    data_channel_tx: broadcast::channel(64).0,
                     channel_tx,
                 });
                 let sys_broadcaster = unsafe {

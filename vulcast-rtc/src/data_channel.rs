@@ -158,7 +158,7 @@ impl DataConsumer {
     ) -> Self {
         let data_consumer_id = data_consumer_options.id;
 
-        let (tx, rx) = mpsc::channel(16);
+        let (tx, rx) = mpsc::channel(32);
 
         tokio::spawn({
             let data_consumer_id = data_consumer_id.clone();

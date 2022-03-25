@@ -91,7 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let graphql_signaller = Arc::new(GraphQLSignaller::new(client.clone()));
-    let broadcaster = Broadcaster::new(graphql_signaller.clone());
+    let broadcaster = Broadcaster::new(graphql_signaller.clone()).await;
 
     let _vcm_capturer = broadcaster
         .produce_video_from_vcm_capturer(None, 640, 480, 60)
